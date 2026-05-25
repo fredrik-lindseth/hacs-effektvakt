@@ -8,7 +8,22 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util_module
+
 from .const import (
+    CONF_DSO,
+    CONF_ENERGY_SENSOR,
+    CONF_KAPASITETSTRINN_CUSTOM,
+    CONF_MIN_RISIKO_FOR_KUTT,
+    CONF_POWER_SENSOR,
+    CONF_RISIKO_HOLDETID_MINUTTER,
+    CONF_SAFETY_BUFFER_KW,
+    DEFAULT_MIN_RISIKO_FOR_KUTT,
+    DEFAULT_RISIKO_HOLDETID_MINUTTER,
+    DEFAULT_SAFETY_BUFFER_KW,
+    DOMAIN,
     MAX_POWER_CLAMP_W,
     RISIKO_HIGH,
     RISIKO_LEVELS,
@@ -16,14 +31,22 @@ from .const import (
     RISIKO_MEDIUM,
     RISIKO_NONE,
     RISIKO_RANK,
+    STORAGE_VERSION,
+    TICK_INTERVAL_BY_RISIKO,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
 )
+from .dso import KAPASITETSTRINN_PER_DSO
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def dt_util_now() -> datetime:
+    """Wrapper for monkeypatch-vennlig now()."""
+    return dt_util_module.now()
 
 
 def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
@@ -242,3 +265,180 @@ def compute_projected_avg(
 def compute_elapsed_h(now: datetime) -> float:
     """Andel av klokketimen som er passert."""
     return (now.minute + now.second / 60) / 60
+
+
+class EffektvaktCoordinator(DataUpdateCoordinator):
+    """Coordinator for Effektvakt."""
+
+    def __init__(self, hass: HomeAssistant, entry: object) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=TICK_INTERVAL_BY_RISIKO[RISIKO_NONE]),
+        )
+        self.entry = entry
+        self.power_sensor: str | None = entry.data.get(CONF_POWER_SENSOR)
+        self.energy_sensor: str | None = entry.data.get(CONF_ENERGY_SENSOR)
+        self.safety_buffer_kw: float = float(entry.data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW))
+        self.min_risiko_for_kutt: str = entry.data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT)
+        self.risiko_holdetid: timedelta = timedelta(minutes=int(
+            entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER)
+        ))
+
+        dso_id = entry.data.get(CONF_DSO)
+        custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
+        if custom:
+            self.kapasitetstrinn: list[tuple[float, int]] = [(float(t[0]), int(t[1])) for t in custom]
+        else:
+            dso_info = KAPASITETSTRINN_PER_DSO.get(dso_id)
+            self.kapasitetstrinn = list(dso_info["kapasitetstrinn"]) if dso_info else []
+
+        # Mutable state
+        self._daily_max_kw: dict[date, float] = {}
+        self._current_month: str = dt_util_now().strftime("%Y-%m")
+        self._current_hour_kwh: float = 0.0
+        self._current_hour_start: datetime | None = None
+        self._current_hour_bucket: tuple[int, timedelta | None] | None = None
+        self._energy_at_hour_start: float | None = None
+        self._previous_month_top_3_snitt_kw: float | None = None
+        self._previous_month_name: str | None = None
+        self._hysterese_state = HystereseState(nivå=RISIKO_NONE)
+        self._last_successful_update: datetime | None = None
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+        self._store_loaded = False
+
+    async def _load_stored_data(self) -> None:
+        if self._store_loaded:
+            return
+        stored = await self._store.async_load()
+        self._store_loaded = True
+        if not stored:
+            return
+        data = stored.get("data", {})
+        for date_str, kw in (data.get("daily_max_kw") or {}).items():
+            try:
+                d = date.fromisoformat(date_str)
+                self._daily_max_kw[d] = float(kw)
+            except (ValueError, TypeError):
+                continue
+        self._current_hour_kwh = float(data.get("current_hour_kwh", 0.0))
+        self._energy_at_hour_start = data.get("energy_at_hour_start")
+        self._previous_month_top_3_snitt_kw = data.get("previous_month_top_3_snitt_kw")
+        self._previous_month_name = data.get("previous_month_name")
+        hyst = data.get("hysterese_state", {})
+        if hyst.get("nivå") in RISIKO_LEVELS:
+            self._hysterese_state.nivå = hyst["nivå"]
+
+    async def _persist(self) -> None:
+        await self._store.async_save({
+            "data": {
+                "current_month": self._current_month,
+                "daily_max_kw": {d.isoformat(): kw for d, kw in self._daily_max_kw.items()},
+                "current_hour_kwh": self._current_hour_kwh,
+                "energy_at_hour_start": self._energy_at_hour_start,
+                "previous_month_top_3_snitt_kw": self._previous_month_top_3_snitt_kw,
+                "previous_month_name": self._previous_month_name,
+                "hysterese_state": {
+                    "nivå": self._hysterese_state.nivå,
+                    "pending_nivå": self._hysterese_state.pending_nivå,
+                    "pending_since": (
+                        self._hysterese_state.pending_since.isoformat()
+                        if self._hysterese_state.pending_since else None
+                    ),
+                },
+            }
+        })
+
+    async def _async_update_data(self) -> dict:
+        await self._load_stored_data()
+        now = dt_util_now()
+
+        hour_bucket = (now.hour, now.utcoffset())
+        if self._current_hour_bucket is not None and self._current_hour_bucket != hour_bucket:
+            self._finalize_hour()
+        if self._current_hour_bucket is None or self._current_hour_bucket != hour_bucket:
+            self._current_hour_bucket = hour_bucket
+            self._current_hour_start = now.replace(minute=0, second=0, microsecond=0)
+            self._current_hour_kwh = 0.0
+
+        month_str = now.strftime("%Y-%m")
+        if month_str != self._current_month:
+            self._handle_month_rollover()
+            self._current_month = month_str
+
+        current_kw = read_power_kw(self.hass, self.power_sensor) or 0.0
+        energy_now = read_energy_kwh(self.hass, self.energy_sensor)
+
+        if energy_now is not None:
+            if self._energy_at_hour_start is None:
+                self._energy_at_hour_start = energy_now
+            else:
+                delta = energy_now - self._energy_at_hour_start - self._current_hour_kwh
+                if delta > 0:
+                    self._current_hour_kwh += delta
+
+        elapsed_h = compute_elapsed_h(now)
+        projected_avg = compute_projected_avg(
+            actual_kwh_this_hour=self._current_hour_kwh,
+            current_kw=current_kw,
+            elapsed_h=elapsed_h,
+        )
+
+        tiers = lookup_tiers(projected_kw=projected_avg, trinn=self.kapasitetstrinn)
+
+        if tiers.next_threshold_kw is None:
+            effective_threshold = float("inf")
+        else:
+            effective_threshold = compute_effective_threshold(
+                next_tier_threshold_kw=tiers.next_threshold_kw,
+                daily_max_kw=self._daily_max_kw,
+            )
+
+        margin = effective_threshold - projected_avg
+        rå = classify_raw_risk(margin_kw=margin, safety_buffer_kw=self.safety_buffer_kw)
+        apply_hysteresis(self._hysterese_state, rå_nivå=rå, now=now, holdetid=self.risiko_holdetid)
+
+        new_interval = timedelta(seconds=TICK_INTERVAL_BY_RISIKO[self._hysterese_state.nivå])
+        if self.update_interval != new_interval:
+            self.update_interval = new_interval
+
+        self._last_successful_update = now
+
+        topp_3 = top_n_average(self._daily_max_kw, n=3) or 0.0
+        topp_2 = top_n_average(self._daily_max_kw, n=2)
+
+        await self._persist()
+
+        return {
+            "projected_avg_kw": round(projected_avg, 3),
+            "current_kw": round(current_kw, 3),
+            "actual_kwh_this_hour": round(self._current_hour_kwh, 3),
+            "elapsed_minutes_in_hour": int(elapsed_h * 60),
+            "margin_kw": round(margin, 3),
+            "effective_threshold_kw": effective_threshold,
+            "next_tier_threshold_kw": tiers.next_threshold_kw,
+            "prev_tier_threshold_kw": tiers.prev_threshold_kw,
+            "next_tier_pris_per_maned": tiers.next_pris_per_mnd,
+            "topp_3_snitt_denne_maned_kw": round(topp_3, 3),
+            "topp_2_snitt_denne_maned_kw": round(topp_2, 3) if topp_2 else None,
+            "kutt_anbefalt_kw": max(0.0, -margin),
+            "risiko_niva": self._hysterese_state.nivå,
+            "raw_risiko_niva": rå,
+            "last_update": now.isoformat(),
+        }
+
+    def _finalize_hour(self) -> None:
+        if self._current_hour_kwh > 0 and self._current_hour_start is not None:
+            d = self._current_hour_start.date()
+            existing = self._daily_max_kw.get(d, 0.0)
+            if self._current_hour_kwh > existing:
+                self._daily_max_kw[d] = round(self._current_hour_kwh, 3)
+        self._current_hour_kwh = 0.0
+
+    def _handle_month_rollover(self) -> None:
+        topp_3 = top_n_average(self._daily_max_kw, n=3)
+        if topp_3 is not None:
+            self._previous_month_top_3_snitt_kw = round(topp_3, 3)
+            self._previous_month_name = self._current_month
+        self._daily_max_kw = {}

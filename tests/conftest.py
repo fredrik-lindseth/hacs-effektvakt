@@ -25,7 +25,24 @@ sys.modules["homeassistant.helpers"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
 sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.storage"] = MagicMock()
-sys.modules["homeassistant.helpers.update_coordinator"] = MagicMock()
+
+
+# DataUpdateCoordinator must be a real class so subclasses work with normal
+# __setattr__ semantics. A MagicMock base intercepts attribute assignments.
+class _DataUpdateCoordinatorStub:
+    update_interval = None
+
+    def __init__(self, hass, logger, *, name, update_interval=None):
+        self.hass = hass
+        self.logger = logger
+        self.name = name
+        self.update_interval = update_interval
+
+
+_update_coordinator_mod = MagicMock()
+_update_coordinator_mod.DataUpdateCoordinator = _DataUpdateCoordinatorStub
+sys.modules["homeassistant.helpers.update_coordinator"] = _update_coordinator_mod
+
 sys.modules["homeassistant.helpers.entity"] = MagicMock()
 sys.modules["homeassistant.helpers.selector"] = MagicMock()
 sys.modules["homeassistant.components.sensor"] = MagicMock()
