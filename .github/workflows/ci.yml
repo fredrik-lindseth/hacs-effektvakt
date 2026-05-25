@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout effektvakt
+        uses: actions/checkout@v6
+
+      - name: Checkout strømkalkulator for DSO-sync
+        uses: actions/checkout@v6
+        with:
+          repository: fredrik-lindseth/hacs-strømkalkulator
+          path: ../hacs-strømkalkulator
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install -e ".[dev]" pyyaml pytest-asyncio voluptuous
+
+      - name: Lint (ruff)
+        run: ruff check custom_components/effektvakt/ tests/ scripts/
+
+      - name: Type check (mypy, warnings only)
+        run: mypy custom_components/effektvakt/ --ignore-missing-imports || true
+
+      - name: Verify DSO sync
+        run: python scripts/sync_dso_from_stromkalkulator.py --check
+
+      - name: Tests with coverage
+        run: pytest tests/ -v --cov=custom_components/effektvakt --cov-report=term-missing
+
+      - name: Manifest valid JSON
+        run: jq empty custom_components/effektvakt/manifest.json
+
+      - name: Required files present
+        run: |
+          for f in \
+            custom_components/effektvakt/__init__.py \
+            custom_components/effektvakt/manifest.json \
+            custom_components/effektvakt/config_flow.py \
+            custom_components/effektvakt/coordinator.py \
+            custom_components/effektvakt/sensor.py \
+            custom_components/effektvakt/binary_sensor.py \
+            custom_components/effektvakt/const.py \
+            custom_components/effektvakt/dso.py \
+            README.md \
+            CHANGELOG.md \
+            LICENSE; do
+            [ -f "$f" ] || { echo "Missing: $f"; exit 1; }
+          done
+
+      - name: Version-format manifest
+        run: |
+          VERSION=$(jq -r '.version' custom_components/effektvakt/manifest.json)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Bad version: $VERSION"; exit 1; }
