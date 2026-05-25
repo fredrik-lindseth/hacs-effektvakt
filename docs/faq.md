@@ -59,7 +59,7 @@ Hvis Effektvakt blindt slår av VVB i et tilfeldig 30-min-vindu, er det 85-90 % 
 
 For å garantere kutt trenger du en sensor som rapporterer VVB-effekten i sanntid. Da kan Effektvakt slå av kun når elementet faktisk varmer. Det gir ca. 1 kWh kutt per 30-min event.
 
-Dette er hvorfor v0.2 av Effektvakt vil støtte en valgfri `vvb_power_sensor`-konfig.
+Effektvakt støtter en valgfri `vvb_power_sensor`-konfig for nettopp dette, se [strategi.md](strategi.md).
 
 ## Hva med elbil-lader?
 

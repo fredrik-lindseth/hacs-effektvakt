@@ -1,6 +1,6 @@
 # Begrensninger
 
-Kjente begrensninger i v0.3. Noen er designvalg, andre er ting som kan forbedres.
+Kjente begrensninger. Noen er designvalg, andre er ting som kan forbedres.
 
 ---
 
