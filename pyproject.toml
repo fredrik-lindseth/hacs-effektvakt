@@ -17,6 +17,7 @@ dev = [
     "hypothesis>=6.0.0",
     "mypy>=1.8.0",
     "voluptuous>=0.14",
+    "pyyaml>=6.0",
 ]
 
 [tool.pytest.ini_options]
