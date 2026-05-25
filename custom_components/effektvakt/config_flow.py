@@ -218,7 +218,9 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            return self.async_create_entry(title="", data={})
         data = self.config_entry.data
         return self.async_show_form(
             step_id="init",

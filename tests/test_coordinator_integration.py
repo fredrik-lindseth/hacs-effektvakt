@@ -51,3 +51,44 @@ async def test_coordinator_low_power_gir_none_risk(base_states):
         data = await coord._async_update_data()
     assert data["risiko_niva"] == RISIKO_NONE
     assert data["projected_avg_kw"] < 5
+
+
+@pytest.mark.asyncio
+async def test_energy_at_hour_start_resets_pa_time_rollover():
+    """Etter time-rollover skal første tick ikke gi falsk delta-spike."""
+    states = {
+        "sensor.power": make_state("500", unit="W"),
+        "sensor.energy": make_state("100.0", unit="kWh"),
+    }
+    coord = _make_coordinator(states, entry_overrides={"safety_buffer_kw": 0.5})
+
+    # 14:30 - første tick, setter baseline
+    with patch(
+        "custom_components.effektvakt.coordinator.dt_util_now",
+        return_value=datetime(2026, 5, 25, 14, 30, 0),
+    ):
+        await coord._async_update_data()
+    assert coord._current_hour_kwh == 0.0
+    assert coord._energy_at_hour_start == 100.0
+
+    # 14:45 - energi økt med 2.5 kWh
+    states["sensor.energy"] = make_state("102.5", unit="kWh")
+    coord.hass = make_hass_with_states(states)
+    with patch(
+        "custom_components.effektvakt.coordinator.dt_util_now",
+        return_value=datetime(2026, 5, 25, 14, 45, 0),
+    ):
+        await coord._async_update_data()
+    assert coord._current_hour_kwh == pytest.approx(2.5)
+
+    # 15:00 - ny time, energi nå 103.0 kWh
+    # Forventet: rollover nullstiller begge, første tick setter ny baseline uten delta
+    states["sensor.energy"] = make_state("103.0", unit="kWh")
+    coord.hass = make_hass_with_states(states)
+    with patch(
+        "custom_components.effektvakt.coordinator.dt_util_now",
+        return_value=datetime(2026, 5, 25, 15, 0, 0),
+    ):
+        await coord._async_update_data()
+    assert coord._current_hour_kwh == 0.0
+    assert coord._energy_at_hour_start == 103.0

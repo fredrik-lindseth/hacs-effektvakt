@@ -367,6 +367,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self._current_hour_bucket = hour_bucket
             self._current_hour_start = now.replace(minute=0, second=0, microsecond=0)
             self._current_hour_kwh = 0.0
+            self._energy_at_hour_start = None
 
         month_str = now.strftime("%Y-%m")
         if month_str != self._current_month:
