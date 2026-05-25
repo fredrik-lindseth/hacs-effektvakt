@@ -1,0 +1,18 @@
+set_safety_buffer:
+  name: Sett sikkerhetsmargin
+  description: Endre safety_buffer_kw runtime uten reload.
+  fields:
+    kw:
+      name: kW
+      description: Ny safety_buffer-verdi i kW
+      required: true
+      selector:
+        number:
+          min: 0.1
+          max: 5
+          step: 0.1
+          mode: slider
+
+reset_topp_3:
+  name: Nullstill topp-3-buffer
+  description: Tøm daily_max-historikken for inneværende måned. Debug-hjelp.
