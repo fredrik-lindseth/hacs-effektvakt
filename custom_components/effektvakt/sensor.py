@@ -9,9 +9,10 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import RISIKO_LEVELS
+from .const import DOMAIN, RISIKO_LEVELS
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -47,6 +48,12 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator: EffektvaktCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{self._sensor_key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.entry.entry_id)},
+            name="Effektvakt",
+            manufacturer="Effektvakt",
+            model="Kapasitetstrinn-styring",
+        )
 
     @property
     def _sensor_key(self) -> str:
