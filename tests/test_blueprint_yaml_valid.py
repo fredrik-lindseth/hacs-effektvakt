@@ -34,11 +34,12 @@ def test_blueprint_is_valid_yaml(blueprint_path: Path):
     assert "input" in bp
 
 
-@pytest.mark.parametrize("blueprint_path", sorted(BLUEPRINTS_DIR.glob("*.yaml")))
+SHED_BLUEPRINTS = sorted(p for p in BLUEPRINTS_DIR.glob("*.yaml") if "kun_varsel" not in p.name)
+
+
+@pytest.mark.parametrize("blueprint_path", SHED_BLUEPRINTS)
 def test_shed_blueprints_har_max_off_minutes(blueprint_path: Path):
     """Shed-blueprints (alle unntatt kun_varsel) må ha max_off_minutes."""
-    if "kun_varsel" in blueprint_path.name:
-        pytest.skip("kun_varsel trenger ikke max_off_minutes")
     data = _load(blueprint_path)
     inputs = data["blueprint"]["input"]
     assert "max_off_minutes" in inputs, f"{blueprint_path.name} mangler max_off_minutes failsafe-input"
