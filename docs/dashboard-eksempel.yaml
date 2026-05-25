@@ -1,0 +1,39 @@
+# Lim inn som en ny view i Lovelace eller bruk som ny dashboard.
+title: Effektvakt
+views:
+  - title: Oversikt
+    cards:
+      - type: gauge
+        entity: sensor.effektvakt_margin_til_neste_trinn
+        name: Margin til neste trinn
+        min: -2
+        max: 5
+        severity:
+          green: 2
+          yellow: 1
+          red: 0
+        needle: true
+
+      - type: entities
+        title: Effektvakt sensorer
+        entities:
+          - entity: sensor.effektvakt_risiko_niva
+            name: Risiko-nivå
+          - entity: sensor.effektvakt_projisert_time_snitt
+            name: Projisert time-snitt
+          - entity: sensor.effektvakt_topp_3_snitt_denne_maned
+            name: Topp-3 hittil i måned
+          - entity: binary_sensor.effektvakt_kutt_ned_anbefalt
+            name: Kutt anbefalt
+
+      - type: history-graph
+        title: Risiko siste 24t
+        entities:
+          - sensor.effektvakt_risiko_niva
+        hours_to_show: 24
+
+      - type: history-graph
+        title: Margin siste 24t
+        entities:
+          - sensor.effektvakt_margin_til_neste_trinn
+        hours_to_show: 24
