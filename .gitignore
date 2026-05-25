@@ -13,3 +13,5 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+.dogcats/config.local.toml
+.dogcats/.issues.lock
