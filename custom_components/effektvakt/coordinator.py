@@ -221,3 +221,24 @@ def apply_hysteresis(
         else:
             state.pending_nivå = None
             state.pending_since = None
+
+
+def compute_projected_avg(
+    *,
+    actual_kwh_this_hour: float,
+    current_kw: float,
+    elapsed_h: float,
+) -> float:
+    """Projisert time-snitt-kW.
+
+    actual_kwh_this_hour: hva som er målt så langt denne klokketimen.
+    current_kw: instant power-sensor-verdi.
+    elapsed_h: hvor langt inn i timen vi er (0.0 til 1.0).
+    """
+    remaining_h = max(0.0, 1.0 - elapsed_h)
+    return actual_kwh_this_hour + current_kw * remaining_h
+
+
+def compute_elapsed_h(now: datetime) -> float:
+    """Andel av klokketimen som er passert."""
+    return (now.minute + now.second / 60) / 60
