@@ -1,0 +1,69 @@
+blueprint:
+  name: Effektvakt - Enkel last-shed
+  description: >
+    Slå av én switch når Effektvakt signaliserer kutt anbefalt.
+    Slår på igjen automatisk når risikoen er borte, eller etter max_off_minutes
+    som failsafe mot at coordinator henger.
+  domain: automation
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/enkel_last_shed.yaml
+  input:
+    binary_sensor_entity:
+      name: Effektvakt binary sensor
+      description: Vanligvis binary_sensor.effektvakt_kutt_ned_anbefalt
+      default: binary_sensor.effektvakt_kutt_ned_anbefalt
+      selector:
+        entity:
+          domain: binary_sensor
+    switch_entity:
+      name: Switch å slå av (typisk VVB, billader)
+      selector:
+        entity:
+          domain: switch
+    max_off_minutes:
+      name: Maks minutter slått av før tving-on (failsafe)
+      description: Hvis Effektvakt henger, slås switchen på etter denne tiden.
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 240
+          step: 5
+
+variables:
+  switch_entity: !input switch_entity
+  binary_sensor_entity: !input binary_sensor_entity
+  max_off_minutes: !input max_off_minutes
+
+trigger:
+  - platform: state
+    entity_id: !input binary_sensor_entity
+    to: "on"
+    id: trigger_off
+  - platform: state
+    entity_id: !input binary_sensor_entity
+    to: "off"
+    id: trigger_on
+
+mode: restart
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: trigger_off
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ switch_entity }}"
+          - delay:
+              minutes: "{{ max_off_minutes }}"
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ switch_entity }}"
+      - conditions:
+          - condition: trigger
+            id: trigger_on
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ switch_entity }}"
