@@ -1,0 +1,47 @@
+blueprint:
+  name: Effektvakt - Kun varsel
+  description: >
+    Send notifikasjon når risiko går til medium eller high. Ingen styring.
+    For brukere som vil ta beslutningen selv basert på en push.
+  domain: automation
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/kun_varsel.yaml
+  input:
+    risiko_sensor:
+      name: Risiko-sensor
+      default: sensor.effektvakt_risiko_niva
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notify-tjeneste (uten notify.-prefiks)
+      description: For eksempel mobile_app_iphone
+      default: notify
+      selector:
+        text:
+    dashboard_url:
+      name: URL til Lovelace-dashboardet ditt
+      default: ""
+      selector:
+        text:
+
+trigger:
+  - platform: state
+    entity_id: !input risiko_sensor
+    to: medium
+    id: medium
+  - platform: state
+    entity_id: !input risiko_sensor
+    to: high
+    id: high
+
+mode: queued
+
+action:
+  - service: "notify.{{ notify_service }}"
+    data:
+      title: "Effektvakt: {{ trigger.id | upper }} risiko"
+      message: >
+        Projisert time-snitt: {{ states('sensor.effektvakt_projisert_time_snitt') }} kW.
+        Margin: {{ states('sensor.effektvakt_margin_til_neste_trinn') }} kW.
+      data:
+        url: "{{ dashboard_url }}"
