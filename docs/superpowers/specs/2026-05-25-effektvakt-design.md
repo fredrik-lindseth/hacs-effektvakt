@@ -580,10 +580,52 @@ Dette er en fundamental begrensning av 60s polling-frekvens og kan ikke unngås 
 
 - **DST-overgang (29.03 og 27.10)**: time-bucket nullstilles ved `(hour, utcoffset)`-tuple endring, ikke kun hour. Spesielt høst-DST gir to 02-timer på rad: `current_hour == prev_hour` men `utcoffset` skifter +02:00 → +01:00. Følg samme mønster som strømkalkulator coordinator.py:557-580.
 
+## Realistiske shed-rater (post-research 2026-05-25)
+
+Etter at v0.1.0 ble bygget, ble det gjort research på faktiske VVB-egenskaper og duty cycle. Funn (se kilder under):
+
+- Norsk standard VVB (OSO Saga): 2 kW element, duty cycle 10-15% i hvile
+- Et 30-min av-vindu uten statussensor treffer "element på" bare ~15% av tiden
+- **Blind VVB shed**: forventet 0.15 kWh per event (duty-cycle-vektet)
+- **VVB med statussensor**: 1.0 kWh per event (2 kW i 30 min, garantert treff)
+- **VVB + billader-pause**: opp til 2.5 kWh per event
+
+Legionella er IKKE et reelt problem ved 15-60 min av-perioder så lenge tanken holder ≥ 60°C ved start. FHI har ingen restriksjoner mot prisstyring i private boliger.
+
+### Empirisk replay-resultat (5 BKK-måneder, des 2025 - apr 2026)
+
+| Scenario | Maks månedlig forbedring | Trinn-bevaring |
+|---|---|---|
+| Blind VVB (0.15 kWh) | +0.15 kW (mars) | Aldri |
+| VVB med status (1.0 kWh) | +0.67 kW (mars) | Aldri |
+| VVB + billader (2.5 kWh) | +0.67 kW (mars, capped) | Aldri |
+
+**Innsikt**: Effektvakt har verdi i å hindre OPPGRADERING til neste trinn, ikke nedgradering. Når topp-3-snitt allerede ligger godt inne i et trinn (som vintermåneder i 5-10 kW-trinnet), gir kutt ingen kroner spart. Mars-måneden viser at 0.67 kW reduksjon er mulig hvis det skjer nær en trinngrense.
+
+### Anbefalinger til v0.2
+
+Coordinator bør konfigureres med eksplisitt shed-modell:
+
+1. **Add CONF_SHED_STRATEGY**: enum `blind | with_vvb_status | with_billader`
+2. **Add CONF_VVB_POWER_SENSOR**: optional sensor som rapporterer VVB-effekt i sanntid. Når satt: anbefal kun kutt når sensoren viser > 1000 W (elementet varmer).
+3. **Add CONF_BILLADER_ENTITY**: optional switch som kan pauses for ekstra ~3.6 kW headroom.
+4. **Coordinator-output**: nytt felt `realistisk_shed_kw` som reflekterer brukerens shed-konfigurasjon.
+
+Disse endringene er deferred til v0.2 fordi v0.1.0 er kjøreklar i grunnform.
+
+### Kilder
+
+- [FHI - Legionellaveilederen](https://www.fhi.no/ss/veiledere/legionellaveilederen/temakapitler/risikokartlegging-og-forebyggende-til/)
+- [Energy Vanguard - Water Heater Cycling and Legionella](https://www.energyvanguard.com/blog/will-your-water-heater-give-you-legionnaires-disease/)
+- [ByggeBolig - Tidsstyring på varmtvannsbereder](https://byggebolig.no/el-varmtvannsbereder/tidsstyring-pa-varmtvannsbereder)
+- [OSO Hotwater Saga Standard](https://osohotwater.no/product/varmtvannsbereder-saga-standard/)
+- [Tu.no - Hvordan styre effektforbruket](https://www.tu.no/artikler/ny-nettleie-hvordan-styre-effektforbruket/515299)
+
 ## Deferred (settes opp senere)
 
 - **Auto-detect av strømkalkulator-sensorer**: utenfor scope nå (brukeren valgte full uavhengighet via egen DSO-liste).
 - **Event-trigger på power-sensor-endring** for å fjerne sen-i-timen-blindspot. Krever HA-state-tracker som er ortogonalt fra coordinator-modellen.
+- **v0.2 shed-strategi-konfig**: CONF_SHED_STRATEGY + CONF_VVB_POWER_SENSOR + CONF_BILLADER_ENTITY (se Realistiske shed-rater).
 
 ## Bevisst utenfor scope
 
