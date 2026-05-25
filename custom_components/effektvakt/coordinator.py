@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import date
 from typing import TYPE_CHECKING
 
 from .const import (
@@ -92,3 +93,35 @@ def classify_raw_risk(*, margin_kw: float, safety_buffer_kw: float) -> str:
     if margin_kw <= 2 * safety_buffer_kw:
         return RISIKO_LOW
     return RISIKO_NONE
+
+
+def top_n_average(daily_max_kw: dict[date, float], *, n: int) -> float | None:
+    """Snitt av de n høyeste verdiene i daily_max_kw.
+
+    Returnerer None hvis dict er tom. Hvis det er færre enn n entries,
+    returneres snittet av alle.
+    """
+    if not daily_max_kw:
+        return None
+    sorted_vals = sorted(daily_max_kw.values(), reverse=True)
+    take = sorted_vals[:n]
+    return sum(take) / len(take)
+
+
+def compute_effective_threshold(
+    *,
+    next_tier_threshold_kw: float,
+    daily_max_kw: dict[date, float],
+) -> float:
+    """Beregn effective_threshold for topp-3-bevissthet.
+
+    Hvis < 2 dager logget: fall tilbake til next_tier_threshold (konservativt
+    valg tidlig i måneden).
+
+    Ellers: max(next_tier_threshold, snitt_av_topp_2_dager).
+    """
+    if len(daily_max_kw) < 2:
+        return next_tier_threshold_kw
+    topp_2 = top_n_average(daily_max_kw, n=2)
+    assert topp_2 is not None
+    return max(next_tier_threshold_kw, topp_2)
