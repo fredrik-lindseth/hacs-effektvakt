@@ -1,0 +1,106 @@
+blueprint:
+  name: Effektvakt - Climate med min-temp
+  description: >
+    Sett climate-entitet (panelovn) til min-temp ved kutt anbefalt, og
+    restore til lagret verdi når risiko er borte. Bruker en input_number-hjelper
+    for å persistere temperatur over HA-restart.
+    Failsafe: etter max_off_minutes restoreres temperatur uavhengig av sensor.
+  domain: automation
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/climate_min_temp.yaml
+  input:
+    binary_sensor_entity:
+      name: Effektvakt binary sensor
+      default: binary_sensor.effektvakt_kutt_ned_anbefalt
+      selector:
+        entity:
+          domain: binary_sensor
+    climate_entity:
+      name: Climate-entitet (panelovn)
+      selector:
+        entity:
+          domain: climate
+    min_temp:
+      name: Min-temperatur ved kutt
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 18
+          unit_of_measurement: °C
+    restore_helper:
+      name: input_number for å lagre forrige temperatur
+      description: Opprett en input_number med min=5, max=30, step=0.5, og pek hit.
+      selector:
+        entity:
+          domain: input_number
+    max_off_minutes:
+      name: Maks minutter med min-temp før tving-restore
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 240
+          step: 5
+
+variables:
+  climate_entity: !input climate_entity
+  restore_helper: !input restore_helper
+  min_temp: !input min_temp
+  max_off_minutes: !input max_off_minutes
+
+trigger:
+  - platform: state
+    entity_id: !input binary_sensor_entity
+    to: "on"
+    id: shed
+  - platform: state
+    entity_id: !input binary_sensor_entity
+    to: "off"
+    id: restore
+  - platform: homeassistant
+    event: start
+    id: ha_start
+
+mode: restart
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: shed
+        sequence:
+          - service: input_number.set_value
+            target:
+              entity_id: "{{ restore_helper }}"
+            data:
+              value: "{{ state_attr(climate_entity, 'temperature') | float(20) }}"
+          - service: climate.set_temperature
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              temperature: "{{ min_temp }}"
+          - delay:
+              minutes: "{{ max_off_minutes }}"
+          - service: climate.set_temperature
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              temperature: "{{ states(restore_helper) | float(20) }}"
+      - conditions:
+          - condition: trigger
+            id: restore
+        sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              temperature: "{{ states(restore_helper) | float(20) }}"
+      - conditions:
+          - condition: trigger
+            id: ha_start
+        sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: "{{ climate_entity }}"
+            data:
+              temperature: "{{ states(restore_helper) | float(20) }}"
