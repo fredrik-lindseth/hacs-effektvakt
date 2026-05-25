@@ -4,6 +4,16 @@ Følger [Keep a Changelog](https://keepachangelog.com/) og [SemVer](https://semv
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-25
+
+### Lagt til
+
+- `CONF_KUTT_STRATEGI`: tre strategier (blind / vvb_status / vvb_billader)
+- `CONF_VVB_POWER_SENSOR`: optional sensor for å garantere reelle kutt
+- `CONF_BILLADER_POWER_SENSOR`: optional sensor for stor enkeltlast
+- Ny sensor: `sensor.effektvakt_tilgjengelig_kutt` (kW)
+- Config flow og options flow utvidet med strategi-velger
+
 ## [0.1.0] - 2026-05-25
 
 ### Lagt til

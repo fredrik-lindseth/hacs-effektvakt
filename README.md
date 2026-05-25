@@ -19,8 +19,19 @@ Norske nettselskap fakturerer kapasitetsledd etter snittet av topp-3 maks-timer 
 | `sensor.effektvakt_projisert_time_snitt` | Forventet time-snitt i kW ved time-slutt |
 | `sensor.effektvakt_margin_til_neste_trinn` | Hvor mange kW under neste trinn (etter topp-3-vurdering) |
 | `sensor.effektvakt_topp_3_snitt_denne_maned` | Snitt av topp-3 maks-timer fra ulike dager |
+| `sensor.effektvakt_tilgjengelig_kutt` | Realistisk kutt-kapasitet i kW basert på valgt strategi |
 | `sensor.effektvakt_risiko_niva` | none / low / medium / high (hysteresefull) |
 | `binary_sensor.effektvakt_kutt_ned_anbefalt` | on når kutt anbefales |
+
+## Kutt-strategi
+
+Effektvakt støtter tre strategier for å vurdere hvor mye effekt som realistisk kan kuttes:
+
+- **Blind** (default): Antar 0,3 kW basert på typisk VVB duty cycle (15%). Ingen ekstra sensorer trengs.
+- **VVB med statussensor**: Krever en sensor som rapporterer VVB-effekten. Gir reelt tall (typisk 0 eller ~2 kW).
+- **VVB + billader**: Som over, pluss en billader-effektsensor. Største realistiske kutt-kapasitet.
+
+Se [docs/faq.md](docs/faq.md) for hvorfor strategi-valg er viktig.
 
 ## Blueprints
 

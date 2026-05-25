@@ -24,7 +24,10 @@
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
           "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
-          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
+          "kutt_strategi": "Kutt-strategi",
+          "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_billader)",
+          "billader_power_sensor": "Billader-effektsensor (valgfri, for vvb_billader)"
         }
       },
       "pricing": {
@@ -54,8 +57,20 @@
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
           "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
-          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
+          "kutt_strategi": "Kutt-strategi",
+          "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_billader)",
+          "billader_power_sensor": "Billader-effektsensor (valgfri, for vvb_billader)"
         }
+      }
+    }
+  },
+  "selector": {
+    "kutt_strategi": {
+      "options": {
+        "blind": "Blind (antar 0,3 kW VVB-kutt)",
+        "vvb_status": "VVB med statussensor (faktisk effekt)",
+        "vvb_billader": "VVB + billader (full fleksibilitet)"
       }
     }
   },

@@ -24,7 +24,10 @@
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
           "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
-          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
+          "kutt_strategi": "Cut strategy",
+          "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_billader)",
+          "billader_power_sensor": "EV charger power sensor (optional, for vvb_billader)"
         }
       },
       "pricing": {
@@ -54,8 +57,20 @@
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
           "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
-          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
+          "kutt_strategi": "Cut strategy",
+          "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_billader)",
+          "billader_power_sensor": "EV charger power sensor (optional, for vvb_billader)"
         }
+      }
+    }
+  },
+  "selector": {
+    "kutt_strategi": {
+      "options": {
+        "blind": "Blind (assumes 0.3 kW water heater cut)",
+        "vvb_status": "Water heater with status sensor (actual power)",
+        "vvb_billader": "Water heater + EV charger (full flexibility)"
       }
     }
   },
