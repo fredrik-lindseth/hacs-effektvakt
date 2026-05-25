@@ -1,0 +1,78 @@
+{
+  "title": "Effektvakt",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Velg nettselskap",
+        "description": "Effektvakt bruker kapasitetstrinn fra ditt nettselskap for å forutse trinn-overskridelser.",
+        "data": {
+          "dso": "Nettselskap"
+        }
+      },
+      "sensors": {
+        "title": "Velg sensorer",
+        "description": "Effektvakt trenger en power-sensor (instant-effekt i W eller kW) og helst en energy-sensor (kumulativ kWh).",
+        "data": {
+          "power_sensor": "Power-sensor (instant)",
+          "energy_sensor": "Energy-sensor (kumulativ, valgfri men anbefalt)",
+          "confirm_peak_sensor": "Jeg bekrefter at sensoren rapporterer instant-effekt"
+        }
+      },
+      "tuning": {
+        "title": "Innstillinger",
+        "description": "Disse kan endres senere via integrasjonens innstillinger.",
+        "data": {
+          "safety_buffer_kw": "Sikkerhetsmargin (kW)",
+          "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+        }
+      },
+      "pricing": {
+        "title": "Egendefinerte kapasitetstrinn",
+        "description": "Skriv inn dine egne kW-terskler og priser per måned. Én linje per trinn, sortert lavest først.",
+        "data": {
+          "kapasitetstrinn_custom": "Kapasitetstrinn (JSON, f.eks. [[2, 130], [5, 230]])"
+        }
+      }
+    },
+    "error": {
+      "sensor_not_found": "Sensoren finnes ikke",
+      "power_unit_invalid": "Power-sensor må ha enhet W eller kW",
+      "energy_unit_invalid": "Energy-sensor må ha enhet Wh eller kWh",
+      "peak_sensor_warning": "Sensoren ser ut som peak/snitt-aggregat. Velg instant-sensor eller bekreft.",
+      "kapasitetstrinn_invalid": "Kapasitetstrinn må være liste av [kW, kr] par sortert stigende",
+      "already_configured": "Denne power-sensoren er allerede konfigurert"
+    },
+    "abort": {
+      "already_configured": "Allerede konfigurert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Effektvakt-innstillinger",
+        "data": {
+          "safety_buffer_kw": "Sikkerhetsmargin (kW)",
+          "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_safety_buffer": {
+      "name": "Sett sikkerhetsmargin",
+      "description": "Endre safety_buffer_kw uten reload.",
+      "fields": {
+        "kw": {
+          "name": "kW",
+          "description": "Ny safety_buffer-verdi i kW"
+        }
+      }
+    },
+    "reset_topp_3": {
+      "name": "Nullstill topp-3-buffer",
+      "description": "Tøm daily_max-historikken for inneværende måned."
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "title": "Effektvakt",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select grid company",
+        "description": "Effektvakt uses your grid company's capacity tiers to predict tier crossings.",
+        "data": {
+          "dso": "Grid company"
+        }
+      },
+      "sensors": {
+        "title": "Select sensors",
+        "description": "Effektvakt needs a power sensor (instant power in W or kW) and ideally an energy sensor (cumulative kWh).",
+        "data": {
+          "power_sensor": "Power sensor (instant)",
+          "energy_sensor": "Energy sensor (cumulative, optional but recommended)",
+          "confirm_peak_sensor": "I confirm the sensor reports instantaneous power"
+        }
+      },
+      "tuning": {
+        "title": "Settings",
+        "description": "These can be changed later via integration options.",
+        "data": {
+          "safety_buffer_kw": "Safety buffer (kW)",
+          "min_risiko_for_kutt": "Minimum risk level that triggers shed",
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+        }
+      },
+      "pricing": {
+        "title": "Custom capacity tiers",
+        "description": "Enter your own kW thresholds and monthly prices. Sorted lowest first.",
+        "data": {
+          "kapasitetstrinn_custom": "Capacity tiers (JSON, e.g. [[2, 130], [5, 230]])"
+        }
+      }
+    },
+    "error": {
+      "sensor_not_found": "Sensor not found",
+      "power_unit_invalid": "Power sensor must have unit W or kW",
+      "energy_unit_invalid": "Energy sensor must have unit Wh or kWh",
+      "peak_sensor_warning": "Sensor looks like a peak/average aggregate. Pick an instant sensor or confirm.",
+      "kapasitetstrinn_invalid": "Capacity tiers must be list of [kW, NOK] pairs sorted ascending",
+      "already_configured": "This power sensor is already configured"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Effektvakt settings",
+        "data": {
+          "safety_buffer_kw": "Safety buffer (kW)",
+          "min_risiko_for_kutt": "Minimum risk level that triggers shed",
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_safety_buffer": {
+      "name": "Set safety buffer",
+      "description": "Change safety_buffer_kw without reload.",
+      "fields": {
+        "kw": {
+          "name": "kW",
+          "description": "New safety buffer value in kW"
+        }
+      }
+    },
+    "reset_topp_3": {
+      "name": "Reset top-3 buffer",
+      "description": "Clear daily_max history for the current month."
+    }
+  }
+}
