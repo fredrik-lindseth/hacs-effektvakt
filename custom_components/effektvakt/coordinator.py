@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING
 
 from .const import (
     MAX_POWER_CLAMP_W,
+    RISIKO_HIGH,
+    RISIKO_LOW,
+    RISIKO_MEDIUM,
+    RISIKO_NONE,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
 )
@@ -69,3 +73,22 @@ def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:
     if unit == "Wh":
         return value / 1000
     return value  # kWh
+
+
+def classify_raw_risk(*, margin_kw: float, safety_buffer_kw: float) -> str:
+    """Klassifiser rå risiko basert på margin og safety_buffer.
+
+    Returnerer en av RISIKO_NONE, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_HIGH.
+    Tabell:
+      none:   margin > 2 × buffer
+      low:    buffer < margin <= 2 × buffer
+      medium: 0 < margin <= buffer
+      high:   margin <= 0
+    """
+    if margin_kw <= 0:
+        return RISIKO_HIGH
+    if margin_kw <= safety_buffer_kw:
+        return RISIKO_MEDIUM
+    if margin_kw <= 2 * safety_buffer_kw:
+        return RISIKO_LOW
+    return RISIKO_NONE
