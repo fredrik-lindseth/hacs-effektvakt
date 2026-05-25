@@ -1,0 +1,56 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/jendrikseipp/vulture
+    rev: v2.14
+    hooks:
+      - id: vulture
+        args: [
+          "custom_components/effektvakt",
+          "vulture_whitelist.py",
+          "--min-confidence", "80",
+          "--exclude", "*test*",
+        ]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --no-error-summary]
+        files: ^custom_components/effektvakt/
+        pass_filenames: false
+        additional_dependencies: []
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest tests/ -v --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: sync_dso
+        name: Verify DSO sync
+        entry: python scripts/sync_dso_from_stromkalkulator.py --check
+        language: system
+        pass_filenames: false
+        files: ^(custom_components/effektvakt/dso\.py|scripts/sync_dso_from_stromkalkulator\.py)$

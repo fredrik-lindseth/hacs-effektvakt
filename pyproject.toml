@@ -1,0 +1,51 @@
+[project]
+name = "effektvakt"
+version = "0.1.0"
+description = "Home Assistant integration for prediktiv kapasitetstrinn-styring"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.5.0",
+    "ruff>=0.8.0",
+    "vulture>=2.13",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "hypothesis>=6.0.0",
+    "mypy>=1.8.0",
+    "voluptuous>=0.14",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "TCH", "RUF"]
+ignore = ["E501", "B008", "SIM108"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components.effektvakt"]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["custom_components/effektvakt"]
+exclude = ["*test*"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+files = ["custom_components/effektvakt"]
+exclude = ["tests"]
