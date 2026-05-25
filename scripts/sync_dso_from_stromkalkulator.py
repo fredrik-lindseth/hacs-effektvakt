@@ -50,6 +50,19 @@ def _normalize_kapasitetstrinn(raw: list) -> list[tuple[float, int]]:
     return [(float(t[0]), int(t[1])) for t in raw]
 
 
+def _format_kapasitetstrinn(trinn: list[tuple[float, int]]) -> str:
+    """Render trinn-listen som Python-literal med eksplisitt float('inf') støtte."""
+    import math
+
+    parts = []
+    for kw, pris in trinn:
+        if math.isinf(kw):
+            parts.append(f"(float('inf'), {pris})")
+        else:
+            parts.append(f"({kw}, {pris})")
+    return "[" + ", ".join(parts) + "]"
+
+
 def _generate(dso_list: dict) -> str:
     """Generer Python-kode for effektvakt/dso.py."""
     lines = [
@@ -85,7 +98,7 @@ def _generate(dso_list: dict) -> str:
         lines.append(f'    "{dso_id}": {{')
         lines.append(f'        "navn": "{navn}",')
         lines.append(f'        "prisomrade": "{prisomrade}",')
-        lines.append(f'        "kapasitetstrinn": {kapasitetstrinn!r},')
+        lines.append(f'        "kapasitetstrinn": {_format_kapasitetstrinn(kapasitetstrinn)},')
         lines.append("    },")
 
     lines.append("}")
