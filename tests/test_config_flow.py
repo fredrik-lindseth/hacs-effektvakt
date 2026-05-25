@@ -21,3 +21,9 @@ from custom_components.effektvakt.config_flow import looks_like_peak_sensor
 )
 def test_looks_like_peak_sensor(entity_id: str, friendly: str, expected: bool):
     assert looks_like_peak_sensor(entity_id, friendly_name=friendly) is expected
+
+
+def test_strategi_options_includes_alle_3():
+    from custom_components.effektvakt.const import STRATEGI_OPTIONS
+
+    assert STRATEGI_OPTIONS == ["blind", "vvb_status", "vvb_billader"]

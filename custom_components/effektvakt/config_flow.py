@@ -12,15 +12,19 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BILLADER_POWER_SENSOR,
     CONF_CONFIRM_PEAK_SENSOR,
     CONF_DSO,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
+    CONF_KUTT_STRATEGI,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
+    CONF_VVB_POWER_SENSOR,
     DEFAULT_DSO,
+    DEFAULT_KUTT_STRATEGI,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
@@ -28,6 +32,7 @@ from .const import (
     PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS,
     PEAK_SENSOR_NAME_PATTERNS,
     RISIKO_LEVELS,
+    STRATEGI_OPTIONS,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
 )
@@ -202,6 +207,19 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
                     ),
+                    vol.Required(CONF_KUTT_STRATEGI, default=DEFAULT_KUTT_STRATEGI): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[selector.SelectOptionDict(value=s, label=s) for s in STRATEGI_OPTIONS],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key="kutt_strategi",
+                        ),
+                    ),
+                    vol.Optional(CONF_VVB_POWER_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    ),
+                    vol.Optional(CONF_BILLADER_POWER_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    ),
                 }
             ),
         )
@@ -252,6 +270,22 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
                         default=data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
+                    ),
+                    vol.Required(
+                        CONF_KUTT_STRATEGI,
+                        default=data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[selector.SelectOptionDict(value=s, label=s) for s in STRATEGI_OPTIONS],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key="kutt_strategi",
+                        ),
+                    ),
+                    vol.Optional(CONF_VVB_POWER_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    ),
+                    vol.Optional(CONF_BILLADER_POWER_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
                     ),
                 }
             ),
