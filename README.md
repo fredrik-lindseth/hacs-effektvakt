@@ -26,8 +26,8 @@ Norske nettselskap fakturerer kapasitetsledd etter snittet av topp-3 maks-timer 
 
 Klikk for å importere blueprint direkte til ditt Home Assistant:
 
-- [Enkel last-shed](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fenkel_last_shed.yaml): én switch av/på basert på risiko
-- [Prioritert last-shed](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fprioritert_last_shed.yaml): flere switches i rekkefølge
+- [Enkel lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fenkel_lastkutt.yaml): én switch av/på basert på risiko
+- [Prioritert lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fprioritert_lastkutt.yaml): flere switches i rekkefølge
 - [Climate med min-temp](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fclimate_min_temp.yaml): panelovner med restore-helper
 - [Kun varsel](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fraw%2Fmain%2Fdocs%2Fblueprints%2Fkun_varsel.yaml): push-notifikasjon, ingen styring
 
@@ -37,11 +37,11 @@ Se [docs/dashboard-eksempel.yaml](docs/dashboard-eksempel.yaml) for en kopierbar
 
 ## Ofte stilte spørsmål
 
-Lurer du på om det er trygt å skru av varmtvannstanken, hvor mye du faktisk sparer, eller hvilke laster som er smartest å shedde? Se [docs/faq.md](docs/faq.md).
+Lurer du på om det er trygt å skru av varmtvannstanken, hvor mye du faktisk sparer, eller hvilke laster som er smartest å kutte? Se [docs/faq.md](docs/faq.md).
 
 ## Failsafe
 
-Alle shed-blueprints har en `max_off_minutes`-input som tvinger lasten på igjen etter en tidsfrist, uavhengig av Effektvakts tilstand. Effektvakts coordinator har egen watchdog som setter sensorer til `unknown` hvis ingen oppdatering har skjedd på 2 minutter. Designet skal aldri etterlate VVB-en din av forever.
+Alle lastkutt-blueprints har en `max_off_minutes`-input som tvinger lasten på igjen etter en tidsfrist, uavhengig av Effektvakts tilstand. Effektvakts coordinator har egen watchdog som setter sensorer til `unknown` hvis ingen oppdatering har skjedd på 2 minutter. Designet skal aldri etterlate VVB-en din av forever.
 
 ## Lisens
 

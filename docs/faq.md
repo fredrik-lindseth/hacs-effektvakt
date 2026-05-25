@@ -31,9 +31,9 @@ Faktisk: hvis tanken får stå litt kaldere mens den er av, blir varmetapet litt
 
 ## Hvor lenge kan tanken stå av før jeg merker det?
 
-For en 200-liters bereder med termostatinnstilling 70 °C: 4-6 timer ved typisk bruk, før vannet du tapper blir merkbart kjøligere. Effektvakt sine standard 15-30 minutters shed-vinduer er usynlig for brukeren.
+For en 200-liters bereder med termostatinnstilling 70 °C: 4-6 timer ved typisk bruk, før vannet du tapper blir merkbart kjøligere. Effektvakt sine standard 15-30 minutters kuttvinduer er usynlig for brukeren.
 
-Hvis du dusjer rett etter et shed-event, vil du ikke merke noe så lenge tanken var varm før shedden begynte.
+Hvis du dusjer rett etter et lastkutt, vil du ikke merke noe så lenge tanken var varm før kuttet begynte.
 
 ## Hvor mye sparer jeg egentlig på dette?
 
@@ -68,14 +68,14 @@ Hjemmeladere på 3,6-22 kW er den eneste enkeltkilden som gir umiddelbar stor ef
 
 Hvis du har elbil er det den klart viktigste lasten å koble på Effektvakt-styring.
 
-## Hvilke laster bør jeg shedde, i prioritert rekkefølge?
+## Hvilke laster bør jeg kutte, i prioritert rekkefølge?
 
 1. **Elbil-lader** (3,6-22 kW). Ingen komfortkostnad, kjempestor fleksibilitet.
 2. **Varmtvannsbereder** (1,5-3 kW, 0 komfortkostnad under 60 min).
 3. **Panelovner** (0,5-2 kW per ovn, treghet i romtemperatur gir 15-30 min buffer).
 4. **Gulvvarme** (1-3 kW, lang treghet).
 
-Unngå å shedde induksjonstopp (irriterende mid-matlaging) og tørketrommel/vaskemaskin/oppvaskmaskin (programmene tåler dårlig avbrudd).
+Unngå å kutte induksjonstopp (irriterende mid-matlaging) og tørketrommel/vaskemaskin/oppvaskmaskin (programmene tåler dårlig avbrudd).
 
 ## Konkrete tall fra en norsk husholdning
 
@@ -91,7 +91,7 @@ Faktisk effektmåling fra et hus i Bergen (4-5 m² baderom, gulvvarme på 130 W/
 | Varmtvannsbereder (OSO Saga 200L) | 2 000 W | ~250 W |
 | Panelovn typisk | 600-1500 W | 200-600 W |
 
-For en husholdning som vanligvis ligger like under et kapasitetstrinn, kan kombinasjonen "VVB + 2-3 varmekabler + 1 panelovn" gi 3-5 kW tilgjengelig shed-kapasitet, mer enn nok til å hindre en trinn-overskridelse på 10 kW eller 15 kW.
+For en husholdning som vanligvis ligger like under et kapasitetstrinn, kan kombinasjonen "VVB + 2-3 varmekabler + 1 panelovn" gi 3-5 kW tilgjengelig kutting, mer enn nok til å hindre en trinn-overskridelse på 10 kW eller 15 kW.
 
 ## Kilder
 

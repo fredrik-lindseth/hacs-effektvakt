@@ -110,7 +110,7 @@ def _ruff_format(path: Path) -> None:
 
     result = subprocess.run(["ruff", "format", str(path)], capture_output=True)
     if result.returncode != 0:
-        # ruff mangler — ignorer, sync-sjekken vil uansett bruke samme logikk
+        # ruff mangler, ignorer. Sync-sjekken bruker uansett samme logikk.
         pass
 
 

@@ -23,7 +23,7 @@
         "description": "These can be changed later via integration options.",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
-          "min_risiko_for_kutt": "Minimum risk level that triggers shed",
+          "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
           "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
         }
       },
@@ -53,7 +53,7 @@
         "title": "Effektvakt settings",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
-          "min_risiko_for_kutt": "Minimum risk level that triggers shed",
+          "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
           "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
         }
       }

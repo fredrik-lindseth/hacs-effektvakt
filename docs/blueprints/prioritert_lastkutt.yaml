@@ -1,11 +1,11 @@
 blueprint:
-  name: Effektvakt - Prioritert last-shed
+  name: Effektvakt - Prioritert lastkutt
   description: >
     Slå av switches i prioritert rekkefølge basert på risiko-nivå.
     medium risiko -> første switch av. high risiko -> alle switches av.
     Slår på igjen i revers rekkefølge når risiko synker.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/prioritert_last_shed.yaml
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/prioritert_lastkutt.yaml
   input:
     risiko_sensor:
       name: Risiko-sensor

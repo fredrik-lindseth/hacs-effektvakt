@@ -52,7 +52,7 @@ trigger:
   - platform: state
     entity_id: !input binary_sensor_entity
     to: "on"
-    id: shed
+    id: kutt
   - platform: state
     entity_id: !input binary_sensor_entity
     to: "off"
@@ -67,7 +67,7 @@ action:
   - choose:
       - conditions:
           - condition: trigger
-            id: shed
+            id: kutt
         sequence:
           - service: input_number.set_value
             target:

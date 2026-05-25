@@ -1,4 +1,4 @@
-# Effektvakt — kongstanke
+# Effektvakt: kongstanke
 
 Prediktiv effekt-styring for norske strømkunder med kapasitetsbasert nettleie.
 
@@ -30,17 +30,17 @@ Clean separation. Bytter du ut Effektvakt, fortsetter Strømkalkulator. Bytter d
 
 Fra research i [docs/research/funn-fra-ha-community.md](../hacs-strømkalkulator/docs/research/funn-fra-ha-community.md) i Strømkalkulator-repoet:
 
-- **Cheapest-hours-blueprintet** (community.home-assistant.io): triggerer last basert på spotpris. Det er pris-optimering, ikke effekt-beskyttelse. Effektvakt er ortogonal — den kan kjøre samtidig.
+- **Cheapest-hours-blueprintet** (community.home-assistant.io): triggerer last basert på spotpris. Det er pris-optimering, ikke effekt-beskyttelse. Effektvakt er ortogonal, den kan kjøre samtidig.
 - **EnergyTariff (epaulsen)**: tracker kapasitetstrinn men styrer ikke noe. Vi kan lese kapasitetstrinn fra Strømkalkulator (eller EnergyTariff hvis brukeren foretrekker det) og styre.
 - **Tråd 9253 (hjemmeautomasjon.no)**: PID-regulator for samme problem. Avansert, krever Python-kunnskap. Vi vil ha en config-flow-basert versjon som "bare virker".
-- **EMHASS**: linear programming for batteri/PV/last. Stort scope-skille — vi gjør én ting.
+- **EMHASS**: linear programming for batteri/PV/last. Stort scope-skille, vi gjør én ting.
 
 ## Tekniske grunnsteiner
 
 - **Coordinator** oppdaterer hvert minutt (eventuelt hvert 30 sek hvis risiko)
 - **Inputs**:
   - Power-sensor (instantan W)
-  - Energi-sensor (kumulativ kWh) — for å vite hvor mye som faktisk er forbrukt denne timen
+  - Energi-sensor (kumulativ kWh), for å vite hvor mye som faktisk er forbrukt denne timen
   - Kapasitetstrinn-grenser (statisk konfig eller lest fra Strømkalkulator)
   - Liste over "controllable loads" (switch.* eller climate.*)
 - **Beregning**:

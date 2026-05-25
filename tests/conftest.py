@@ -47,7 +47,7 @@ class _CoordinatorEntityStub:
 
 
 class _SensorEntityStub:
-    """Minimal stub for SensorEntity — mirrors HA's _attr_* property pattern."""
+    """Minimal stub for SensorEntity. Mirrors HA's _attr_* property pattern."""
 
     @property
     def native_unit_of_measurement(self) -> str | None:

@@ -1,11 +1,11 @@
 blueprint:
-  name: Effektvakt - Enkel last-shed
+  name: Effektvakt - Enkel lastkutt
   description: >
     Slå av én switch når Effektvakt signaliserer kutt anbefalt.
     Slår på igjen automatisk når risikoen er borte, eller etter max_off_minutes
     som failsafe mot at coordinator henger.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/enkel_last_shed.yaml
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/enkel_lastkutt.yaml
   input:
     binary_sensor_entity:
       name: Effektvakt binary sensor

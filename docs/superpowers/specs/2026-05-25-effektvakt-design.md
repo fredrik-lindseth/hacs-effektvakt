@@ -172,8 +172,8 @@ custom_components/effektvakt/
 
 docs/
 ├── blueprints/
-│   ├── enkel_last_shed.yaml
-│   ├── prioritert_last_shed.yaml
+│   ├── enkel_lastkutt.yaml
+│   ├── prioritert_lastkutt.yaml
 │   ├── climate_min_temp.yaml
 │   └── kun_varsel.yaml
 ├── dashboard-eksempel.yaml
@@ -292,13 +292,13 @@ reset_topp_3:
   description: Debug-hjelp ved feilmåling
 ```
 
-Bevisst utelatt: ingen `shed_load`-service. Blueprintet kaller `switch.turn_off` direkte mot sin egen target, slik at API-flaten er tynnere og koblingen lavere.
+Bevisst utelatt: ingen `cut_load`-service. Blueprintet kaller `switch.turn_off` direkte mot sin egen target, slik at API-flaten er tynnere og koblingen lavere.
 
 ## Blueprints (4 stk)
 
 Alle lagres som YAML i `docs/blueprints/` og lenkes fra README med My-Home-Assistant-importknapp.
 
-### 1. `enkel_last_shed.yaml`
+### 1. `enkel_lastkutt.yaml`
 
 - **Bruker**: én VVB eller én billader
 - **Trigger**: `binary_sensor.effektvakt_kutt_ned_anbefalt` → on
@@ -306,7 +306,7 @@ Alle lagres som YAML i `docs/blueprints/` og lenkes fra README med My-Home-Assis
 - **Restore**: trigger off → switch.turn_on (eller `restore_after_minutes` hvis brukeren vil)
 - **Input-selectors**: switch_entity (selector: target/entity), restore_strategy (selector: select)
 
-### 2. `prioritert_last_shed.yaml`
+### 2. `prioritert_lastkutt.yaml`
 
 - **Bruker**: flere loads i prioritert rekkefølge
 - **Trigger**: `sensor.effektvakt_risiko_niva` endrer seg
@@ -337,8 +337,8 @@ README har en seksjon:
 
 Klikk for å importere blueprint direkte til ditt HA:
 
-- [Enkel last-shed](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
-- [Prioritert last-shed](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
+- [Enkel lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
+- [Prioritert lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
 - [Climate med min-temp](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
 - [Kun varsel](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...)
 ```
@@ -444,11 +444,11 @@ if (now - last_successful_update) > timedelta(minutes=2):
 
 Det sikrer at "sensor blir unknown ved coordinator-død" virker selv om coordinator-loopen selv står stille.
 
-### Restore-tidsfrist i shed-blueprints
+### Restore-tidsfrist i lastkutt-blueprints
 
-Shed-blueprints (`enkel_last_shed`, `prioritert_last_shed`, `climate_min_temp`) MÅ inneholde `max_off_minutes`-input. `kun_varsel` har ingen handling å reversere og er unntatt.
+Lastkutt-blueprints (`enkel_lastkutt`, `prioritert_lastkutt`, `climate_min_temp`) MÅ inneholde `max_off_minutes`-input. `kun_varsel` har ingen handling å reversere og er unntatt.
 
-Skjelett for shed-blueprints:
+Skjelett for lastkutt-blueprints:
 
 ```yaml
 input:
@@ -580,13 +580,13 @@ Dette er en fundamental begrensning av 60s polling-frekvens og kan ikke unngås 
 
 - **DST-overgang (29.03 og 27.10)**: time-bucket nullstilles ved `(hour, utcoffset)`-tuple endring, ikke kun hour. Spesielt høst-DST gir to 02-timer på rad: `current_hour == prev_hour` men `utcoffset` skifter +02:00 → +01:00. Følg samme mønster som strømkalkulator coordinator.py:557-580.
 
-## Realistiske shed-rater (post-research 2026-05-25)
+## Realistiske kuttmengder (post-research 2026-05-25)
 
 Etter at v0.1.0 ble bygget, ble det gjort research på faktiske VVB-egenskaper og duty cycle. Funn (se kilder under):
 
 - Norsk standard VVB (OSO Saga): 2 kW element, duty cycle 10-15% i hvile
 - Et 30-min av-vindu uten statussensor treffer "element på" bare ~15% av tiden
-- **Blind VVB shed**: forventet 0.15 kWh per event (duty-cycle-vektet)
+- **Blind VVB-kutt**: forventet 0.15 kWh per event (duty-cycle-vektet)
 - **VVB med statussensor**: 1.0 kWh per event (2 kW i 30 min, garantert treff)
 - **VVB + billader-pause**: opp til 2.5 kWh per event
 
@@ -604,12 +604,12 @@ Legionella er IKKE et reelt problem ved 15-60 min av-perioder så lenge tanken h
 
 ### Anbefalinger til v0.2
 
-Coordinator bør konfigureres med eksplisitt shed-modell:
+Coordinator bør konfigureres med eksplisitt kutt-modell:
 
-1. **Add CONF_SHED_STRATEGY**: enum `blind | with_vvb_status | with_billader`
+1. **Add CONF_KUTT_STRATEGI**: enum `blind | with_vvb_status | with_billader`
 2. **Add CONF_VVB_POWER_SENSOR**: optional sensor som rapporterer VVB-effekt i sanntid. Når satt: anbefal kun kutt når sensoren viser > 1000 W (elementet varmer).
 3. **Add CONF_BILLADER_ENTITY**: optional switch som kan pauses for ekstra ~3.6 kW headroom.
-4. **Coordinator-output**: nytt felt `realistisk_shed_kw` som reflekterer brukerens shed-konfigurasjon.
+4. **Coordinator-output**: nytt felt `realistisk_kutt_kw` som reflekterer brukerens kutt-konfigurasjon.
 
 Disse endringene er deferred til v0.2 fordi v0.1.0 er kjøreklar i grunnform.
 
@@ -625,7 +625,7 @@ Disse endringene er deferred til v0.2 fordi v0.1.0 er kjøreklar i grunnform.
 
 - **Auto-detect av strømkalkulator-sensorer**: utenfor scope nå (brukeren valgte full uavhengighet via egen DSO-liste).
 - **Event-trigger på power-sensor-endring** for å fjerne sen-i-timen-blindspot. Krever HA-state-tracker som er ortogonalt fra coordinator-modellen.
-- **v0.2 shed-strategi-konfig**: CONF_SHED_STRATEGY + CONF_VVB_POWER_SENSOR + CONF_BILLADER_ENTITY (se Realistiske shed-rater).
+- **v0.2 kutt-strategi-konfig**: CONF_KUTT_STRATEGI + CONF_VVB_POWER_SENSOR + CONF_BILLADER_ENTITY (se Realistiske kuttmengder).
 
 ## Bevisst utenfor scope
 
@@ -666,7 +666,7 @@ Avhengigheter:
 1. **Døgn-topp, ikke time-topp**: Kritisk fiks. NVE-modellen er én topp-time per dag, så snitt av tre høyeste DAGENE. Strømkalkulator implementerer det via `_daily_max_power: dict[date, ...]`. Effektvakts coordinator bruker nå `_daily_max_kw: dict[date, float]`, og `effective_threshold` bygger på topp-2-DAGER, ikke topp-2-timer.
 2. **Persistering forenklet**: `daily_max_kw` (én entry per dag) i stedet for full `hour_history`. Mindre minne og lagring, samsvarer med NVE-modellen.
 3. **Fallback ved tomt datagrunnlag**: når `len(daily_max_kw) < 2`, faller `effective_threshold` tilbake til ren `next_tier_threshold`. Konservativt valg første dager i måneden.
-4. **`kun_varsel.yaml` unntatt `max_off_minutes`**: motsetning fra forrige spec rettet. Bare shed-blueprints har failsafe-input.
+4. **`kun_varsel.yaml` unntatt `max_off_minutes`**: motsetning fra forrige spec rettet. Bare lastkutt-blueprints har failsafe-input.
 5. **Power-sensor unit-validering**: avvis hvis ikke W eller kW. Energy-sensor: avvis hvis ikke kWh eller Wh.
 6. **Adaptiv tick-frekvens flyttet til kjerne**: 60/30/15s basert på risiko-nivå. Tidligere "deferred", nå spesifisert som påkrevd.
 7. **Sen-i-timen-blindspot dokumentert**: kjent begrensning av 60s polling. Hvis bruker slår på stor last 18:58, kan timen bli ny topp-3-dag før Effektvakt rakk å reagere.

@@ -38,10 +38,10 @@ def _aggregate_daily_max(hours: list[dict]) -> dict[date, float]:
     return daily
 
 
-def _simulate_with_shed(hours: list[dict], trinn: list[tuple[float, int]], shed_kwh: float = 0.5) -> dict[date, float]:
-    """Anta Effektvakt fikk styre. Reduserer kwh med shed_kwh i timer hvor risiko ville vært >= medium.
+def _simulate_with_kutt(hours: list[dict], trinn: list[tuple[float, int]], kutt_kwh: float = 0.5) -> dict[date, float]:
+    """Anta Effektvakt fikk styre. Reduserer kwh med kutt_kwh i timer hvor risiko ville vært >= medium.
 
-    shed_kwh modellerer tre scenarier:
+    kutt_kwh modellerer tre scenarier:
       0.15  - blind VVB (duty-cycle ~15%, 2 kW x 30 min x 0.15 = 0.15 kWh)
       1.0   - VVB med status-sensor (garantert 2 kW x 30 min = 1.0 kWh)
       2.5   - VVB med status + billader-pause (1.0 + 1.6 kWh ≈ 2.5 kWh)
@@ -66,8 +66,8 @@ def _simulate_with_shed(hours: list[dict], trinn: list[tuple[float, int]], shed_
                 daily_max_kw=daily_max_so_far,
             )
             margin = effective_threshold - kwh
-            would_shed = margin <= safety_buffer_kw
-            adjusted = kwh - shed_kwh if would_shed else kwh
+            ville_kuttet = margin <= safety_buffer_kw
+            adjusted = kwh - kutt_kwh if ville_kuttet else kwh
 
         if adjusted > daily_result.get(d, 0.0):
             daily_result[d] = adjusted
@@ -93,8 +93,8 @@ def test_replay_skadebegrensning_over_5_måneder():
     """Kontrafaktisk besparelse: styring skal aldri forverre og gi positiv effekt minst én måned.
 
     Måneder med høyt forbruk godt over en tier-grense (f.eks. jan/feb/des med
-    topp ~6 kWh i 5-10 kW-trinnet) vil sjelden vise målbar top-3-forbedring --
-    shedding hjelper kun når borter-time ER daglig topp. Det er forventet.
+    topp ~6 kWh i 5-10 kW-trinnet) vil sjelden vise målbar top-3-forbedring.
+    Lastkutt hjelper kun når den aktuelle timen ER daglig topp. Det er forventet.
     Testen sjekker at systemet er ikke-negativt (invariant) og demonstrerer
     faktisk nytte i måneder nær en tier-grense.
     """
@@ -104,7 +104,7 @@ def test_replay_skadebegrensning_over_5_måneder():
     for path in BKK_FIXTURES:
         hours = _load_fixture(path)
         rå_daily = _aggregate_daily_max(hours)
-        post_daily = _simulate_with_shed(hours, trinn, shed_kwh=0.5)
+        post_daily = _simulate_with_kutt(hours, trinn, kutt_kwh=0.5)
 
         rå_topp_3 = top_n_average(rå_daily, n=3) or 0.0
         post_topp_3 = top_n_average(post_daily, n=3) or 0.0
@@ -127,8 +127,8 @@ def test_replay_skadebegrensning_over_5_måneder():
     )
 
 
-# Scenario-parametere: (shed_kwh, label, min_forbedring_kw, min_måneder_med_forbedring, trinn_bevaring_krav)
-_SHED_SCENARIER = [
+# Scenario-parametere: (kutt_kwh, label, min_forbedring_kw, min_måneder_med_forbedring, trinn_bevaring_krav)
+_KUTT_SCENARIER = [
     pytest.param(
         0.15,
         "blind VVB (duty-cycle ~15%)",
@@ -160,9 +160,9 @@ _SHED_SCENARIER = [
     not FIXTURES_DIR.exists() or not BKK_FIXTURES,
     reason="strømkalkulator-fixturer ikke tilgjengelig",
 )
-@pytest.mark.parametrize("shed_kwh,label,min_forbedring,min_måneder,min_trinn_bevaring", _SHED_SCENARIER)
-def test_replay_shed_scenarier(
-    shed_kwh: float,
+@pytest.mark.parametrize("kutt_kwh,label,min_forbedring,min_måneder,min_trinn_bevaring", _KUTT_SCENARIER)
+def test_replay_kutt_scenarier(
+    kutt_kwh: float,
     label: str,
     min_forbedring: float,
     min_måneder: int,
@@ -170,12 +170,12 @@ def test_replay_shed_scenarier(
 ) -> None:
     """Tre VVB-scenarier mot reelle BKK-fixturer.
 
-    Dokumenterer at blind shed (duty-cycle-vektet) er tilnærmet verdiløst,
+    Dokumenterer at blind lastkutt (duty-cycle-vektet) er tilnærmet verdiløst,
     mens status-sensor eller billader-kombinasjon gir målbar kapasitetsreduksjon.
     """
     trinn = KAPASITETSTRINN_PER_DSO["bkk"]["kapasitetstrinn"]
 
-    print(f"\n--- Scenario: {label} (shed_kwh={shed_kwh}) ---")
+    print(f"\n--- Scenario: {label} (kutt_kwh={kutt_kwh}) ---")
     print(f"  {'Måned':<30} {'Rå topp-3':>10} {'Post topp-3':>11} {'Forbedring':>11}  Trinn")
 
     måneder_over_krav = 0
@@ -184,7 +184,7 @@ def test_replay_shed_scenarier(
     for path in BKK_FIXTURES:
         hours = _load_fixture(path)
         rå_daily = _aggregate_daily_max(hours)
-        post_daily = _simulate_with_shed(hours, trinn, shed_kwh=shed_kwh)
+        post_daily = _simulate_with_kutt(hours, trinn, kutt_kwh=kutt_kwh)
 
         rå_topp_3 = top_n_average(rå_daily, n=3) or 0.0
         post_topp_3 = top_n_average(post_daily, n=3) or 0.0
