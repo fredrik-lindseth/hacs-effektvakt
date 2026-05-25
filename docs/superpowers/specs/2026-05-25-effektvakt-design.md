@@ -503,7 +503,11 @@ Skrives til `.storage/effektvakt_{entry.entry_id}` ved hver klokketime-rollover 
     "energy_at_hour_start": 124523.105,
     "previous_month_top_3_snitt_kw": 9.2,
     "previous_month_name": "2026-04",
-    "hysterese_state": {"nivå": "low", "pending_nivå": null, "pending_since": null}
+    "hysterese_state": {
+      "nivå": "low",
+      "pending_nivå": null,
+      "pending_since": null
+    }
   }
 }
 ```
@@ -594,11 +598,11 @@ Legionella er IKKE et reelt problem ved 15-60 min av-perioder så lenge tanken h
 
 ### Empirisk replay-resultat (5 BKK-måneder, des 2025 - apr 2026)
 
-| Scenario | Maks månedlig forbedring | Trinn-bevaring |
-|---|---|---|
-| Blind VVB (0.15 kWh) | +0.15 kW (mars) | Aldri |
-| VVB med status (1.0 kWh) | +0.67 kW (mars) | Aldri |
-| VVB + billader (2.5 kWh) | +0.67 kW (mars, capped) | Aldri |
+| Scenario                 | Maks månedlig forbedring | Trinn-bevaring |
+| ------------------------ | ------------------------ | -------------- |
+| Blind VVB (0.15 kWh)     | +0.15 kW (mars)          | Aldri          |
+| VVB med status (1.0 kWh) | +0.67 kW (mars)          | Aldri          |
+| VVB + billader (2.5 kWh) | +0.67 kW (mars, capped)  | Aldri          |
 
 **Innsikt**: Effektvakt har verdi i å hindre OPPGRADERING til neste trinn, ikke nedgradering. Når topp-3-snitt allerede ligger godt inne i et trinn (som vintermåneder i 5-10 kW-trinnet), gir kutt ingen kroner spart. Mars-måneden viser at 0.67 kW reduksjon er mulig hvis det skjer nær en trinngrense.
 

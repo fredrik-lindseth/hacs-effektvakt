@@ -12,7 +12,7 @@ Strategien bestemmer hva `sensor.effektvakt_tilgjengelig_kutt` rapporterer. Den 
 
 **Hva den gjør**: Returnerer alltid 0,3 kW, basert på at en norsk standard VVB (2 kW element) er aktiv ca. 15% av tiden i normal drift.
 
-**Problem**: Duty cycle-antagelsen på 15% betyr at det er 85% sjanse for at VVB-en *ikke* varmer i et gitt øyeblikk. Slår du av VVB blindt ved medium risiko, er den reelle forventede effektreduksjonen 0,15 × 2 kW = 0,3 kW. Noen ganger er VVB aktiv og kuttet gir 2 kW. Noen ganger er den allerede av og kuttet gir 0 kW.
+**Problem**: Duty cycle-antagelsen på 15% betyr at det er 85% sjanse for at VVB-en _ikke_ varmer i et gitt øyeblikk. Slår du av VVB blindt ved medium risiko, er den reelle forventede effektreduksjonen 0,15 × 2 kW = 0,3 kW. Noen ganger er VVB aktiv og kuttet gir 2 kW. Noen ganger er den allerede av og kuttet gir 0 kW.
 
 **Når bruke**: Ingen smart plugg på VVB. Rask oppsett. Akseptabelt for testing eller husholdninger der VVB sjelden er den avgjørende faktoren.
 
@@ -40,13 +40,13 @@ Strategien bestemmer hva `sensor.effektvakt_tilgjengelig_kutt` rapporterer. Den 
 
 **Eksempel-tall fra typisk husholdning**:
 
-| Last | Effekt når aktiv | Bidrag til kutt |
-|---|---|---|
-| VVB (OSO Saga 200L) | 2 000 W | 2,0 kW |
-| Gulvvarme bad | 550 W | 0,55 kW |
-| Gulvvarme stue | 900 W | 0,90 kW |
-| Panelovn | 1 200 W | 1,2 kW |
-| **Sum** | | **4,65 kW** |
+| Last                | Effekt når aktiv | Bidrag til kutt |
+| ------------------- | ---------------- | --------------- |
+| VVB (OSO Saga 200L) | 2 000 W          | 2,0 kW          |
+| Gulvvarme bad       | 550 W            | 0,55 kW         |
+| Gulvvarme stue      | 900 W            | 0,90 kW         |
+| Panelovn            | 1 200 W          | 1,2 kW          |
+| **Sum**             |                  | **4,65 kW**     |
 
 Med 4,65 kW tilgjengelig kutt er det god margin mot de fleste trinngrenser. Blueprints kan bruke `sensor.effektvakt_tilgjengelig_kutt` for å avgjøre hvilke laster som faktisk er nødvendig å skru av.
 
@@ -56,12 +56,12 @@ Med 4,65 kW tilgjengelig kutt er det god margin mot de fleste trinngrenser. Blue
 
 ## Sammenligning
 
-| | blind | vvb_status | vvb_pluss_ekstra |
-|---|---|---|---|
-| Ekstra sensorer | Nei | VVB | VVB + liste |
-| Presisjon | Lav | God | Best |
-| Oppsett | Enkelt | Middels | Mer arbeid |
-| Anbefalt for | Testing / ingen smart plugg | VVB alene | Flere kuttbare laster |
+|                 | blind                       | vvb_status | vvb_pluss_ekstra      |
+| --------------- | --------------------------- | ---------- | --------------------- |
+| Ekstra sensorer | Nei                         | VVB        | VVB + liste           |
+| Presisjon       | Lav                         | God        | Best                  |
+| Oppsett         | Enkelt                      | Middels    | Mer arbeid            |
+| Anbefalt for    | Testing / ingen smart plugg | VVB alene  | Flere kuttbare laster |
 
 ---
 
@@ -81,4 +81,4 @@ condition:
     above: 0.5
 ```
 
-Dette slår bare av lasten hvis Effektvakt anbefaler kutt *og* vi faktisk har minst 0,5 kW tilgjengelig (dvs. VVB-en varmer).
+Dette slår bare av lasten hvis Effektvakt anbefaler kutt _og_ vi faktisk har minst 0,5 kW tilgjengelig (dvs. VVB-en varmer).

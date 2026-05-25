@@ -12,13 +12,14 @@ Effektvakt kommer med fire blueprints i `docs/blueprints/`. De er laget for å b
 
 **Input**:
 
-| Felt | Standard | Beskrivelse |
-|---|---|---|
-| `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren |
-| `switch_entity` | (ingen) | Switchen som slås av |
-| `max_off_minutes` | 30 | Failsafe: tving på igjen etter N minutter |
+| Felt                   | Standard                                     | Beskrivelse                               |
+| ---------------------- | -------------------------------------------- | ----------------------------------------- |
+| `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren                       |
+| `switch_entity`        | (ingen)                                      | Switchen som slås av                      |
+| `max_off_minutes`      | 30                                           | Failsafe: tving på igjen etter N minutter |
 
 **Oppførsel**:
+
 - Sensor `on`: switch slås av, timer starter
 - Timer utløper: switch slås på (uavhengig av sensor)
 - Sensor `off`: switch slås på umiddelbart
@@ -45,14 +46,15 @@ use_blueprint:
 
 **Input**:
 
-| Felt | Standard | Beskrivelse |
-|---|---|---|
-| `risiko_sensor` | `sensor.effektvakt_risiko_niva` | Effektvakt risiko-sensor |
-| `switch_high_priority` | (ingen) | Kuttes først (medium risiko) |
-| `switch_medium_priority` | (ingen) | Kuttes i tillegg (high risiko) |
-| `max_off_minutes` | 30 | Failsafe per switch |
+| Felt                     | Standard                        | Beskrivelse                    |
+| ------------------------ | ------------------------------- | ------------------------------ |
+| `risiko_sensor`          | `sensor.effektvakt_risiko_niva` | Effektvakt risiko-sensor       |
+| `switch_high_priority`   | (ingen)                         | Kuttes først (medium risiko)   |
+| `switch_medium_priority` | (ingen)                         | Kuttes i tillegg (high risiko) |
+| `max_off_minutes`        | 30                              | Failsafe per switch            |
 
 **Oppførsel**:
+
 - `medium` risiko: switch 1 av, switch 2 på
 - `high` risiko: begge av, failsafe starter
 - `low` / `none`: begge på
@@ -80,13 +82,13 @@ use_blueprint:
 
 **Input**:
 
-| Felt | Standard | Beskrivelse |
-|---|---|---|
-| `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren |
-| `climate_entity` | (ingen) | Panelovn eller annen climate |
-| `min_temp` | 10 °C | Setpunkt under kutt |
-| `restore_helper` | (ingen) | `input_number` for å lagre forrige temp |
-| `max_off_minutes` | 30 | Failsafe: restore etter N minutter |
+| Felt                   | Standard                                     | Beskrivelse                             |
+| ---------------------- | -------------------------------------------- | --------------------------------------- |
+| `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren                     |
+| `climate_entity`       | (ingen)                                      | Panelovn eller annen climate            |
+| `min_temp`             | 10 °C                                        | Setpunkt under kutt                     |
+| `restore_helper`       | (ingen)                                      | `input_number` for å lagre forrige temp |
+| `max_off_minutes`      | 30                                           | Failsafe: restore etter N minutter      |
 
 **Sett opp `input_number` manuelt**:
 
@@ -101,6 +103,7 @@ input_number:
 ```
 
 **Oppførsel**:
+
 - Sensor `on`: lagre nåværende temp i `input_number`, sett climate til `min_temp`, start timer
 - Timer utløper: restore (uten å lese sensor)
 - Sensor `off`: restore til lagret temp
@@ -130,13 +133,14 @@ use_blueprint:
 
 **Input**:
 
-| Felt | Standard | Beskrivelse |
-|---|---|---|
-| `risiko_sensor` | `sensor.effektvakt_risiko_niva` | Effektvakt risiko-sensor |
-| `notify_service` | `notify` | Tjeneste uten `notify.`-prefiks, f.eks. `mobile_app_iphone` |
-| `dashboard_url` | (tom) | URL til Lovelace-dashboard, lenkes i notifikasjon |
+| Felt             | Standard                        | Beskrivelse                                                 |
+| ---------------- | ------------------------------- | ----------------------------------------------------------- |
+| `risiko_sensor`  | `sensor.effektvakt_risiko_niva` | Effektvakt risiko-sensor                                    |
+| `notify_service` | `notify`                        | Tjeneste uten `notify.`-prefiks, f.eks. `mobile_app_iphone` |
+| `dashboard_url`  | (tom)                           | URL til Lovelace-dashboard, lenkes i notifikasjon           |
 
 **Oppførsel**:
+
 - `medium` risiko: sender notifikasjon med projisert time-snitt og margin
 - `high` risiko: sender notifikasjon med `HIGH` i tittelen
 - Notifikasjoner køes (mode: queued) for å unngå tap ved rask endring

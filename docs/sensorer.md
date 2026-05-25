@@ -4,14 +4,14 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 
 ## Oversikt
 
-| Sensor | Enhet | State class |
-|---|---|---|
-| `sensor.effektvakt_projisert_time_snitt` | kW | measurement |
-| `sensor.effektvakt_margin_til_neste_trinn` | kW | measurement |
-| `sensor.effektvakt_topp_3_snitt_denne_maned` | kW | measurement |
-| `sensor.effektvakt_risiko_niva` | enum | - |
-| `sensor.effektvakt_tilgjengelig_kutt` | kW | measurement |
-| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | - |
+| Sensor                                       | Enhet  | State class |
+| -------------------------------------------- | ------ | ----------- |
+| `sensor.effektvakt_projisert_time_snitt`     | kW     | measurement |
+| `sensor.effektvakt_margin_til_neste_trinn`   | kW     | measurement |
+| `sensor.effektvakt_topp_3_snitt_denne_maned` | kW     | measurement |
+| `sensor.effektvakt_risiko_niva`              | enum   | -           |
+| `sensor.effektvakt_tilgjengelig_kutt`        | kW     | measurement |
+| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | -           |
 
 ---
 
@@ -23,7 +23,7 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 
 **Oppdateres**: Hvert 60 sekund (none/low risiko), 30 sekund (medium), 15 sekund (high).
 
-**Pålitelighet**: God etter de første par minuttene av timen. Tidlig i timen (0-5 minutter) dominerer `current_kw`-leddet fullstendig, siden lite energi er registrert ennå. Mangler energy-sensor, estimeres `actual_kwh_this_hour` fra effekt * tid, noe som kan gi avvik.
+**Pålitelighet**: God etter de første par minuttene av timen. Tidlig i timen (0-5 minutter) dominerer `current_kw`-leddet fullstendig, siden lite energi er registrert ennå. Mangler energy-sensor, estimeres `actual_kwh_this_hour` fra effekt \* tid, noe som kan gi avvik.
 
 **Formel**: Se [beregninger.md](beregninger.md).
 
@@ -63,12 +63,12 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 
 **Verdier**:
 
-| Nivå | Betingelse |
-|---|---|
-| `none` | Margin > 2 × sikkerhetsbuffer |
-| `low` | Sikkerhetsbuffer < margin <= 2 × sikkerhetsbuffer |
-| `medium` | 0 < margin <= sikkerhetsbuffer |
-| `high` | Margin <= 0 (terskelen er overskredet) |
+| Nivå     | Betingelse                                        |
+| -------- | ------------------------------------------------- |
+| `none`   | Margin > 2 × sikkerhetsbuffer                     |
+| `low`    | Sikkerhetsbuffer < margin <= 2 × sikkerhetsbuffer |
+| `medium` | 0 < margin <= sikkerhetsbuffer                    |
+| `high`   | Margin <= 0 (terskelen er overskredet)            |
 
 **Hysterese**: Oppgang til høyere risiko skjer umiddelbart. Nedgang skjer ett trinn av gangen og krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min) før det bekreftes.
 
@@ -106,20 +106,20 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 
 Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sensorer eller automations.
 
-| Attributt | Enhet | Beskrivelse |
-|---|---|---|
-| `elapsed_minutes_in_hour` | min | Antall hele minutter passert i inneværende klokketime |
-| `actual_kwh_this_hour` | kWh | Energi målt hittil denne timen (fra energy-sensor eller estimert) |
-| `current_kw` | kW | Øyeblikkelig effekt fra power-sensor |
-| `next_tier_threshold_kw` | kW | Konfigurert terskel for neste kapasitetstrinn |
-| `next_tier_pris_per_maned` | kr | Månedspris for neste trinn |
-| `prev_tier_threshold_kw` | kW | Terskel for trinnet under (None hvis laveste trinn) |
-| `effective_threshold_kw` | kW | Justert terskel etter topp-3-bevissthet |
-| `kutt_anbefalt_kw` | kW | `max(0, -margin)`: hvor mye som bør kuttes nå |
-| `topp_2_snitt_denne_maned_kw` | kW | Snitt av topp-2 dager (brukes i effective_threshold) |
-| `ekstra_power_w_total` | W | Sum av ekstra-sensorer (kun for vvb_pluss_ekstra) |
-| `kutt_strategi` | str | Aktiv strategi: blind / vvb_status / vvb_pluss_ekstra |
-| `last_update` | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering |
+| Attributt                     | Enhet    | Beskrivelse                                                       |
+| ----------------------------- | -------- | ----------------------------------------------------------------- |
+| `elapsed_minutes_in_hour`     | min      | Antall hele minutter passert i inneværende klokketime             |
+| `actual_kwh_this_hour`        | kWh      | Energi målt hittil denne timen (fra energy-sensor eller estimert) |
+| `current_kw`                  | kW       | Øyeblikkelig effekt fra power-sensor                              |
+| `next_tier_threshold_kw`      | kW       | Konfigurert terskel for neste kapasitetstrinn                     |
+| `next_tier_pris_per_maned`    | kr       | Månedspris for neste trinn                                        |
+| `prev_tier_threshold_kw`      | kW       | Terskel for trinnet under (None hvis laveste trinn)               |
+| `effective_threshold_kw`      | kW       | Justert terskel etter topp-3-bevissthet                           |
+| `kutt_anbefalt_kw`            | kW       | `max(0, -margin)`: hvor mye som bør kuttes nå                     |
+| `topp_2_snitt_denne_maned_kw` | kW       | Snitt av topp-2 dager (brukes i effective_threshold)              |
+| `ekstra_power_w_total`        | W        | Sum av ekstra-sensorer (kun for vvb_pluss_ekstra)                 |
+| `kutt_strategi`               | str      | Aktiv strategi: blind / vvb_status / vvb_pluss_ekstra             |
+| `last_update`                 | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering            |
 
 ### Eksempel
 

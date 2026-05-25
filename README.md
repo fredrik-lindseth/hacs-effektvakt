@@ -49,34 +49,34 @@ Velg nettselskapet ditt fra listen (72 støttede DSO-er). Kapasitetstrinnene og 
 
 ### Steg 2: Velg sensorer
 
-| Sensor | Krav | Beskrivelse |
-|---|---|---|
-| Power-sensor | Påkrevd | Instantan effekt (W eller kW), oppdateres hvert 2-10 sek |
-| Energy-sensor | Anbefalt | Kumulativ kWh-måler, `total_increasing` |
-| VVB-power-sensor | Valgfri | Krevd for strategi `vvb_status` og `vvb_pluss_ekstra` |
-| Ekstra power-sensorer | Valgfri | Krevd for strategi `vvb_pluss_ekstra` |
+| Sensor                | Krav     | Beskrivelse                                              |
+| --------------------- | -------- | -------------------------------------------------------- |
+| Power-sensor          | Påkrevd  | Instantan effekt (W eller kW), oppdateres hvert 2-10 sek |
+| Energy-sensor         | Anbefalt | Kumulativ kWh-måler, `total_increasing`                  |
+| VVB-power-sensor      | Valgfri  | Krevd for strategi `vvb_status` og `vvb_pluss_ekstra`    |
+| Ekstra power-sensorer | Valgfri  | Krevd for strategi `vvb_pluss_ekstra`                    |
 
 Se [docs/input-sensorer.md](docs/input-sensorer.md) for detaljer om sensorkrav og kjente kilder.
 
 ### Steg 3: Innstillinger
 
-| Innstilling | Standard | Beskrivelse |
-|---|---|---|
-| Sikkerhetsbuffer (kW) | 1,0 | Margin under terskelen som trigger `medium`-risiko |
-| Min risiko for kutt | medium | Under dette nivået er `binary_sensor` av |
-| Risiko-holdetid (min) | 5 | Hvor lenge nedgang i risiko må holde seg før det bekreftes |
-| Kutt-strategi | blind | Se [Kutt-strategi](#kutt-strategi) |
+| Innstilling           | Standard | Beskrivelse                                                |
+| --------------------- | -------- | ---------------------------------------------------------- |
+| Sikkerhetsbuffer (kW) | 1,0      | Margin under terskelen som trigger `medium`-risiko         |
+| Min risiko for kutt   | medium   | Under dette nivået er `binary_sensor` av                   |
+| Risiko-holdetid (min) | 5        | Hvor lenge nedgang i risiko må holde seg før det bekreftes |
+| Kutt-strategi         | blind    | Se [Kutt-strategi](#kutt-strategi)                         |
 
 ## Sensorer
 
-| Sensor | Enhet | Beskrivelse |
-|---|---|---|
-| `sensor.effektvakt_projisert_time_snitt` | kW | Forventet time-snitt ved time-slutt |
-| `sensor.effektvakt_margin_til_neste_trinn` | kW | Margin fra projisert til neste trinn (negativ = overskredet) |
-| `sensor.effektvakt_topp_3_snitt_denne_maned` | kW | Snitt av topp-3 maks-timer fra ulike dager denne måneden |
-| `sensor.effektvakt_risiko_niva` | enum | none / low / medium / high |
-| `sensor.effektvakt_tilgjengelig_kutt` | kW | Realistisk kutt-kapasitet basert på strategi |
-| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | on når risiko >= min_risiko_for_kutt |
+| Sensor                                       | Enhet  | Beskrivelse                                                  |
+| -------------------------------------------- | ------ | ------------------------------------------------------------ |
+| `sensor.effektvakt_projisert_time_snitt`     | kW     | Forventet time-snitt ved time-slutt                          |
+| `sensor.effektvakt_margin_til_neste_trinn`   | kW     | Margin fra projisert til neste trinn (negativ = overskredet) |
+| `sensor.effektvakt_topp_3_snitt_denne_maned` | kW     | Snitt av topp-3 maks-timer fra ulike dager denne måneden     |
+| `sensor.effektvakt_risiko_niva`              | enum   | none / low / medium / high                                   |
+| `sensor.effektvakt_tilgjengelig_kutt`        | kW     | Realistisk kutt-kapasitet basert på strategi                 |
+| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | on når risiko >= min_risiko_for_kutt                         |
 
 Alle sensorer har felles attributter med detaljer om beregningene. Se [docs/sensorer.md](docs/sensorer.md).
 
@@ -84,11 +84,11 @@ Alle sensorer har felles attributter med detaljer om beregningene. Se [docs/sens
 
 Strategien styrer hva `sensor.effektvakt_tilgjengelig_kutt` rapporterer. Den påvirker ikke risiko-vurderingen, som alltid baserer seg på projisert time-snitt mot trinnterskel.
 
-| Strategi | Sensorer | Beskrivelse |
-|---|---|---|
-| `blind` | Ingen | Antar 0,3 kW (VVB duty cycle ~15%). Standardvalg. |
-| `vvb_status` | VVB-power-sensor | Faktisk VVB-effekt i kW. Typisk 0 eller ~2 kW. |
-| `vvb_pluss_ekstra` | VVB + ekstra | VVB pluss sum av ekstra-sensorer (varmekabler, billader). |
+| Strategi           | Sensorer         | Beskrivelse                                               |
+| ------------------ | ---------------- | --------------------------------------------------------- |
+| `blind`            | Ingen            | Antar 0,3 kW (VVB duty cycle ~15%). Standardvalg.         |
+| `vvb_status`       | VVB-power-sensor | Faktisk VVB-effekt i kW. Typisk 0 eller ~2 kW.            |
+| `vvb_pluss_ekstra` | VVB + ekstra     | VVB pluss sum av ekstra-sensorer (varmekabler, billader). |
 
 Se [docs/strategi.md](docs/strategi.md) for når-bruke-hva og eksempel-tall.
 
@@ -109,17 +109,17 @@ Alle lastkutt-blueprints har `max_off_minutes` som tvinger lasten på igjen ette
 
 ## Dokumentasjon
 
-| Dokument | Innhold |
-|---|---|
-| [docs/sensorer.md](docs/sensorer.md) | Alle sensorer og attributter |
-| [docs/beregninger.md](docs/beregninger.md) | Formler og beregningslogikk |
-| [docs/input-sensorer.md](docs/input-sensorer.md) | Sensorkrav og kjente kilder |
-| [docs/blueprints.md](docs/blueprints.md) | Blueprint-detaljer og eksempler |
-| [docs/strategi.md](docs/strategi.md) | Kutt-strategier sammenlignet |
-| [docs/begrensninger.md](docs/begrensninger.md) | Kjente begrensninger |
-| [docs/dso.md](docs/dso.md) | DSO-data og oppdatering |
-| [docs/development.md](docs/development.md) | Utvikler-guide |
-| [docs/faq.md](docs/faq.md) | Ofte stilte spørsmål |
+| Dokument                                         | Innhold                         |
+| ------------------------------------------------ | ------------------------------- |
+| [docs/sensorer.md](docs/sensorer.md)             | Alle sensorer og attributter    |
+| [docs/beregninger.md](docs/beregninger.md)       | Formler og beregningslogikk     |
+| [docs/input-sensorer.md](docs/input-sensorer.md) | Sensorkrav og kjente kilder     |
+| [docs/blueprints.md](docs/blueprints.md)         | Blueprint-detaljer og eksempler |
+| [docs/strategi.md](docs/strategi.md)             | Kutt-strategier sammenlignet    |
+| [docs/begrensninger.md](docs/begrensninger.md)   | Kjente begrensninger            |
+| [docs/dso.md](docs/dso.md)                       | DSO-data og oppdatering         |
+| [docs/development.md](docs/development.md)       | Utvikler-guide                  |
+| [docs/faq.md](docs/faq.md)                       | Ofte stilte spørsmål            |
 
 ## Lisens
 

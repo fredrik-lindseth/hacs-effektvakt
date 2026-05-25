@@ -4,12 +4,12 @@ Hva Effektvakt trenger fra Home Assistant for å fungere.
 
 ## TL;DR
 
-| Sensor | Krav | Beste kilde |
-|---|---|---|
-| Power-sensor (W/kW) | Påkrevd | AMS-leser via HAN-port |
-| Energy-sensor (kWh) | Anbefalt | Samme AMS-leser, kumulativ teller |
-| VVB-power-sensor (W/kW) | Valgfri | Smart plugg med energimåling |
-| Ekstra power-sensorer (W/kW) | Valgfri | Varmekabler, billader med effektmåling |
+| Sensor                       | Krav     | Beste kilde                            |
+| ---------------------------- | -------- | -------------------------------------- |
+| Power-sensor (W/kW)          | Påkrevd  | AMS-leser via HAN-port                 |
+| Energy-sensor (kWh)          | Anbefalt | Samme AMS-leser, kumulativ teller      |
+| VVB-power-sensor (W/kW)      | Valgfri  | Smart plugg med energimåling           |
+| Ekstra power-sensorer (W/kW) | Valgfri  | Varmekabler, billader med effektmåling |
 
 ---
 
@@ -24,6 +24,7 @@ Hva Effektvakt trenger fra Home Assistant for å fungere.
 **Maksgrense**: Effektvakt avviser verdier over 100 000 W (100 kW). Høyere verdier logges som advarsel og behandles som `unknown`.
 
 **Kjente kilder**:
+
 - Tibber Pulse (HAN-port, oppdaterer hvert 2-10 sek)
 - Pow-U fra AMSleser.no (HAN-port, oppdaterer hvert 2 sek)
 - ESPHome med P1-leser
@@ -48,6 +49,7 @@ Instantan effekt er bedre fordi Effektvakt selv gjør midling via energy-sensore
 **State class**: Må være `total_increasing`. Det er standardverdi for alle AMS-lesere.
 
 **Kjente sensor-navn**:
+
 - `sensor.<ams_navn>_active_energy_import` (vanlig OBIS 1.8.0)
 - `sensor.<ams_navn>_total_consumption`
 - `sensor.<ams_navn>_tpi` (Pow-U)
@@ -57,7 +59,7 @@ Verdien er typisk over 1 000 kWh og stiger sakte (noen kWh per time).
 
 ### Hvorfor energy-sensor gir bedre projeksjon
 
-Uten energy-sensor estimerer Effektvakt forbruket via effekt * tid mellom ticks (tilsvarende Riemann-summering). Dette fungerer, men gir avvik hvis:
+Uten energy-sensor estimerer Effektvakt forbruket via effekt \* tid mellom ticks (tilsvarende Riemann-summering). Dette fungerer, men gir avvik hvis:
 
 - Power-sensoren ikke oppdaterer jevnt
 - HA har omstart midt i en time
@@ -76,6 +78,7 @@ Med energy-sensor leses delta direkte fra den kumulative telleren. Eventuelle fe
 **Terskel**: Effektvakt anser VVB som aktiv hvis sensoren rapporterer over 1 000 W. Under denne grensen antas elementet å ikke varme. Norsk standard VVB (f.eks. OSO Saga 200L) har 2 000 W element.
 
 **Kjente kilder**:
+
 - Smart plugg med energimåling (Shelly Plug S, Sonoff S31, Zaptec Pro med OCPP)
 - Clamp-on energimåler for VVB-krets
 
@@ -91,12 +94,12 @@ Med energy-sensor leses delta direkte fra den kumulative telleren. Eventuelle fe
 
 **Eksempel-laster og typisk effekt**:
 
-| Last | Typisk effekt |
-|---|---|
-| Gulvvarme, bad (5 m²) | 400-600 W |
-| Panelovn | 600-1500 W |
+| Last                   | Typisk effekt  |
+| ---------------------- | -------------- |
+| Gulvvarme, bad (5 m²)  | 400-600 W      |
+| Panelovn               | 600-1500 W     |
 | Billader (hjemmelader) | 3 600-22 000 W |
-| Elbil (Type 2, 16 A) | 3 600 W |
+| Elbil (Type 2, 16 A)   | 3 600 W        |
 
 En billader er den klart største enkeltkilden for kutt-kapasitet. 30 minutter pause tilsvarer 1,8-11 kWh, avhengig av ladeeffekt.
 

@@ -2,19 +2,18 @@
 
 ## Er det trygt å skru varmtvannstanken av og på automatisk?
 
-Ja, for av-perioder på 15-60 minutter er det helt trygt. Tanken er stor termisk masse (en 200-liters bereder mister typisk 0,5-2 °C per time ved god isolasjon), så et halvtimes av-vindu kjøler vannet noen få grader. Det er den samme cyklingen termostaten din gjør flere ganger i timen uansett, bare litt mer kontrollert.
-
-Etablert praksis blant norske VVS-folk på forum som byggebolig.no er at både timer-styring og prisbasert av/på er greit, så lenge tanken holder 60-70 °C i drift.
+Ja, for av-perioder på 15-60 minutter. En 200-liters bereder mister typisk 0,5-2 °C per time ved god isolasjon. Et halvtimes av-vindu kjøler vannet noen få grader, det merkes ikke. Termostaten din skrur elementet av og på flere ganger i timen uansett, Effektvakt legger bare på en ekstra syklus.
 
 ## Får jeg legionella av dette?
 
-Nei, ikke fra korte styringsperioder. Legionella vokser i temperaturområdet 25-50 °C. Over 55 °C er det ingen vekst, og over 60 °C dør bakteriene aktivt. Hvis tanken din står på 65-75 °C (anbefalt innstilling) når den varmer, vil den ikke nå risikosonen i løpet av et halvtimes av-vindu.
+Nei. Legionella er en bakterie som trenger 25-50 °C og tid for å vokse. Over 55 °C er det ingen vekst. Over 60 °C dør den aktivt. En riktig innstilt bereder står på 65-75 °C i drift.
 
-Folkehelseinstituttet sin [legionellaveileder](https://www.fhi.no/ss/veiledere/legionellaveilederen/temakapitler/risikokartlegging-og-forebyggende-til/) har ingen restriksjoner mot prisstyring av VVB i private boliger. Anbefalingene gjelder kjøletårn, spa og rør i offentlige bygg.
+Regn på det: hvis tanken står på 70 °C og mister 2 °C/time, er den fortsatt 68 °C etter en time. Det er langt over risiko-sonen. For å nå 50 °C måtte du la den stå av i ti timer. Effektvakt slår av i maks 30 minutter (failsafe) før den uansett tvinges på igjen.
 
-Praktisk tommelfingerregel:
+Praktiske tommelfingerregler:
+
 - Hold termostaten på minst 65 °C i drift
-- Ikke la tanken stå av i mer enn 4-6 timer kontinuerlig (varmetapet blir merkbart, ikke et legionella-problem)
+- Ikke la tanken stå av i mer enn 4-6 timer kontinuerlig (varmetap, ikke bakteriefare)
 - Spyl gjennom lite brukte tappesteder (gjesteservant) noen ganger i året
 
 ## Sliter elementet av at det slås av og på?
@@ -39,12 +38,12 @@ Hvis du dusjer rett etter et lastkutt, vil du ikke merke noe så lenge tanken va
 
 Det avhenger sterkt av hvor du ligger i kapasitetstrinnene. Nettleien faktureres etter snittet av topp-3 maks-timer fra ulike dager i måneden. For BKK koster det typisk:
 
-| Trinn | Pris per måned |
-|---|---|
-| 2-5 kW | ca. 230 kr |
-| 5-10 kW | ca. 415 kr |
-| 10-15 kW | ca. 600 kr |
-| 15-20 kW | ca. 800 kr |
+| Trinn    | Pris per måned |
+| -------- | -------------- |
+| 2-5 kW   | ca. 230 kr     |
+| 5-10 kW  | ca. 415 kr     |
+| 10-15 kW | ca. 600 kr     |
+| 15-20 kW | ca. 800 kr     |
 
 Hvis Effektvakt hindrer at du krysser fra et trinn til neste, sparer du 100-300 kr per måned så lenge du holder deg under. Hvis du allerede ligger godt midt i et trinn (f.eks. topp-3-snitt på 7 kW i 5-10 kW-trinnet), gir kutting null besparelse den måneden.
 
@@ -81,26 +80,32 @@ Unngå å kutte induksjonstopp (irriterende mid-matlaging) og tørketrommel/vask
 
 Faktisk effektmåling fra et hus i Bergen (4-5 m² baderom, gulvvarme på 130 W/m²):
 
-| Sone | Max effekt | Snitt over tid |
-|---|---|---|
-| Bad gulvvarme | 557 W | 183 W |
-| Stue gulvvarme | ca. 1100 W | n/a |
-| Kjøkken gulvvarme | typisk 500-800 W | n/a |
-| Gang gulvvarme | typisk 400-700 W | n/a |
-| **Sum gulvvarme** | **~3 000 W** | varierer |
-| Varmtvannsbereder (OSO Saga 200L) | 2 000 W | ~250 W |
-| Panelovn typisk | 600-1500 W | 200-600 W |
+| Sone                              | Max effekt       | Snitt over tid |
+| --------------------------------- | ---------------- | -------------- |
+| Bad gulvvarme                     | 557 W            | 183 W          |
+| Stue gulvvarme                    | ca. 1100 W       | n/a            |
+| Kjøkken gulvvarme                 | typisk 500-800 W | n/a            |
+| Gang gulvvarme                    | typisk 400-700 W | n/a            |
+| **Sum gulvvarme**                 | **~3 000 W**     | varierer       |
+| Varmtvannsbereder (OSO Saga 200L) | 2 000 W          | ~250 W         |
+| Panelovn typisk                   | 600-1500 W       | 200-600 W      |
 
 For en husholdning som vanligvis ligger like under et kapasitetstrinn, kan kombinasjonen "VVB + 2-3 varmekabler + 1 panelovn" gi 3-5 kW tilgjengelig kutting, mer enn nok til å hindre en trinn-overskridelse på 10 kW eller 15 kW.
 
 ## Kilder
 
-- [FHI - Legionellaveilederen](https://www.fhi.no/ss/veiledere/legionellaveilederen/temakapitler/risikokartlegging-og-forebyggende-til/)
-- [FHI - Legionellasmitte hjemme (PDF)](https://www.fhi.no/globalassets/dokumenterfiler/til-arkiv/legionellasmitte-hjemme-kan-forebygges-med-enkle-tiltak-pdf.pdf)
-- [Energy Vanguard - Water Heater Cycling and Legionnaires Disease](https://www.energyvanguard.com/blog/will-your-water-heater-give-you-legionnaires-disease/)
-- [Heat Geek - Legionella and Water Temperature](https://www.heatgeek.com/articles/legionella-and-water-temperature-what-you-need-to-know)
-- [PMC - Water Heater Type, Temperature Setting, and Legionella Growth (2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC11731276/)
-- [ByggeBolig - Tidsstyring på varmtvannsbereder](https://byggebolig.no/el-varmtvannsbereder/tidsstyring-pa-varmtvannsbereder)
-- [OSO Hotwater - Saga Standard](https://osohotwater.no/product/varmtvannsbereder-saga-standard/)
-- [Tu.no - Hvordan styre effektforbruket](https://www.tu.no/artikler/ny-nettleie-hvordan-styre-effektforbruket/515299)
+Legionella-biologi:
+
+- [PMC - Water Heater Type, Temperature Setting, and Legionella Growth (2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC11731276/): vekstrater per temperatur, eksperimentelle tall
+- [Heat Geek - Legionella and Water Temperature](https://www.heatgeek.com/articles/legionella-and-water-temperature-what-you-need-to-know): praktisk forklaring av temperatur-tid-forholdet
+- [Energy Vanguard - Water Heater Cycling and Legionnaires Disease](https://www.energyvanguard.com/blog/will-your-water-heater-give-you-legionnaires-disease/): cycling-spesifikk diskusjon
+
+VVB-effekt og duty cycle:
+
+- [OSO Hotwater - Saga Standard](https://osohotwater.no/product/varmtvannsbereder-saga-standard/): typisk norsk standard-bereder
 - [Energy Vanguard - 3 Types of Energy Efficiency Losses in Water Heating](https://www.energyvanguard.com/blog/the-3-types-of-energy-efficiency-losses-in-water-heating/)
+- [ByggeBolig - Tidsstyring på varmtvannsbereder](https://byggebolig.no/el-varmtvannsbereder/tidsstyring-pa-varmtvannsbereder): norske brukererfaringer
+
+Norsk kontekst:
+
+- [Tu.no - Hvordan styre effektforbruket](https://www.tu.no/artikler/ny-nettleie-hvordan-styre-effektforbruket/515299)

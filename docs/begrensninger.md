@@ -51,7 +51,7 @@ Konsekvens: Etter restart kan risiko holde seg på `medium` litt lenger enn forv
 
 ## Energy-sensor mangler: dårligere nøyaktighet tidlig i timen
 
-Uten energy-sensor estimeres `actual_kwh_this_hour` fra effekt * tid. De første par minuttene av en time er estimatet basert på svært lite akkumulert data, og `projected_avg` domineres av `current_kw * remaining_h`. Projeksjon i starten av timen er altså mer sensitiv for kortvarige effektspisser.
+Uten energy-sensor estimeres `actual_kwh_this_hour` fra effekt _ tid. De første par minuttene av en time er estimatet basert på svært lite akkumulert data, og `projected_avg` domineres av `current_kw _ remaining_h`. Projeksjon i starten av timen er altså mer sensitiv for kortvarige effektspisser.
 
 Med energy-sensor kompenseres dette ved at delta leses direkte fra telleren.
 

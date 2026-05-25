@@ -42,7 +42,7 @@ Fra research i [docs/research/funn-fra-ha-community.md](../hacs-strømkalkulator
   - Power-sensor (instantan W)
   - Energi-sensor (kumulativ kWh), for å vite hvor mye som faktisk er forbrukt denne timen
   - Kapasitetstrinn-grenser (statisk konfig eller lest fra Strømkalkulator)
-  - Liste over "controllable loads" (switch.* eller climate.*)
+  - Liste over "controllable loads" (switch._ eller climate._)
 - **Beregning**:
   - elapsed = time elapsed denne timen
   - actual_kwh = kWh akkumulert denne timen
@@ -74,6 +74,7 @@ Effektvakt kan kjøre samme replay og verifisere:
 Det gir oss empirisk grunnlag for default-verdier (safety_buffer, restore-pause, etc) i stedet for gjetting.
 
 Replay-pipeline:
+
 - Last fixtur (samme format som Strømkalkulator-fixturer)
 - For hver time: simulér minutt-for-minutt-poll med interpolert power
 - La Effektvakt's terskel-logikk bestemme av/på

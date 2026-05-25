@@ -94,12 +94,14 @@ rsync -av custom_components/effektvakt/ homeassistant:/config/custom_components/
 ## CI-workflows
 
 `.github/workflows/ci.yml`:
+
 - ruff check + format
 - mypy
 - pytest med coverage
 - vulture (dead code)
 
 `.github/workflows/validate.yml`:
+
 - HACS validation (hassfest)
 - manifest.json-sjekk
 

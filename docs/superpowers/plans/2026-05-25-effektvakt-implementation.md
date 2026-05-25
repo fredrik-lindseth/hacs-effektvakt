@@ -76,6 +76,7 @@ Top-level:
 ### Task 1: Lage pyproject.toml og linting-config
 
 **Files:**
+
 - Create: `pyproject.toml`
 - Create: `.pre-commit-config.yaml`
 - Create: `.gitignore`
@@ -154,12 +155,15 @@ repos:
     rev: v2.14
     hooks:
       - id: vulture
-        args: [
-          "custom_components/effektvakt",
-          "vulture_whitelist.py",
-          "--min-confidence", "80",
-          "--exclude", "*test*",
-        ]
+        args:
+          [
+            "custom_components/effektvakt",
+            "vulture_whitelist.py",
+            "--min-confidence",
+            "80",
+            "--exclude",
+            "*test*",
+          ]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -169,7 +173,7 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
-        args: ['--maxkb=500']
+        args: ["--maxkb=500"]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.14.1
@@ -273,6 +277,7 @@ git commit -m "chore: initial tooling, spec, plan"
 ### Task 2: Oppdatere manifest.json
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/manifest.json`
 
 - [ ] **Step 1: Oppdatere manifest.json**
@@ -310,6 +315,7 @@ git commit -m "chore(manifest): legg til config_flow og integration_type"
 ### Task 3: Lage const.py
 
 **Files:**
+
 - Create: `custom_components/effektvakt/const.py`
 
 - [ ] **Step 1: Skrive const.py**
@@ -399,6 +405,7 @@ git commit -m "feat(const): konstanter for DOMAIN, CONF_*, RISIKO_*"
 ### Task 4: Lage sync_dso-script og generert dso.py
 
 **Files:**
+
 - Create: `scripts/sync_dso_from_stromkalkulator.py`
 - Create: `custom_components/effektvakt/dso.py` (autogenerert)
 
@@ -563,6 +570,7 @@ git commit -m "feat(dso): sync-script og generert kapasitetstrinn-data"
 ### Task 5: Lage tests/conftest.py med HA-mocks
 
 **Files:**
+
 - Create: `tests/conftest.py`
 - Create: `tests/__init__.py` (tom)
 
@@ -667,9 +675,10 @@ def entry():
     return make_entry()
 ```
 
-- [ ] **Step 2: Lage tom tests/__init__.py**
+- [ ] **Step 2: Lage tom tests/**init**.py**
 
 ```python
+
 ```
 
 - [ ] **Step 3: Verifiser at pytest starter uten feil**
@@ -689,6 +698,7 @@ git commit -m "test: conftest med HA-mocks"
 ### Task 6: test_dso_data: sanity-tester for generert DSO-data
 
 **Files:**
+
 - Create: `tests/test_dso_data.py`
 
 - [ ] **Step 1: Skrive testene**
@@ -760,6 +770,7 @@ git commit -m "test(dso): sanity-tester for kapasitetstrinn-data"
 ### Task 7: Coordinator-skjelett og helpers (read_sensor, normalize_unit)
 
 **Files:**
+
 - Create: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_coordinator_helpers.py`
 
@@ -915,6 +926,7 @@ git commit -m "feat(coordinator): read_power_kw og read_energy_kwh med unit-norm
 ### Task 8: Risikoklassifisering (rå)
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_risk_classification.py`
 
@@ -947,6 +959,7 @@ def test_classify_raw_risk(margin: float, buffer: float, expected: str):
 ```
 
 Vent: formelen i spec sier:
+
 - `none`: margin > 2 × buffer
 - `low`: buffer < margin ≤ 2 × buffer
 - `medium`: 0 < margin ≤ buffer
@@ -1017,6 +1030,7 @@ git commit -m "feat(coordinator): classify_raw_risk basert på margin og safety_
 ### Task 9: Topp-3-dager-beregning og effective_threshold
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_effective_threshold.py`
 
@@ -1167,6 +1181,7 @@ git commit -m "feat(coordinator): topp-3-aware effective_threshold"
 ### Task 10: Tier-oppslag (next_tier_threshold + prev_tier_threshold)
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_tier_lookup.py`
 
@@ -1295,6 +1310,7 @@ git commit -m "feat(coordinator): lookup_tiers for next/prev kapasitetstrinn"
 ### Task 11: Hysterese-state
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_hysteresis.py`
 
@@ -1509,6 +1525,7 @@ git commit -m "feat(coordinator): hysterese-state med multi-step nedgang"
 ### Task 12: EffektvaktCoordinator-klasse: minimal versjon (init + read sensors + projection)
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_coordinator_projection.py`
 
@@ -1613,9 +1630,10 @@ git commit -m "feat(coordinator): compute_projected_avg + compute_elapsed_h"
 
 ---
 
-### Task 13: Full coordinator-klasse: init, _async_update_data, integrert beregning
+### Task 13: Full coordinator-klasse: init, \_async_update_data, integrert beregning
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_coordinator_integration.py`
 
@@ -1931,6 +1949,7 @@ git commit -m "feat(coordinator): EffektvaktCoordinator med adaptive tick og per
 ### Task 14: Watchdog (uavhengig av coordinator)
 
 **Files:**
+
 - Modify: `custom_components/effektvakt/coordinator.py`
 - Create: `tests/test_watchdog.py`
 
@@ -2012,6 +2031,7 @@ git commit -m "feat(coordinator): watchdog-helper for stale-deteksjon"
 ### Task 15: sensor.py: 4 sensorer
 
 **Files:**
+
 - Create: `custom_components/effektvakt/sensor.py`
 - Create: `tests/test_sensor.py`
 
@@ -2238,6 +2258,7 @@ git commit -m "feat(sensor): 4 sensorer med diagnostikk-attributter"
 ### Task 16: binary_sensor.py
 
 **Files:**
+
 - Create: `custom_components/effektvakt/binary_sensor.py`
 - Create: `tests/test_binary_sensor.py`
 
@@ -2359,6 +2380,7 @@ git commit -m "feat(binary_sensor): kutt_ned_anbefalt basert på hysteresefull r
 ### Task 17: strings.json + translations
 
 **Files:**
+
 - Create: `custom_components/effektvakt/strings.json`
 - Create: `custom_components/effektvakt/translations/en.json`
 - Create: `custom_components/effektvakt/translations/nb.json`
@@ -2556,6 +2578,7 @@ git commit -m "i18n: strings + en/nb-oversettelser for config flow og services"
 ### Task 18: config_flow.py: heuristikk for peak-sensor + validering
 
 **Files:**
+
 - Create: `custom_components/effektvakt/config_flow.py`
 - Create: `tests/test_config_flow.py`
 
@@ -2855,11 +2878,12 @@ git commit -m "feat(config_flow): 3-stegs flow med peak-sensor-heuristikk"
 
 ---
 
-## Phase 5: __init__.py og services
+## Phase 5: **init**.py og services
 
-### Task 19: __init__.py: setup_entry, watchdog, services
+### Task 19: **init**.py: setup_entry, watchdog, services
 
 **Files:**
+
 - Create: `custom_components/effektvakt/__init__.py`
 - Create: `custom_components/effektvakt/services.yaml`
 - Create: `tests/test_init.py`
@@ -2934,7 +2958,7 @@ async def test_async_unload_entry():
 Run: `pytest tests/test_init.py -v`
 Expected: ImportError.
 
-- [ ] **Step 4: Implementere __init__.py**
+- [ ] **Step 4: Implementere **init**.py**
 
 ```python
 """Effektvakt integration for Home Assistant."""
@@ -3019,11 +3043,13 @@ pip install pytest-asyncio
 ```
 
 Legg til i `pyproject.toml` under `dev`:
+
 ```toml
 "pytest-asyncio>=0.23.0",
 ```
 
 Også: legg til i `[tool.pytest.ini_options]`:
+
 ```toml
 asyncio_mode = "auto"
 ```
@@ -3045,6 +3071,7 @@ git commit -m "feat: __init__.py med setup/unload, watchdog, services"
 ### Task 20: diagnostics.py
 
 **Files:**
+
 - Create: `custom_components/effektvakt/diagnostics.py`
 
 - [ ] **Step 1: Skrive diagnostics.py**
@@ -3099,6 +3126,7 @@ git commit -m "feat(diagnostics): config entry diagnostics-eksport"
 ### Task 21: docs/blueprints/enkel_last_shed.yaml
 
 **Files:**
+
 - Create: `docs/blueprints/enkel_last_shed.yaml`
 
 - [ ] **Step 1: Skrive blueprint**
@@ -3191,6 +3219,7 @@ git commit -m "feat(blueprint): enkel last-shed med failsafe"
 ### Task 22: docs/blueprints/prioritert_last_shed.yaml
 
 **Files:**
+
 - Create: `docs/blueprints/prioritert_last_shed.yaml`
 
 - [ ] **Step 1: Skrive blueprint**
@@ -3300,6 +3329,7 @@ git commit -m "feat(blueprint): prioritert last-shed på 2 switches"
 ### Task 23: docs/blueprints/climate_min_temp.yaml
 
 **Files:**
+
 - Create: `docs/blueprints/climate_min_temp.yaml`
 
 - [ ] **Step 1: Skrive blueprint**
@@ -3429,6 +3459,7 @@ git commit -m "feat(blueprint): climate med min-temp og restore-via-helper"
 ### Task 24: docs/blueprints/kun_varsel.yaml
 
 **Files:**
+
 - Create: `docs/blueprints/kun_varsel.yaml`
 
 - [ ] **Step 1: Skrive blueprint**
@@ -3499,6 +3530,7 @@ git commit -m "feat(blueprint): kun varsel (uten styring)"
 ### Task 25: test_blueprint_yaml_valid.py
 
 **Files:**
+
 - Create: `tests/test_blueprint_yaml_valid.py`
 
 - [ ] **Step 1: Skrive testen**
@@ -3561,6 +3593,7 @@ pip install pyyaml
 ```
 
 Legg til i pyproject.toml under dev:
+
 ```toml
 "pyyaml>=6.0",
 ```
@@ -3584,6 +3617,7 @@ git commit -m "test(blueprints): YAML-validitet og max_off_minutes-krav"
 ### Task 26: Symlink fixturer og lage minimal replay-test
 
 **Files:**
+
 - Create: `tests/fixtures` (symlink)
 - Create: `tests/test_coordinator_replay.py`
 
@@ -3771,6 +3805,7 @@ git commit -m "test(replay): kontrafaktisk besparelse-test mot BKK-fixturer"
 ### Task 27: README.md med blueprint-import-knapper
 
 **Files:**
+
 - Create: `README.md`
 - Create: `CHANGELOG.md`
 
@@ -3793,13 +3828,13 @@ Norske nettselskap fakturerer kapasitetsledd etter snittet av topp-3 maks-timer 
 
 ## Sensorer
 
-| Sensor | Hva |
-|---|---|
-| `sensor.effektvakt_projisert_time_snitt` | Forventet time-snitt i kW ved time-slutt |
-| `sensor.effektvakt_margin_til_neste_trinn` | Hvor mange kW under neste trinn (etter topp-3-vurdering) |
-| `sensor.effektvakt_topp_3_snitt_denne_maned` | Snitt av topp-3 maks-timer fra ulike dager |
-| `sensor.effektvakt_risiko_niva` | none / low / medium / high (hysteresefull) |
-| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on når kutt anbefales |
+| Sensor                                       | Hva                                                      |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `sensor.effektvakt_projisert_time_snitt`     | Forventet time-snitt i kW ved time-slutt                 |
+| `sensor.effektvakt_margin_til_neste_trinn`   | Hvor mange kW under neste trinn (etter topp-3-vurdering) |
+| `sensor.effektvakt_topp_3_snitt_denne_maned` | Snitt av topp-3 maks-timer fra ulike dager               |
+| `sensor.effektvakt_risiko_niva`              | none / low / medium / high (hysteresefull)               |
+| `binary_sensor.effektvakt_kutt_ned_anbefalt` | on når kutt anbefales                                    |
 
 ## Blueprints
 
@@ -3857,6 +3892,7 @@ git commit -m "docs: README med blueprint-import-knapper, CHANGELOG 0.1.0"
 ### Task 28: docs/dashboard-eksempel.yaml
 
 **Files:**
+
 - Create: `docs/dashboard-eksempel.yaml`
 
 - [ ] **Step 1: Skrive dashboard-yaml**
@@ -3919,6 +3955,7 @@ git commit -m "docs: Lovelace dashboard-eksempel"
 ### Task 29: CI-workflow
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`
 - Create: `.github/workflows/validate.yml`
 
@@ -3949,7 +3986,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install deps
         run: pip install -e ".[dev]" pyyaml pytest-asyncio
@@ -4003,7 +4040,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 4 * * 1'
+    - cron: "0 4 * * 1"
 
 jobs:
   hacs:
@@ -4035,6 +4072,7 @@ git commit -m "ci: pytest, ruff, DSO-sync-sjekk, hassfest, HACS-validering"
 ### Task 30: Kjør full test-suite og pre-commit
 
 **Files:**
+
 - Ingen nye filer
 
 - [ ] **Step 1: Installer pre-commit hooks**
@@ -4099,6 +4137,7 @@ git commit -m "chore: pre-commit fix-ups"
 Etter at planen er skrevet, sjekk:
 
 **Spec coverage:**
+
 - ✅ Topp-3-dager (NVE-modell): Task 9, 12, 13
 - ✅ Effective_threshold med fallback: Task 9
 - ✅ Hysterese (oppgang umiddelbar, multi-step nedgang): Task 11
@@ -4120,4 +4159,5 @@ Etter at planen er skrevet, sjekk:
 **Type-consistency:** `EffektvaktCoordinator`, `HystereseState`, `TierInfo`, `compute_*`, `read_*`, `lookup_tiers`, `apply_hysteresis`, `classify_raw_risk` brukes konsekvent.
 
 **Mangler:**
+
 - Replay variant B (syntetisk minutt-replay) er ikke i planen. Bevisst utelatt: variant A dekker hovedformålet. Hvis brukeren vil ha B senere, legges som egen task.

@@ -11,6 +11,7 @@ projected_avg = actual_kwh_this_hour + current_kw * remaining_h
 ```
 
 Hvor:
+
 - `actual_kwh_this_hour`: energi målt hittil denne timen (kWh)
 - `current_kw`: øyeblikkelig effekt fra power-sensor (kW)
 - `remaining_h`: andel av timen som gjenstår (`1.0 - elapsed_h`)
@@ -34,7 +35,7 @@ actual_kwh_this_hour += max(0, energy_now - energy_at_hour_start - current_hour_
 
 Kun positive delta aksepteres (kumulativ sensor kan ikke gå ned). Verdien nullstilles ved time-skifte.
 
-Uten energy-sensor estimeres forbruket via effekt * tid mellom ticks. Dette gir typisk 1-5 % avvik over en time, avhengig av tick-frekvens og forbruksmønster.
+Uten energy-sensor estimeres forbruket via effekt \* tid mellom ticks. Dette gir typisk 1-5 % avvik over en time, avhengig av tick-frekvens og forbruksmønster.
 
 ---
 
@@ -72,12 +73,12 @@ Begrunnelse: Hvis du allerede har to dager med snitt på 9,5 kW, og neste trinn 
 
 Rå risiko bestemmes av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):
 
-| Betingelse | Risiko |
-|---|---|
-| `margin > 2 × buffer` | `none` |
-| `buffer < margin <= 2 × buffer` | `low` |
-| `0 < margin <= buffer` | `medium` |
-| `margin <= 0` | `high` |
+| Betingelse                      | Risiko   |
+| ------------------------------- | -------- |
+| `margin > 2 × buffer`           | `none`   |
+| `buffer < margin <= 2 × buffer` | `low`    |
+| `0 < margin <= buffer`          | `medium` |
+| `margin <= 0`                   | `high`   |
 
 Margin = `effective_threshold_kw - projected_avg`.
 
@@ -101,12 +102,12 @@ Dette forhindrer at VVB eller panelovn slås raskt av og på ved forbruk som svi
 
 Coordinator-intervallet justeres basert på risiko-nivå:
 
-| Risiko | Intervall |
-|---|---|
-| `none` | 60 sekunder |
-| `low` | 60 sekunder |
+| Risiko   | Intervall   |
+| -------- | ----------- |
+| `none`   | 60 sekunder |
+| `low`    | 60 sekunder |
 | `medium` | 30 sekunder |
-| `high` | 15 sekunder |
+| `high`   | 15 sekunder |
 
 Ved høy risiko leses sensorer og projeksjon oppdateres hvert 15 sekund for rask respons.
 
@@ -116,11 +117,11 @@ Ved høy risiko leses sensorer og projeksjon oppdateres hvert 15 sekund for rask
 
 `compute_tilgjengelig_kutt_kw` i coordinator.py:
 
-| Strategi | Logikk |
-|---|---|
-| `blind` | Returnerer `BLIND_ASSUMED_KUTT_KW` = 0,3 kW (2 kW VVB × 15% duty cycle) |
-| `vvb_status` | VVB-effekt / 1000 hvis VVB > 1000 W, ellers 0,0 kW |
-| `vvb_pluss_ekstra` | VVB-bidrag + sum av ekstra-sensorer > 100 W terskel |
+| Strategi           | Logikk                                                                  |
+| ------------------ | ----------------------------------------------------------------------- |
+| `blind`            | Returnerer `BLIND_ASSUMED_KUTT_KW` = 0,3 kW (2 kW VVB × 15% duty cycle) |
+| `vvb_status`       | VVB-effekt / 1000 hvis VVB > 1000 W, ellers 0,0 kW                      |
+| `vvb_pluss_ekstra` | VVB-bidrag + sum av ekstra-sensorer > 100 W terskel                     |
 
 Terskelen på 1000 W for VVB er satt fordi elementet er enten fullt på (~2 kW) eller av. Verdier mellom 0 og 1000 W antas å være standby-forbruk, ikke aktiv oppvarming.
 
