@@ -1,0 +1,86 @@
+blueprint:
+  name: Effektvakt - Prioritert last-shed
+  description: >
+    Slå av switches i prioritert rekkefølge basert på risiko-nivå.
+    medium risiko -> første switch av. high risiko -> alle switches av.
+    Slår på igjen i revers rekkefølge når risiko synker.
+  domain: automation
+  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/prioritert_last_shed.yaml
+  input:
+    risiko_sensor:
+      name: Risiko-sensor
+      default: sensor.effektvakt_risiko_niva
+      selector:
+        entity:
+          domain: sensor
+    switch_high_priority:
+      name: Første switch som slås av (medium risiko)
+      selector:
+        entity:
+          domain: switch
+    switch_medium_priority:
+      name: Andre switch som slås av (high risiko)
+      selector:
+        entity:
+          domain: switch
+    max_off_minutes:
+      name: Maks minutter slått av før tving-on
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 240
+          step: 5
+
+variables:
+  switch_high: !input switch_high_priority
+  switch_medium: !input switch_medium_priority
+  max_off_minutes: !input max_off_minutes
+
+trigger:
+  - platform: state
+    entity_id: !input risiko_sensor
+
+mode: restart
+
+action:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input risiko_sensor
+            state: "high"
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id:
+                - "{{ switch_high }}"
+                - "{{ switch_medium }}"
+          - delay:
+              minutes: "{{ max_off_minutes }}"
+          - service: switch.turn_on
+            target:
+              entity_id:
+                - "{{ switch_high }}"
+                - "{{ switch_medium }}"
+      - conditions:
+          - condition: state
+            entity_id: !input risiko_sensor
+            state: "medium"
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ switch_high }}"
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ switch_medium }}"
+          - delay:
+              minutes: "{{ max_off_minutes }}"
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ switch_high }}"
+    default:
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - "{{ switch_high }}"
+            - "{{ switch_medium }}"
