@@ -35,6 +35,7 @@ from .const import (
     TICK_INTERVAL_BY_RISIKO,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
+    WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
 
@@ -442,3 +443,14 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self._previous_month_top_3_snitt_kw = round(topp_3, 3)
             self._previous_month_name = self._current_month
         self._daily_max_kw = {}
+
+
+def is_coordinator_stale(
+    *,
+    last_successful_update: datetime | None,
+    now: datetime,
+) -> bool:
+    """True hvis siste vellykkede oppdatering er eldre enn watchdog-terskel."""
+    if last_successful_update is None:
+        return True
+    return (now - last_successful_update).total_seconds() > WATCHDOG_STALE_THRESHOLD_SECONDS
