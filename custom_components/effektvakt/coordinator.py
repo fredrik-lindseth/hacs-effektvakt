@@ -5,15 +5,17 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from .const import (
     MAX_POWER_CLAMP_W,
     RISIKO_HIGH,
+    RISIKO_LEVELS,
     RISIKO_LOW,
     RISIKO_MEDIUM,
     RISIKO_NONE,
+    RISIKO_RANK,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
 )
@@ -162,3 +164,60 @@ def lookup_tiers(
     next_kw, next_pris = trinn[next_idx]
     prev_kw = trinn[next_idx - 1][0] if next_idx > 0 else None
     return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=next_kw, next_pris_per_mnd=next_pris)
+
+
+@dataclass
+class HystereseState:
+    """Stateful hysterese-tilstand."""
+    nivå: str
+    pending_nivå: str | None = None
+    pending_since: datetime | None = None
+
+
+def _nivå_ett_under(nivå: str) -> str:
+    """Returner risiko-nivået ett trinn under det gitte. RISIKO_NONE returnerer seg selv."""
+    idx = RISIKO_RANK[nivå]
+    if idx == 0:
+        return nivå
+    return RISIKO_LEVELS[idx - 1]
+
+
+def apply_hysteresis(
+    state: HystereseState,
+    *,
+    rå_nivå: str,
+    now: datetime,
+    holdetid: timedelta,
+) -> None:
+    """Oppdater hysterese-state in-place.
+
+    Oppgang er umiddelbar. Nedgang krever holdetid. Multi-step nedgang
+    skjer ett trinn av gangen med ny timer per trinn. Se spec for full
+    policy.
+    """
+    rå_rank = RISIKO_RANK[rå_nivå]
+    cur_rank = RISIKO_RANK[state.nivå]
+
+    if rå_rank >= cur_rank:
+        state.nivå = rå_nivå
+        state.pending_nivå = None
+        state.pending_since = None
+        return
+
+    if state.pending_nivå != rå_nivå:
+        state.pending_nivå = rå_nivå
+        state.pending_since = now
+        return
+
+    if state.pending_since is None:
+        state.pending_since = now
+        return
+
+    if (now - state.pending_since) >= holdetid:
+        ett_under = _nivå_ett_under(state.nivå)
+        state.nivå = ett_under
+        if RISIKO_RANK[state.nivå] > rå_rank:
+            state.pending_since = now
+        else:
+            state.pending_nivå = None
+            state.pending_since = None
