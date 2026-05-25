@@ -10,6 +10,7 @@ from custom_components.effektvakt.sensor import (
     EffektvaktMarginSensor,
     EffektvaktProjisertSensor,
     EffektvaktRisikoSensor,
+    EffektvaktTilgjengeligKuttSensor,
     EffektvaktTopp3Sensor,
 )
 
@@ -66,3 +67,10 @@ def test_risiko_sensor_options(coord_mock):
     s = EffektvaktRisikoSensor(coord_mock)
     assert "none" in s.options
     assert "high" in s.options
+
+
+def test_tilgjengelig_kutt_sensor(coord_mock):
+    coord_mock.data["tilgjengelig_kutt_kw"] = 2.5
+    s = EffektvaktTilgjengeligKuttSensor(coord_mock)
+    assert s.native_value == 2.5
+    assert s.native_unit_of_measurement == "kW"

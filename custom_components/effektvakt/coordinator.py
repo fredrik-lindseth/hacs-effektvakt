@@ -13,13 +13,18 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util_module
 
 from .const import (
+    BLIND_ASSUMED_KUTT_KW,
+    CONF_BILLADER_POWER_SENSOR,
     CONF_DSO,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
+    CONF_KUTT_STRATEGI,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
+    CONF_VVB_POWER_SENSOR,
+    DEFAULT_KUTT_STRATEGI,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
@@ -32,9 +37,13 @@ from .const import (
     RISIKO_NONE,
     RISIKO_RANK,
     STORAGE_VERSION,
+    STRATEGI_BLIND,
+    STRATEGI_VVB_BILLADER,
+    STRATEGI_VVB_STATUS,
     TICK_INTERVAL_BY_RISIKO,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
+    VVB_ACTIVE_THRESHOLD_W,
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
@@ -288,6 +297,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self.risiko_holdetid: timedelta = timedelta(
             minutes=int(entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER))
         )
+        self.vvb_power_sensor: str | None = entry.data.get(CONF_VVB_POWER_SENSOR)
+        self.billader_power_sensor: str | None = entry.data.get(CONF_BILLADER_POWER_SENSOR)
+        self.kutt_strategi: str = entry.data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI)
 
         dso_id = entry.data.get(CONF_DSO)
         custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
@@ -377,6 +389,24 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         current_kw = read_power_kw(self.hass, self.power_sensor) or 0.0
         energy_now = read_energy_kwh(self.hass, self.energy_sensor)
 
+        vvb_power_w = None
+        if self.vvb_power_sensor:
+            vvb_kw = read_power_kw(self.hass, self.vvb_power_sensor)
+            if vvb_kw is not None:
+                vvb_power_w = vvb_kw * 1000.0
+
+        billader_power_w = None
+        if self.billader_power_sensor:
+            billader_kw = read_power_kw(self.hass, self.billader_power_sensor)
+            if billader_kw is not None:
+                billader_power_w = billader_kw * 1000.0
+
+        tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(
+            strategi=self.kutt_strategi,
+            vvb_power_w=vvb_power_w,
+            billader_power_w=billader_power_w,
+        )
+
         if energy_now is not None:
             if self._energy_at_hour_start is None:
                 self._energy_at_hour_start = energy_now
@@ -433,6 +463,10 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
             "last_update": now.isoformat(),
+            "tilgjengelig_kutt_kw": round(tilgjengelig_kutt_kw, 3),
+            "vvb_power_w": vvb_power_w,
+            "billader_power_w": billader_power_w,
+            "kutt_strategi": self.kutt_strategi,
         }
 
     def _finalize_hour(self) -> None:
@@ -449,6 +483,37 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self._previous_month_top_3_snitt_kw = round(topp_3, 3)
             self._previous_month_name = self._current_month
         self._daily_max_kw = {}
+
+
+def compute_tilgjengelig_kutt_kw(
+    *,
+    strategi: str,
+    vvb_power_w: float | None,
+    billader_power_w: float | None,
+) -> float:
+    """Beregn realistisk tilgjengelig kutt i kW basert på valgt strategi.
+
+    blind: antar 0.3 kW (duty-cycle-vektet VVB)
+    vvb_status: bruker faktisk VVB-effekt, kutter kun når > VVB_ACTIVE_THRESHOLD_W
+    vvb_billader: vvb_status + billader hvis billader er på (> 100 W)
+    """
+    if strategi == STRATEGI_BLIND:
+        return BLIND_ASSUMED_KUTT_KW
+
+    vvb_kw = 0.0
+    if vvb_power_w is not None and vvb_power_w > VVB_ACTIVE_THRESHOLD_W:
+        vvb_kw = vvb_power_w / 1000.0
+
+    if strategi == STRATEGI_VVB_STATUS:
+        return vvb_kw
+
+    if strategi == STRATEGI_VVB_BILLADER:
+        billader_kw = 0.0
+        if billader_power_w is not None and billader_power_w > 100.0:
+            billader_kw = billader_power_w / 1000.0
+        return vvb_kw + billader_kw
+
+    return 0.0  # ukjent strategi
 
 
 def is_coordinator_stale(

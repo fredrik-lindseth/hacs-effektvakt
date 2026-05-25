@@ -34,6 +34,7 @@ async def async_setup_entry(
             EffektvaktMarginSensor(coordinator),
             EffektvaktTopp3Sensor(coordinator),
             EffektvaktRisikoSensor(coordinator),
+            EffektvaktTilgjengeligKuttSensor(coordinator),
         ]
     )
 
@@ -123,3 +124,16 @@ class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
     @property
     def options(self) -> list[str]:
         return list(RISIKO_LEVELS)
+
+
+class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
+    _attr_name = "Tilgjengelig kutt"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = "kW"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    _sensor_key = "tilgjengelig_kutt"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("tilgjengelig_kutt_kw") if self.coordinator.data else None
