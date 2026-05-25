@@ -35,6 +35,10 @@ Klikk for å importere blueprint direkte til ditt Home Assistant:
 
 Se [docs/dashboard-eksempel.yaml](docs/dashboard-eksempel.yaml) for en kopierbar Lovelace-konfigurasjon.
 
+## Ofte stilte spørsmål
+
+Lurer du på om det er trygt å skru av varmtvannstanken, hvor mye du faktisk sparer, eller hvilke laster som er smartest å shedde? Se [docs/faq.md](docs/faq.md).
+
 ## Failsafe
 
 Alle shed-blueprints har en `max_off_minutes`-input som tvinger lasten på igjen etter en tidsfrist, uavhengig av Effektvakts tilstand. Effektvakts coordinator har egen watchdog som setter sensorer til `unknown` hvis ingen oppdatering har skjedd på 2 minutter. Designet skal aldri etterlate VVB-en din av forever.
