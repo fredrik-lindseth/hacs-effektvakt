@@ -26,4 +26,4 @@ def test_looks_like_peak_sensor(entity_id: str, friendly: str, expected: bool):
 def test_strategi_options_includes_alle_3():
     from custom_components.effektvakt.const import STRATEGI_OPTIONS
 
-    assert STRATEGI_OPTIONS == ["blind", "vvb_status", "vvb_billader"]
+    assert STRATEGI_OPTIONS == ["blind", "vvb_status", "vvb_pluss_ekstra"]

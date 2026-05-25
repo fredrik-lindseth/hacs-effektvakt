@@ -14,8 +14,8 @@ from homeassistant.util import dt as dt_util_module
 
 from .const import (
     BLIND_ASSUMED_KUTT_KW,
-    CONF_BILLADER_POWER_SENSOR,
     CONF_DSO,
+    CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
     CONF_KUTT_STRATEGI,
@@ -29,6 +29,8 @@ from .const import (
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
+    EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
+    LEGACY_STRATEGI_MAPPING,
     MAX_POWER_CLAMP_W,
     RISIKO_HIGH,
     RISIKO_LEVELS,
@@ -38,7 +40,7 @@ from .const import (
     RISIKO_RANK,
     STORAGE_VERSION,
     STRATEGI_BLIND,
-    STRATEGI_VVB_BILLADER,
+    STRATEGI_VVB_PLUSS_EKSTRA,
     STRATEGI_VVB_STATUS,
     TICK_INTERVAL_BY_RISIKO,
     VALID_ENERGY_UNITS,
@@ -298,8 +300,11 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             minutes=int(entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER))
         )
         self.vvb_power_sensor: str | None = entry.data.get(CONF_VVB_POWER_SENSOR)
-        self.billader_power_sensor: str | None = entry.data.get(CONF_BILLADER_POWER_SENSOR)
-        self.kutt_strategi: str = entry.data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI)
+        self.ekstra_power_sensors: list[str] = list(entry.data.get(CONF_EKSTRA_POWER_SENSORS) or [])
+
+        # Bakoverkompatibilitet for strategi-navn
+        strategi_raw = entry.data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI)
+        self.kutt_strategi: str = LEGACY_STRATEGI_MAPPING.get(strategi_raw, strategi_raw)
 
         dso_id = entry.data.get(CONF_DSO)
         custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
@@ -395,16 +400,15 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             if vvb_kw is not None:
                 vvb_power_w = vvb_kw * 1000.0
 
-        billader_power_w = None
-        if self.billader_power_sensor:
-            billader_kw = read_power_kw(self.hass, self.billader_power_sensor)
-            if billader_kw is not None:
-                billader_power_w = billader_kw * 1000.0
+        ekstra_power_w_list: list[float | None] = []
+        for sensor in self.ekstra_power_sensors:
+            kw = read_power_kw(self.hass, sensor)
+            ekstra_power_w_list.append(kw * 1000.0 if kw is not None else None)
 
         tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(
             strategi=self.kutt_strategi,
             vvb_power_w=vvb_power_w,
-            billader_power_w=billader_power_w,
+            ekstra_power_w=ekstra_power_w_list,
         )
 
         if energy_now is not None:
@@ -465,7 +469,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "last_update": now.isoformat(),
             "tilgjengelig_kutt_kw": round(tilgjengelig_kutt_kw, 3),
             "vvb_power_w": vvb_power_w,
-            "billader_power_w": billader_power_w,
+            "ekstra_power_w_total": sum(p for p in ekstra_power_w_list if p is not None) or None,
             "kutt_strategi": self.kutt_strategi,
         }
 
@@ -489,13 +493,13 @@ def compute_tilgjengelig_kutt_kw(
     *,
     strategi: str,
     vvb_power_w: float | None,
-    billader_power_w: float | None,
+    ekstra_power_w: list[float | None] | None = None,
 ) -> float:
     """Beregn realistisk tilgjengelig kutt i kW basert på valgt strategi.
 
-    blind: antar 0.3 kW (duty-cycle-vektet VVB)
-    vvb_status: bruker faktisk VVB-effekt, kutter kun når > VVB_ACTIVE_THRESHOLD_W
-    vvb_billader: vvb_status + billader hvis billader er på (> 100 W)
+    blind: antar BLIND_ASSUMED_KUTT_KW
+    vvb_status: bruker faktisk VVB-effekt, kun over VVB_ACTIVE_THRESHOLD_W
+    vvb_pluss_ekstra: VVB pluss sum av ekstra-sensorer over EKSTRA_SENSOR_ACTIVE_THRESHOLD_W
     """
     if strategi == STRATEGI_BLIND:
         return BLIND_ASSUMED_KUTT_KW
@@ -507,11 +511,12 @@ def compute_tilgjengelig_kutt_kw(
     if strategi == STRATEGI_VVB_STATUS:
         return vvb_kw
 
-    if strategi == STRATEGI_VVB_BILLADER:
-        billader_kw = 0.0
-        if billader_power_w is not None and billader_power_w > 100.0:
-            billader_kw = billader_power_w / 1000.0
-        return vvb_kw + billader_kw
+    if strategi == STRATEGI_VVB_PLUSS_EKSTRA:
+        ekstra_kw = 0.0
+        for p in ekstra_power_w or []:
+            if p is not None and p > EKSTRA_SENSOR_ACTIVE_THRESHOLD_W:
+                ekstra_kw += p / 1000.0
+        return vvb_kw + ekstra_kw
 
     return 0.0  # ukjent strategi
 

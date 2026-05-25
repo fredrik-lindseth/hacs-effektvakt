@@ -16,21 +16,27 @@ CONF_MIN_RISIKO_FOR_KUTT: Final[str] = "min_risiko_for_kutt"
 CONF_RISIKO_HOLDETID_MINUTTER: Final[str] = "risiko_holdetid_minutter"
 CONF_CONFIRM_PEAK_SENSOR: Final[str] = "confirm_peak_sensor"
 CONF_VVB_POWER_SENSOR: Final[str] = "vvb_power_sensor"
-CONF_BILLADER_POWER_SENSOR: Final[str] = "billader_power_sensor"
+CONF_EKSTRA_POWER_SENSORS: Final[str] = "ekstra_power_sensors"
 CONF_KUTT_STRATEGI: Final[str] = "kutt_strategi"
 
 # Kutt-strategier
 STRATEGI_BLIND: Final[str] = "blind"
 STRATEGI_VVB_STATUS: Final[str] = "vvb_status"
-STRATEGI_VVB_BILLADER: Final[str] = "vvb_billader"
+STRATEGI_VVB_PLUSS_EKSTRA: Final[str] = "vvb_pluss_ekstra"
 
-STRATEGI_OPTIONS: Final[list[str]] = [STRATEGI_BLIND, STRATEGI_VVB_STATUS, STRATEGI_VVB_BILLADER]
+STRATEGI_OPTIONS: Final[list[str]] = [STRATEGI_BLIND, STRATEGI_VVB_STATUS, STRATEGI_VVB_PLUSS_EKSTRA]
 
 DEFAULT_KUTT_STRATEGI: Final[str] = STRATEGI_BLIND
+
+# Bakoverkompatibilitet for strategi-navn
+LEGACY_STRATEGI_MAPPING: Final[dict[str, str]] = {
+    "vvb_billader": STRATEGI_VVB_PLUSS_EKSTRA,
+}
 
 # Antagelser per strategi
 BLIND_ASSUMED_KUTT_KW: Final[float] = 0.3  # 2 kW VVB x 15% duty cycle
 VVB_ACTIVE_THRESHOLD_W: Final[float] = 1000.0  # under denne: element antas å ikke varme
+EKSTRA_SENSOR_ACTIVE_THRESHOLD_W: Final[float] = 100.0  # under denne: bidrar ikke
 
 # Default values
 DEFAULT_DSO: Final[str] = "bkk"

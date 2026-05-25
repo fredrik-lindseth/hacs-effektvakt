@@ -12,9 +12,9 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_BILLADER_POWER_SENSOR,
     CONF_CONFIRM_PEAK_SENSOR,
     CONF_DSO,
+    CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
     CONF_KUTT_STRATEGI,
@@ -217,8 +217,12 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_VVB_POWER_SENSOR): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="sensor", device_class="power"),
                     ),
-                    vol.Optional(CONF_BILLADER_POWER_SENSOR): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    vol.Optional(CONF_EKSTRA_POWER_SENSORS, default=[]): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="power",
+                            multiple=True,
+                        ),
                     ),
                 }
             ),
@@ -284,8 +288,12 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_VVB_POWER_SENSOR): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="sensor", device_class="power"),
                     ),
-                    vol.Optional(CONF_BILLADER_POWER_SENSOR): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    vol.Optional(CONF_EKSTRA_POWER_SENSORS, default=[]): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="power",
+                            multiple=True,
+                        ),
                     ),
                 }
             ),

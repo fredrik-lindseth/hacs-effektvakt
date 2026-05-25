@@ -4,6 +4,18 @@ Følger [Keep a Changelog](https://keepachangelog.com/) og [SemVer](https://semv
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-25
+
+### Endret
+
+- `CONF_BILLADER_POWER_SENSOR` (single) erstattet med `CONF_EKSTRA_POWER_SENSORS` (liste)
+- Strategi `vvb_billader` omdøpt til `vvb_pluss_ekstra` (gammel navn aksepteres for bakoverkompatibilitet)
+- Ekstra-power-sensorer som er over 100 W summeres og bidrar til `tilgjengelig_kutt_kw`
+
+### Bruksanvisning
+
+Nå kan du legge inn flere varmekabler, billader, osv som ekstra-sensorer for å få realistisk kutt-kapasitet.
+
 ## [0.2.0] - 2026-05-25
 
 ### Lagt til
