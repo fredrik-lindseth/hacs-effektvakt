@@ -39,14 +39,51 @@ class _DataUpdateCoordinatorStub:
         self.update_interval = update_interval
 
 
+class _CoordinatorEntityStub:
+    """Minimal stub for CoordinatorEntity so subclasses can use normal __setattr__."""
+
+    def __init__(self, coordinator) -> None:
+        self.coordinator = coordinator
+
+
+class _SensorEntityStub:
+    """Minimal stub for SensorEntity — mirrors HA's _attr_* property pattern."""
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return getattr(self, "_attr_native_unit_of_measurement", None)
+
+    @property
+    def state_class(self):
+        return getattr(self, "_attr_state_class", None)
+
+    @property
+    def device_class(self):
+        return getattr(self, "_attr_device_class", None)
+
+
+class _BinarySensorEntityStub:
+    """Minimal stub for BinarySensorEntity."""
+
+
 _update_coordinator_mod = MagicMock()
 _update_coordinator_mod.DataUpdateCoordinator = _DataUpdateCoordinatorStub
+_update_coordinator_mod.CoordinatorEntity = _CoordinatorEntityStub
 sys.modules["homeassistant.helpers.update_coordinator"] = _update_coordinator_mod
 
 sys.modules["homeassistant.helpers.entity"] = MagicMock()
 sys.modules["homeassistant.helpers.selector"] = MagicMock()
-sys.modules["homeassistant.components.sensor"] = MagicMock()
-sys.modules["homeassistant.components.binary_sensor"] = MagicMock()
+
+_sensor_mod = MagicMock()
+_sensor_mod.SensorEntity = _SensorEntityStub
+_sensor_mod.SensorDeviceClass = MagicMock()
+_sensor_mod.SensorStateClass = MagicMock()
+sys.modules["homeassistant.components.sensor"] = _sensor_mod
+
+_binary_sensor_mod = MagicMock()
+_binary_sensor_mod.BinarySensorEntity = _BinarySensorEntityStub
+_binary_sensor_mod.BinarySensorDeviceClass = MagicMock()
+sys.modules["homeassistant.components.binary_sensor"] = _binary_sensor_mod
 
 _dt_util_mock = MagicMock()
 _dt_util_mock.now.return_value = datetime(2026, 6, 15, 12, 0, 0)
