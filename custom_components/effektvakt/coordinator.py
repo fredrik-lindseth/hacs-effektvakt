@@ -108,8 +108,8 @@ def classify_raw_risk(*, margin_kw: float, safety_buffer_kw: float) -> str:
 
     Returnerer en av RISIKO_NONE, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_HIGH.
     Tabell:
-      none:   margin > 2 × buffer
-      low:    buffer < margin <= 2 × buffer
+      none:   margin > 2 x buffer
+      low:    buffer < margin <= 2 x buffer
       medium: 0 < margin <= buffer
       high:   margin <= 0
     """
@@ -157,6 +157,7 @@ def compute_effective_threshold(
 @dataclass(frozen=True)
 class TierInfo:
     """Resultat fra tier-oppslag."""
+
     prev_threshold_kw: float | None
     next_threshold_kw: float | None
     next_pris_per_mnd: int | None
@@ -193,6 +194,7 @@ def lookup_tiers(
 @dataclass
 class HystereseState:
     """Stateful hysterese-tilstand."""
+
     nivå: str
     pending_nivå: str | None = None
     pending_since: datetime | None = None
@@ -283,9 +285,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self.energy_sensor: str | None = entry.data.get(CONF_ENERGY_SENSOR)
         self.safety_buffer_kw: float = float(entry.data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW))
         self.min_risiko_for_kutt: str = entry.data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT)
-        self.risiko_holdetid: timedelta = timedelta(minutes=int(
-            entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER)
-        ))
+        self.risiko_holdetid: timedelta = timedelta(
+            minutes=int(entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER))
+        )
 
         dso_id = entry.data.get(CONF_DSO)
         custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
@@ -332,24 +334,27 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self._hysterese_state.nivå = hyst["nivå"]
 
     async def _persist(self) -> None:
-        await self._store.async_save({
-            "data": {
-                "current_month": self._current_month,
-                "daily_max_kw": {d.isoformat(): kw for d, kw in self._daily_max_kw.items()},
-                "current_hour_kwh": self._current_hour_kwh,
-                "energy_at_hour_start": self._energy_at_hour_start,
-                "previous_month_top_3_snitt_kw": self._previous_month_top_3_snitt_kw,
-                "previous_month_name": self._previous_month_name,
-                "hysterese_state": {
-                    "nivå": self._hysterese_state.nivå,
-                    "pending_nivå": self._hysterese_state.pending_nivå,
-                    "pending_since": (
-                        self._hysterese_state.pending_since.isoformat()
-                        if self._hysterese_state.pending_since else None
-                    ),
-                },
+        await self._store.async_save(
+            {
+                "data": {
+                    "current_month": self._current_month,
+                    "daily_max_kw": {d.isoformat(): kw for d, kw in self._daily_max_kw.items()},
+                    "current_hour_kwh": self._current_hour_kwh,
+                    "energy_at_hour_start": self._energy_at_hour_start,
+                    "previous_month_top_3_snitt_kw": self._previous_month_top_3_snitt_kw,
+                    "previous_month_name": self._previous_month_name,
+                    "hysterese_state": {
+                        "nivå": self._hysterese_state.nivå,
+                        "pending_nivå": self._hysterese_state.pending_nivå,
+                        "pending_since": (
+                            self._hysterese_state.pending_since.isoformat()
+                            if self._hysterese_state.pending_since
+                            else None
+                        ),
+                    },
+                }
             }
-        })
+        )
 
     async def _async_update_data(self) -> dict:
         await self._load_stored_data()

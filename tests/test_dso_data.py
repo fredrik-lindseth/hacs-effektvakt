@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
 
 
@@ -19,9 +21,7 @@ def test_kapasitetstrinn_terskler_stigende():
     for dso_id, info in KAPASITETSTRINN_PER_DSO.items():
         trinn = info["kapasitetstrinn"]
         terskler = [t[0] for t in trinn]
-        assert terskler == sorted(terskler), (
-            f"{dso_id}: terskler ikke stigende: {terskler}"
-        )
+        assert terskler == sorted(terskler), f"{dso_id}: terskler ikke stigende: {terskler}"
 
 
 def test_kapasitetstrinn_priser_stigende_eller_likt():
@@ -29,7 +29,7 @@ def test_kapasitetstrinn_priser_stigende_eller_likt():
         trinn = info["kapasitetstrinn"]
         priser = [t[1] for t in trinn]
         # Noen DSO-er kan ha samme pris over flere trinn, men aldri synkende
-        for prev, curr in zip(priser, priser[1:], strict=False):
+        for prev, curr in itertools.pairwise(priser):
             assert curr >= prev, f"{dso_id}: pris {curr} < forrige {prev}"
 
 

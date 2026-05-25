@@ -18,9 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EFFEKTVAKT_DSO = REPO_ROOT / "custom_components" / "effektvakt" / "dso.py"
-STROMKALKULATOR_DSO = (
-    REPO_ROOT.parent / "hacs-strømkalkulator" / "custom_components" / "stromkalkulator" / "dso.py"
-)
+STROMKALKULATOR_DSO = REPO_ROOT.parent / "hacs-strømkalkulator" / "custom_components" / "stromkalkulator" / "dso.py"
 
 
 def _load_stromkalkulator_dso() -> dict:
@@ -106,6 +104,16 @@ def _generate(dso_list: dict) -> str:
     return "\n".join(lines)
 
 
+def _ruff_format(path: Path) -> None:
+    """Kjør ruff format på filen slik at output alltid matcher ruff-format."""
+    import subprocess
+
+    result = subprocess.run(["ruff", "format", str(path)], capture_output=True)
+    if result.returncode != 0:
+        # ruff mangler — ignorer, sync-sjekken vil uansett bruke samme logikk
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Feil hvis output skiller seg fra committet fil")
@@ -118,15 +126,26 @@ def main() -> int:
         if not EFFEKTVAKT_DSO.exists():
             print(f"FEIL: {EFFEKTVAKT_DSO} eksisterer ikke. Kjør uten --check først.", file=sys.stderr)
             return 1
+        # Skriv til en temp-fil, formater med ruff, og sammenlign
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+            tmp.write(generated)
+            tmp_path = Path(tmp.name)
+        _ruff_format(tmp_path)
+        formatted = tmp_path.read_text()
+        tmp_path.unlink()
+
         current = EFFEKTVAKT_DSO.read_text()
-        if current.strip() != generated.strip():
+        if current.strip() != formatted.strip():
             print("FEIL: dso.py har driftet fra strømkalkulator.", file=sys.stderr)
-            print("Kjør: python scripts/sync_dso_from_stromkalkulator.py", file=sys.stderr)
+            print("Kjør: python3 scripts/sync_dso_from_stromkalkulator.py", file=sys.stderr)
             return 1
         print("OK: dso.py er i sync.")
         return 0
 
     EFFEKTVAKT_DSO.write_text(generated)
+    _ruff_format(EFFEKTVAKT_DSO)
     n = sum(1 for line in generated.splitlines() if line.startswith('    "') and line.endswith(": {"))
     print(f"Skrev {EFFEKTVAKT_DSO} ({n} DSO-er)")
     return 0

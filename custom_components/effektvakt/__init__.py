@@ -33,15 +33,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             last_successful_update=coordinator._last_successful_update,
             now=dt_util_now(),
         ):
-            _LOGGER.warning(
-                "Effektvakt coordinator stale, setter sensorer til unknown"
-            )
+            _LOGGER.warning("Effektvakt coordinator stale, setter sensorer til unknown")
             coordinator.async_set_updated_data({})
 
     entry.async_on_unload(
-        async_track_time_interval(
-            hass, _watchdog_check, timedelta(seconds=WATCHDOG_INTERVAL_SECONDS)
-        )
+        async_track_time_interval(hass, _watchdog_check, timedelta(seconds=WATCHDOG_INTERVAL_SECONDS))
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

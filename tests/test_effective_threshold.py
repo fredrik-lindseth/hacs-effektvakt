@@ -46,18 +46,24 @@ def test_top_n_average_topp_3():
 
 def test_effective_threshold_med_for_fa_dager():
     dm = {date(2026, 5, 1): 5.0}
-    assert compute_effective_threshold(
-        next_tier_threshold_kw=10.0,
-        daily_max_kw=dm,
-    ) == 10.0
+    assert (
+        compute_effective_threshold(
+            next_tier_threshold_kw=10.0,
+            daily_max_kw=dm,
+        )
+        == 10.0
+    )
 
 
 def test_effective_threshold_topp_2_under_terskel():
     dm = {date(2026, 5, 1): 6.0, date(2026, 5, 2): 7.0}
-    assert compute_effective_threshold(
-        next_tier_threshold_kw=10.0,
-        daily_max_kw=dm,
-    ) == 10.0
+    assert (
+        compute_effective_threshold(
+            next_tier_threshold_kw=10.0,
+            daily_max_kw=dm,
+        )
+        == 10.0
+    )
 
 
 def test_effective_threshold_topp_2_over_terskel():

@@ -45,9 +45,7 @@ def looks_like_peak_sensor(entity_id: str, *, friendly_name: str = "") -> bool:
     if any(pat in lower_id for pat in PEAK_SENSOR_NAME_PATTERNS):
         return True
     lower_name = friendly_name.lower()
-    if any(kw in lower_name for kw in PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS):
-        return True
-    return False
+    return any(kw in lower_name for kw in PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS)
 
 
 def _dso_options() -> list[selector.SelectOptionDict]:
@@ -72,14 +70,16 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_DSO, default=DEFAULT_DSO): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=_dso_options(),
-                        mode=selector.SelectSelectorMode.DROPDOWN,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_DSO, default=DEFAULT_DSO): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=_dso_options(),
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        ),
                     ),
-                ),
-            }),
+                }
+            ),
         )
 
     async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -122,15 +122,17 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="sensors",
-            data_schema=vol.Schema({
-                vol.Required(CONF_POWER_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power"),
-                ),
-                vol.Optional(CONF_ENERGY_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="energy"),
-                ),
-                vol.Optional(CONF_CONFIRM_PEAK_SENSOR, default=False): selector.BooleanSelector(),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_POWER_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+                    ),
+                    vol.Optional(CONF_ENERGY_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="energy"),
+                    ),
+                    vol.Optional(CONF_CONFIRM_PEAK_SENSOR, default=False): selector.BooleanSelector(),
+                }
+            ),
             errors=errors,
         )
 
@@ -158,9 +160,11 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="pricing",
-            data_schema=vol.Schema({
-                vol.Required(CONF_KAPASITETSTRINN_CUSTOM): str,
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_KAPASITETSTRINN_CUSTOM): str,
+                }
+            ),
             errors=errors,
         )
 
@@ -174,31 +178,32 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="tuning",
-            data_schema=vol.Schema({
-                vol.Required(
-                    CONF_SAFETY_BUFFER_KW, default=DEFAULT_SAFETY_BUFFER_KW
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0.1, max=5, step=0.1, mode=selector.NumberSelectorMode.SLIDER
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SAFETY_BUFFER_KW, default=DEFAULT_SAFETY_BUFFER_KW): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.1, max=5, step=0.1, mode=selector.NumberSelectorMode.SLIDER
+                        ),
                     ),
-                ),
-                vol.Required(
-                    CONF_MIN_RISIKO_FOR_KUTT, default=DEFAULT_MIN_RISIKO_FOR_KUTT
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            selector.SelectOptionDict(value=lvl, label=lvl)
-                            for lvl in RISIKO_LEVELS if lvl != "none"
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    vol.Required(
+                        CONF_MIN_RISIKO_FOR_KUTT, default=DEFAULT_MIN_RISIKO_FOR_KUTT
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=lvl, label=lvl)
+                                for lvl in RISIKO_LEVELS
+                                if lvl != "none"
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        ),
                     ),
-                ),
-                vol.Required(
-                    CONF_RISIKO_HOLDETID_MINUTTER, default=DEFAULT_RISIKO_HOLDETID_MINUTTER
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
-                ),
-            }),
+                    vol.Required(
+                        CONF_RISIKO_HOLDETID_MINUTTER, default=DEFAULT_RISIKO_HOLDETID_MINUTTER
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
+                    ),
+                }
+            ),
         )
 
     @staticmethod
@@ -217,30 +222,35 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
         data = self.config_entry.data
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Required(
-                    CONF_SAFETY_BUFFER_KW,
-                    default=data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.1, max=5, step=0.1, mode=selector.NumberSelectorMode.SLIDER),
-                ),
-                vol.Required(
-                    CONF_MIN_RISIKO_FOR_KUTT,
-                    default=data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            selector.SelectOptionDict(value=lvl, label=lvl)
-                            for lvl in RISIKO_LEVELS if lvl != "none"
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SAFETY_BUFFER_KW,
+                        default=data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.1, max=5, step=0.1, mode=selector.NumberSelectorMode.SLIDER
+                        ),
                     ),
-                ),
-                vol.Required(
-                    CONF_RISIKO_HOLDETID_MINUTTER,
-                    default=data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
-                ),
-            }),
+                    vol.Required(
+                        CONF_MIN_RISIKO_FOR_KUTT,
+                        default=data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=lvl, label=lvl)
+                                for lvl in RISIKO_LEVELS
+                                if lvl != "none"
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        ),
+                    ),
+                    vol.Required(
+                        CONF_RISIKO_HOLDETID_MINUTTER,
+                        default=data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
+                    ),
+                }
+            ),
         )

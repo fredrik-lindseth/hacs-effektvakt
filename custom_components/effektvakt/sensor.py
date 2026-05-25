@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, RISIKO_LEVELS
+from .const import RISIKO_LEVELS
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -28,12 +28,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensors from config entry."""
     coordinator: EffektvaktCoordinator = entry.runtime_data
-    async_add_entities([
-        EffektvaktProjisertSensor(coordinator),
-        EffektvaktMarginSensor(coordinator),
-        EffektvaktTopp3Sensor(coordinator),
-        EffektvaktRisikoSensor(coordinator),
-    ])
+    async_add_entities(
+        [
+            EffektvaktProjisertSensor(coordinator),
+            EffektvaktMarginSensor(coordinator),
+            EffektvaktTopp3Sensor(coordinator),
+            EffektvaktRisikoSensor(coordinator),
+        ]
+    )
 
 
 class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
@@ -110,7 +112,7 @@ class EffektvaktTopp3Sensor(_EffektvaktBaseSensor):
 class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
     _attr_name = "Risiko-nivå"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = list(RISIKO_LEVELS)
+    _attr_options: ClassVar[list[str]] = list(RISIKO_LEVELS)
 
     _sensor_key = "risiko_niva"
 

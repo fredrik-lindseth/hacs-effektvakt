@@ -15,7 +15,6 @@ from custom_components.effektvakt.coordinator import (
 )
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
 
-
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 BKK_FIXTURES = sorted(FIXTURES_DIR.glob("bkk_*_hourly.json"))
 
@@ -157,8 +156,7 @@ def test_replay_ingen_false_positives_lavt_forbruk():
             )
             margin = effective_threshold - kwh
             assert margin > 1.0, (
-                f"{path.stem} {dt}: lav forbruks-time {kwh:.2f} kWh "
-                f"gir margin {margin:.2f} (forventet > 1.0)"
+                f"{path.stem} {dt}: lav forbruks-time {kwh:.2f} kWh " f"gir margin {margin:.2f} (forventet > 1.0)"
             )
 
             if kwh > daily_max_so_far.get(d, 0.0):

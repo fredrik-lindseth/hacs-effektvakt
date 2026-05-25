@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.effektvakt.sensor import (
-    EffektvaktProjisertSensor,
     EffektvaktMarginSensor,
-    EffektvaktTopp3Sensor,
+    EffektvaktProjisertSensor,
     EffektvaktRisikoSensor,
+    EffektvaktTopp3Sensor,
 )
 
 

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from custom_components.effektvakt.const import RISIKO_HIGH, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_NONE
 from custom_components.effektvakt.coordinator import HystereseState, apply_hysteresis
-from custom_components.effektvakt.const import RISIKO_NONE, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_HIGH
-
 
 HOLDETID = timedelta(minutes=5)
 NOW = datetime(2026, 5, 25, 14, 0, 0)

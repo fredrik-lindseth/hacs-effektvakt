@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from custom_components.effektvakt.coordinator import lookup_tiers
 
-
 BKK_TIER_EXAMPLE = [
     (2.0, 130),
     (5.0, 230),

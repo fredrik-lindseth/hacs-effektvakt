@@ -10,15 +10,18 @@ from custom_components.effektvakt.binary_sensor import EffektvaktKuttNedAnbefalt
 from custom_components.effektvakt.const import RISIKO_HIGH, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_NONE
 
 
-@pytest.mark.parametrize("risiko,min_for_kutt,expected", [
-    (RISIKO_NONE, "medium", False),
-    (RISIKO_LOW, "medium", False),
-    (RISIKO_MEDIUM, "medium", True),
-    (RISIKO_HIGH, "medium", True),
-    (RISIKO_LOW, "low", True),
-    (RISIKO_HIGH, "high", True),
-    (RISIKO_MEDIUM, "high", False),
-])
+@pytest.mark.parametrize(
+    "risiko,min_for_kutt,expected",
+    [
+        (RISIKO_NONE, "medium", False),
+        (RISIKO_LOW, "medium", False),
+        (RISIKO_MEDIUM, "medium", True),
+        (RISIKO_HIGH, "medium", True),
+        (RISIKO_LOW, "low", True),
+        (RISIKO_HIGH, "high", True),
+        (RISIKO_MEDIUM, "high", False),
+    ],
+)
 def test_binary_sensor_is_on(risiko: str, min_for_kutt: str, expected: bool):
     coord = MagicMock()
     coord.entry.entry_id = "test"

@@ -9,9 +9,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Returner diagnose-info for support-issues."""
     coordinator = entry.runtime_data
     return {

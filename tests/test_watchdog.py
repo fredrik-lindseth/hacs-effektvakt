@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from custom_components.effektvakt.const import WATCHDOG_STALE_THRESHOLD_SECONDS
 from custom_components.effektvakt.coordinator import is_coordinator_stale
 
-
 NOW = datetime(2026, 5, 25, 14, 0, 0)
 
 
