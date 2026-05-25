@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -125,3 +126,39 @@ def compute_effective_threshold(
     topp_2 = top_n_average(daily_max_kw, n=2)
     assert topp_2 is not None
     return max(next_tier_threshold_kw, topp_2)
+
+
+@dataclass(frozen=True)
+class TierInfo:
+    """Resultat fra tier-oppslag."""
+    prev_threshold_kw: float | None
+    next_threshold_kw: float | None
+    next_pris_per_mnd: int | None
+
+
+def lookup_tiers(
+    *,
+    projected_kw: float,
+    trinn: list[tuple[float, int]],
+) -> TierInfo:
+    """Finn prev og next tier basert på projisert kW.
+
+    Trinn-listen er sortert stigende på kW-terskel. "next" er det laveste
+    trinnet hvor terskel >= projected_kw. "prev" er trinnet rett under.
+    """
+    if not trinn:
+        return TierInfo(None, None, None)
+
+    next_idx: int | None = None
+    for i, (threshold, _) in enumerate(trinn):
+        if projected_kw <= threshold:
+            next_idx = i
+            break
+
+    if next_idx is None:
+        prev_kw, _prev_pris = trinn[-1]
+        return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=None, next_pris_per_mnd=None)
+
+    next_kw, next_pris = trinn[next_idx]
+    prev_kw = trinn[next_idx - 1][0] if next_idx > 0 else None
+    return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=next_kw, next_pris_per_mnd=next_pris)
