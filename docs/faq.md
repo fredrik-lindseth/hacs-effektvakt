@@ -76,21 +76,25 @@ Hvis du har elbil er det den klart viktigste lasten å koble på Effektvakt-styr
 
 Unngå å kutte induksjonstopp (irriterende mid-matlaging) og tørketrommel/vaskemaskin/oppvaskmaskin (programmene tåler dårlig avbrudd).
 
-## Konkrete tall fra en norsk husholdning
+## Hvordan finne ut hva ditt eget hus drar
 
-Faktisk effektmåling fra et hus i Bergen (4-5 m² baderom, gulvvarme på 130 W/m²):
+Ikke gjett. Effekten står på navnplaten:
 
-| Sone                              | Max effekt       | Snitt over tid |
-| --------------------------------- | ---------------- | -------------- |
-| Bad gulvvarme                     | 557 W            | 183 W          |
-| Stue gulvvarme                    | ca. 1100 W       | n/a            |
-| Kjøkken gulvvarme                 | typisk 500-800 W | n/a            |
-| Gang gulvvarme                    | typisk 400-700 W | n/a            |
-| **Sum gulvvarme**                 | **~3 000 W**     | varierer       |
-| Varmtvannsbereder (OSO Saga 200L) | 2 000 W          | ~250 W         |
-| Panelovn typisk                   | 600-1500 W       | 200-600 W      |
+- **Varmtvannsbereder**: nominell effekt på typeskiltet bak/under kabinettet. Standard norske 200L er 2000 W (én-element) eller 2×2000 W (eks. OSO Saga SE). Skiltet sier "2,0 kW" eller "4,0 kW".
+- **Panelovn**: står på frontplaten eller bakplaten. Vanlig 600/800/1000/1200/1500/2000 W.
+- **Elbil-lader**: står på laderens veggboks. Vanlige hjemmeladere: 3,6 / 7,4 / 11 / 22 kW.
 
-For en husholdning som vanligvis ligger like under et kapasitetstrinn, kan kombinasjonen "VVB + 2-3 varmekabler + 1 panelovn" gi 3-5 kW tilgjengelig kutting, mer enn nok til å hindre en trinn-overskridelse på 10 kW eller 15 kW.
+For gulvvarme er det effekt per kvadratmeter × areal:
+
+- **Bad og våtrom**: 130-160 W/m² (typisk)
+- **Stue, kjøkken, gang**: 80-120 W/m² (typisk)
+- Eksempel: 5 m² bad × 130 W/m² = 650 W
+
+Tallene over kommer fra produktkataloger (Nexans, Elko, Mill, Bauhaus). Ditt eget anlegg kan ligge utenfor området, sjekk faktura eller monteringspapirer hvis du vil ha eksakt tall.
+
+For å vite **når** lastene faktisk drar effekt (duty cycle), trenger du en sensor. Shelly Plus Plug S, Aeotec Smart Switch eller andre power-sensorer på 230V-uttaket gir deg sanntidsverdi. Da kan Effektvakt bruke den (se [strategi.md](strategi.md)).
+
+Den ENESTE målte verdien jeg har fra eget hus er bad-gulvvarme: 557 W max, 183 W snitt. Det matcher ca 4-5 m² bad × 130 W/m². Bekrefter formelen, men én datapunkt er ikke "data".
 
 ## Kilder
 
