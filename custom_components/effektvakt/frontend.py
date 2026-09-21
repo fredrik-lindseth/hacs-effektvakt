@@ -1,6 +1,6 @@
 """Servering av Effektvakt sitt eget Lovelace-kort.
 
-Integrasjonen tar med seg kortet selv: filene under ``frontend/`` serveres paa
+Integrasjonen tar med seg kortet selv: filene under ``www/`` serveres paa
 ``/effektvakt-static``, og kort-URL-en meldes inn med ``add_extra_js_url`` slik
 at Fredrik slipper aa registrere en Lovelace-ressurs for haand. Skiven hentes
 over websocket i stedet for aa bli tegnet i JavaScript, saa kortet og trykkfilen
@@ -24,6 +24,7 @@ from .const import (
     CONF_KAPASITETSTRINN_CUSTOM,
     DOMAIN,
     FRONTEND_CARD_FILENAME,
+    FRONTEND_DIR_NAME,
     FRONTEND_URL_BASE,
     WS_TYPE_FACEPLATE,
 )
@@ -41,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 # async_register_static_paths feiler paa en URL som alt er tatt.
 DATA_FRONTEND_REGISTRERT: str = f"{DOMAIN}_frontend_registrert"
 
-FRONTEND_DIR: Path = Path(__file__).parent / "frontend"
+FRONTEND_DIR: Path = Path(__file__).parent / FRONTEND_DIR_NAME
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:

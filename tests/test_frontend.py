@@ -11,6 +11,7 @@ import pytest
 from custom_components.effektvakt import async_setup
 from custom_components.effektvakt.const import (
     FRONTEND_CARD_FILENAME,
+    FRONTEND_DIR_NAME,
     FRONTEND_URL_BASE,
     WS_TYPE_FACEPLATE,
 )
@@ -53,7 +54,7 @@ async def test_async_setup_registrerer_static_path_en_gang():
     assert len(konfigurasjoner) == 1
     konfig = konfigurasjoner[0]
     assert konfig.url_path == FRONTEND_URL_BASE
-    assert Path(konfig.path).name == "frontend"
+    assert Path(konfig.path).name == FRONTEND_DIR_NAME
     assert Path(konfig.path).is_dir()
     assert konfig.cache_headers is True
 
@@ -120,6 +121,13 @@ async def test_async_setup_taaler_manifest_uten_versjon():
 def test_manifest_har_avhengighetene_frontendregistreringen_krever():
     """hass.data-nokkelen frontend bruker opprettes i frontends egen async_setup."""
     assert set(MANIFEST["dependencies"]) == {"http", "frontend", "websocket_api"}
+
+
+def test_static_katalogen_kolliderer_ikke_med_modulnavnet():
+    """En katalog frontend/ ville skygget for frontend.py og stoppet importen."""
+    pakke = Path(__file__).parent.parent / "custom_components/effektvakt"
+    assert (pakke / FRONTEND_DIR_NAME).is_dir()
+    assert not (pakke / "frontend").exists()
 
 
 # --- websocket-handleren --------------------------------------------------

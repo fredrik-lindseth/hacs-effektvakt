@@ -68,8 +68,11 @@ WATCHDOG_STALE_THRESHOLD_SECONDS: Final[int] = 120
 # Storage
 STORAGE_VERSION: Final[int] = 1
 
-# Frontend: kortet serveres av integrasjonen selv, ingen HACS-plugin
+# Frontend: kortet serveres av integrasjonen selv, ingen HACS-plugin.
+# Katalogen heter www/ etter HA-konvensjonen, og maa ikke hete frontend/:
+# da ville den skygget for modulen frontend.py i samme pakke.
 FRONTEND_URL_BASE: Final[str] = "/effektvakt-static"
+FRONTEND_DIR_NAME: Final[str] = "www"
 FRONTEND_CARD_FILENAME: Final[str] = "effektvakt-card.js"
 WS_TYPE_FACEPLATE: Final[str] = "effektvakt/faceplate"
 
