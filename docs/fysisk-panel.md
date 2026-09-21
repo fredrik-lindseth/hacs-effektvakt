@@ -194,9 +194,9 @@ python3 scripts/export_faceplate.py --dso bkk --png
 ingen slitasje og intet plastdeksel, siden alt det er fysisk på et ekte panel.
 `--variant card` er skjermversjonen.
 
-Oppgir du `--maks-kw`, rundes tallet opp til nærmeste multiplum av 15 så
-hovedtallene på skalaen forblir hele, og scriptet sier fra når det skjer. Det
-samme tallet må stå i `maks_kw` i ESPHome-YAML-en.
+Oppgir du `--maks-kw`, løftes tallet opp til nærmeste skalatopp som gir hele
+hovedtall, og scriptet sier fra når det skjer. 10 gir 0 2 4 6 8 10, 15 gir
+0 3 6 9 12 15. Det samme tallet må stå i `maks_kw` i ESPHome-YAML-en.
 
 Se [development.md](development.md#eksportere-geha-meter-skiven) for detaljene om
 scriptet.
