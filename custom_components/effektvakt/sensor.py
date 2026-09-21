@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.sensor import (
@@ -36,8 +37,18 @@ async def async_setup_entry(
             EffektvaktTopp3Sensor(coordinator),
             EffektvaktRisikoSensor(coordinator),
             EffektvaktTilgjengeligKuttSensor(coordinator),
+            EffektvaktKostnadNesteTrinnSensor(coordinator),
         ]
     )
+
+
+def _kapasitetstrinn_json(trinn: list[tuple[float, int]]) -> list[list[float | int | None]]:
+    """Trinn-tabellen som [kW, kr]-par et dashboard kan lese.
+
+    Øverste terskel er float("inf") internt. inf er ugyldig JSON og knekker både
+    recorder og websocket, så den sendes som None.
+    """
+    return [[None if math.isinf(terskel) else terskel, pris] for terskel, pris in trinn]
 
 
 class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
@@ -144,3 +155,38 @@ class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
     @property
     def native_value(self) -> float | None:
         return self.coordinator.data.get("tilgjengelig_kutt_kw") if self.coordinator.data else None
+
+
+class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
+    """Kronene per måned som står på spill mellom trinnet vi ligger an til og neste."""
+
+    _attr_name = "Kostnad neste trinn"
+    # Ingen device_class: MONETARY krever ISO-valutakode som enhet og en total-state_class,
+    # og satser holdes i kr/mnd, slik strømkalkulator gjør det.
+    _attr_native_unit_of_measurement = "kr/mnd"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    _sensor_key = "kostnad_neste_trinn"
+
+    @property
+    def native_value(self) -> int | None:
+        return self.coordinator.data.get("kostnad_neste_trinn_kr") if self.coordinator.data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        d = self.coordinator.data
+        if not d:
+            return None
+        felles = super().extra_state_attributes or {}
+        return {
+            **felles,
+            "trinn_na_kr": d.get("trinn_na_kr"),
+            "trinn_na_ovre_grense_kw": d.get("trinn_na_ovre_grense_kw"),
+            "trinn_neste_kr": d.get("trinn_neste_kr"),
+            "besparelse_trinn_under_kr": d.get("besparelse_trinn_under_kr"),
+            "trinn_under_oppnaelig": d.get("trinn_under_oppnaelig"),
+            "kostnad_denne_timen_kr": d.get("kostnad_denne_timen_kr"),
+            "topp_3_projisert_kw": d.get("topp_3_projisert_kw"),
+            "minste_mulige_topp_3_kw": d.get("minste_mulige_topp_3_kw"),
+            "kapasitetstrinn": _kapasitetstrinn_json(self.coordinator.kapasitetstrinn),
+        }

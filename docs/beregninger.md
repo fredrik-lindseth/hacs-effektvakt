@@ -69,6 +69,67 @@ Begrunnelse: Hvis du allerede har to dager med snitt på 9,5 kW, og neste trinn 
 
 ---
 
+## Kostnad for neste trinn
+
+`compute_kostnad` i coordinator.py regner ut hva kapasitetsleddet koster og hva som står på spill akkurat nå. Resultatet mater `sensor.effektvakt_kostnad_neste_trinn`.
+
+Først: hvilket trinn ligger måneden an til?
+
+```
+projiserte_dager       = daily_max_kw, men dagens verdi byttes ut med
+                         max(daily_max_kw[i dag], projisert_time_snitt)
+topp_3_projisert_kw    = snitt av de 3 høyeste i projiserte_dager
+```
+
+Trinnet er det laveste med terskel >= `topp_3_projisert_kw`. Over høyeste terskel havner du på øverste trinn. Derfra:
+
+```
+trinn_na_kr                = månedspris for det trinnet
+trinn_na_ovre_grense_kw    = terskelen for det trinnet (null på øverste trinn)
+trinn_neste_kr             = månedspris for trinnet over (null på øverste trinn)
+kostnad_neste_trinn_kr     = trinn_neste_kr - trinn_na_kr   (0 på øverste trinn)
+besparelse_trinn_under_kr  = trinn_na_kr - pris for trinnet under   (0 på laveste)
+```
+
+Prisene er flate månedspriser. Ingen pro rata, så tallet er like stort den 1. som den 28. Det er hele månedsregningen som står på spill uansett når i måneden toppen settes.
+
+### `minste_mulige_topp_3_kw`
+
+Nedre skranke for hva måneden kan ende på:
+
+```
+minste_mulige_topp_3_kw = sum av inntil 3 høyeste daily_max_kw / 3
+```
+
+Alltid delt på 3, uansett hvor mange dager som er logget, og bare dagsmaks som alt er låst inn telles. Den inneværende timen holdes utenfor nettopp fordi den fortsatt kan kuttes. Å telle den med ville gjort tallet pessimistisk og kunne sagt at trinnet under er uoppnåelig når det faktisk er innen rekkevidde.
+
+```
+trinn_under_oppnaelig = minste_mulige_topp_3_kw <= terskel for trinnet under
+```
+
+Én dag på 7 kW gir 2,33 og trinnet under er oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og da er løpet kjørt.
+
+### `kostnad_denne_timen_kr`
+
+Kronene den inneværende timen er i ferd med å låse inn:
+
+```
+kostnad_denne_timen_kr = max(0, trinn_na_kr - pris for trinnet topp_3_snitt
+                                              uten denne timen gir)
+```
+
+Klemmen mot null trengs fordi `topp_3_snitt` tidlig i måneden deler på antall dager, ikke på 3 (se `top_n_average`). To dager på 12 kW gir topp-3 lik 12, mens en projeksjon som drar inn en rolig tredje dag gir 8,17. Da ligger det projiserte trinnet under det nåværende, og differansen blir negativ uten klemmen.
+
+### Uendelig øverste terskel
+
+Øverste kapasitetstrinn har `float("inf")` som terskel i `dso.py`. `inf` er ugyldig JSON og knekker både recorder og websocket, så både `trinn_na_ovre_grense_kw` og øverste par i `kapasitetstrinn`-attributtet sendes som `null`.
+
+### Ukjent nettselskap
+
+Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `unknown`.
+
+---
+
 ## Risikoklassifisering
 
 Rå risiko bestemmes av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):

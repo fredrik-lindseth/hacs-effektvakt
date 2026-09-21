@@ -1,6 +1,6 @@
 # Sensorer
 
-Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et sett felles attributter.
+Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et sett felles attributter.
 
 ## Oversikt
 
@@ -11,6 +11,7 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 | `sensor.effektvakt_topp_3_snitt_denne_maned` | kW     | measurement |
 | `sensor.effektvakt_risiko_niva`              | enum   | -           |
 | `sensor.effektvakt_tilgjengelig_kutt`        | kW     | measurement |
+| `sensor.effektvakt_kostnad_neste_trinn`      | kr/mnd | measurement |
 | `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | -           |
 
 ---
@@ -89,6 +90,51 @@ Effektvakt oppretter ett device med 5 sensorer og 1 binary sensor. Alle deler et
 - `vvb_pluss_ekstra`: VVB-effekt pluss sum av ekstra-sensorer over 100 W terskel
 
 **Merk**: Denne sensoren sier ingenting om risiko. Den er en hjelpe-sensor for blueprints og dashboards som vil vise "vi kan kutte X kW nå".
+
+---
+
+## `sensor.effektvakt_kostnad_neste_trinn`
+
+**Hva**: Hva det koster per måned å havne på neste kapasitetstrinn. Tilstanden er månedsprisen for neste trinn minus månedsprisen for trinnet måneden ligger an til, altså kronene som står på spill hvis topp-3-snittet krysser terskelen over. Ligger du på BKKs 10 kW-trinn til 415 kr, og neste er 15 kW til 600 kr, viser sensoren 185.
+
+**Enhet**: kr/mnd. Ingen device_class: `MONETARY` krever ISO-valutakode som enhet og en total-state_class, og satser hører hjemme i kr/mnd. Samme regel som i strømkalkulator. State class er `measurement`, så tallet kan grafes over tid.
+
+**Trinnet du ligger an til** er trinnet til `topp_3_projisert_kw`, ikke til topp-3-snittet slik det står nå. Det er topp-3-snittet der dagens dagsmaks er byttet ut med det høyeste av dagens maks så langt og projisert time-snitt nå. Prisen er flat månedspris uten pro rata, så sensoren er like skarp den 1. som den 28.
+
+**Oppdateres**: Samme frekvens som projisert time-snitt.
+
+**Pålitelighet**: Tidlig i måneden deler topp-3-snittet på antall dager, ikke alltid på tre. To dager på 12 kW gir topp-3 lik 12, og en rolig tredje dag drar snittet ned til 8,17. Sensoren arver det, så den kan vise et lavere trinn etter hvert som måneden går. Det pessimistiske utslaget er riktig retning for et varsel, men ikke les tallet som en fasit de første dagene.
+
+**Ukjent nettselskap**: Uten kapasitetstrinn er tilstanden `unknown` og alle kostnadsattributtene `None`.
+
+### Attributter
+
+I tillegg til fellesattributtene lenger nede:
+
+| Attributt                   | Enhet  | Beskrivelse                                                                             |
+| --------------------------- | ------ | --------------------------------------------------------------------------------------- |
+| `trinn_na_kr`               | kr/mnd | Månedsprisen for trinnet måneden ligger an til                                          |
+| `trinn_na_ovre_grense_kw`   | kW     | Øvre terskel for det trinnet. `null` på øverste trinn, som ikke har noen øvre grense    |
+| `trinn_neste_kr`            | kr/mnd | Månedsprisen for trinnet over. `null` når du alt er på øverste trinn                    |
+| `besparelse_trinn_under_kr` | kr/mnd | Hva du sparer på å komme ned et trinn. 0 på laveste trinn                               |
+| `trinn_under_oppnaelig`     | bool   | Om trinnet under fortsatt er innen rekkevidde denne måneden                             |
+| `kostnad_denne_timen_kr`    | kr/mnd | Kronene den inneværende timen er i ferd med å låse inn. 0 når timen ikke flytter noe    |
+| `topp_3_projisert_kw`       | kW     | Topp-3-snittet med dagens projeksjon regnet inn. Dette er trinnet måneden ligger an til |
+| `minste_mulige_topp_3_kw`   | kW     | Nedre skranke: sum av inntil tre høyeste låste dagsmaks delt på 3                       |
+| `kapasitetstrinn`           | liste  | Hele trinn-tabellen som `[kW, kr]`-par                                                  |
+
+`kapasitetstrinn` er tabellen et dashboard trenger for å tegne skalaen selv. Øverste terskel er uendelig internt, og `inf` er ugyldig JSON og knekker både recorder og websocket, så den sendes som `null`:
+
+```yaml
+kapasitetstrinn:
+  - [2.0, 155]
+  - [5.0, 250]
+  - [10.0, 415]
+  - [15.0, 600]
+  - [null, 6900]
+```
+
+`trinn_under_oppnaelig` sammenligner `minste_mulige_topp_3_kw` mot terskelen til trinnet under. Skranken teller bare dagsmaks som alt er låst inn, ikke den inneværende timen, nettopp fordi den timen fortsatt kan kuttes. En enkelt dag på 7 kW gir 2,33, og trinnet under er da oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og løpet er kjørt for denne måneden.
 
 ---
 
