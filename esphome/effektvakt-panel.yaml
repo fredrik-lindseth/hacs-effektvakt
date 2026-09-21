@@ -1,0 +1,189 @@
+# GEHA-METER: fysisk panelmeter drevet av Effektvakt.
+#
+# En ESP32 leser sensor.effektvakt_projisert_time_snitt over Home Assistant
+# API-et og styrer et ekte dreispoleinstrument (0-1 mA) over DAC-en. Viseren
+# er av metall og beveger seg på ordentlig. Se docs/fysisk-panel.md for
+# deleliste, kobling, kalibrering og montering.
+#
+#   cp esphome/secrets.example.yaml esphome/secrets.yaml
+#   esphome config esphome/effektvakt-panel.yaml
+#   esphome run esphome/effektvakt-panel.yaml
+
+substitutions:
+  navn: effektvakt-panel
+  vennlig_navn: GEHA-METER
+
+  # Skalaens toppverdi i kW. Må stemme med skiven du trykker med
+  # scripts/export_faceplate.py --maks-kw.
+  maks_kw: "15"
+
+  # DAC-en på ESP32 sitter på GPIO25 og GPIO26. Begge duger.
+  dac_pin: GPIO25
+
+  # Fin-trim av fullskala i programvare, 0.80-1.00. Grovtrimmen er trimpotten
+  # i serie med instrumentet, se docs/fysisk-panel.md. Stå på 1.0 til
+  # trimpotten er stilt, ellers trimmer du to ting mot hverandre.
+  dac_maks: "1.0"
+
+esphome:
+  name: ${navn}
+  friendly_name: ${vennlig_navn}
+  comment: Dreispoleinstrument for projisert time-snitt
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${navn}
+    password: !secret ap_password
+
+captive_portal:
+
+output:
+  # 8-bits DAC, 0-3,3 V. 256 trinn over 15 kW er 59 W per trinn, langt under
+  # det øyet ser på en 100 mm skive.
+  - platform: esp32_dac
+    pin: ${dac_pin}
+    id: viser_dac
+    max_power: ${dac_maks}
+
+  # Variant med to instrumenter: et ekstra dreispoleinstrument på GPIO26 som
+  # viser øyeblikkseffekten, ved siden av det projiserte time-snittet.
+  # Fjern kommentartegnene her og på homeassistant-sensoren under.
+  # - platform: esp32_dac
+  #   pin: GPIO26
+  #   id: viser_dac_na
+  #   max_power: ${dac_maks}
+
+sensor:
+  - platform: homeassistant
+    id: projisert_kw
+    entity_id: sensor.effektvakt_projisert_time_snitt
+    internal: true
+    on_value:
+      - script.execute:
+          id: tegn_viser
+          kw: !lambda "return x;"
+
+  # Andre halvdel av to-instrument-varianten. Sett inn din egen power-sensor
+  # i entity_id, og merk at AMS-sensorer rapporterer i W, ikke kW.
+  # - platform: homeassistant
+  #   id: effekt_na_w
+  #   entity_id: sensor.ams_power
+  #   internal: true
+  #   on_value:
+  #     - lambda: |-
+  #         float andel = (x / 1000.0f) / ${maks_kw};
+  #         if (std::isnan(andel)) {
+  #           andel = 0.0f;
+  #         }
+  #         id(viser_dac_na)->set_level(clamp(andel, 0.0f, 1.0f));
+
+script:
+  - id: tegn_viser
+    parameters:
+      kw: float
+    then:
+      - lambda: |-
+          if (id(kalibreringsmodus).state) {
+            return;  // håndstyrt under kalibrering
+          }
+          float andel = kw / ${maks_kw};
+          if (std::isnan(andel)) {
+            andel = 0.0f;  // sensoren er unavailable, legg viseren på null
+          }
+          id(viser_dac)->set_level(clamp(andel, 0.0f, 1.0f));
+
+  # Feier viseren gjennom hele skalaen så du ser at mekanikken går fritt.
+  - id: selvtest
+    mode: restart
+    then:
+      - output.set_level:
+          id: viser_dac
+          level: 0%
+      - delay: 500ms
+      - output.set_level:
+          id: viser_dac
+          level: 100%
+      - delay: 1500ms
+      - output.set_level:
+          id: viser_dac
+          level: 50%
+      - delay: 1000ms
+      - script.execute:
+          id: tegn_viser
+          kw: !lambda "return id(projisert_kw).state;"
+
+switch:
+  # Kobler viseren fra HA-verdien så kalibreringsnivået styrer den direkte.
+  - platform: template
+    name: Kalibreringsmodus
+    id: kalibreringsmodus
+    entity_category: config
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_off_action:
+      - script.execute:
+          id: tegn_viser
+          kw: !lambda "return id(projisert_kw).state;"
+
+number:
+  # Prosent av fullskala. 0 % stiller nullpunktet, 100 % stiller trimpotten.
+  - platform: template
+    name: Kalibreringsnivå
+    id: kalibreringsniva
+    entity_category: config
+    optimistic: true
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    restore_value: false
+    initial_value: 0
+    on_value:
+      - if:
+          condition:
+            switch.is_on: kalibreringsmodus
+          then:
+            - output.set_level:
+                id: viser_dac
+                level: !lambda "return x / 100.0f;"
+
+button:
+  - platform: template
+    name: Selvtest viser
+    entity_category: diagnostic
+    on_press:
+      - script.execute: selvtest
+
+interval:
+  # Mister vi HA, fryser sensoren på siste verdi. En viser som står stille på
+  # 9 kW er verre enn en som står på null, for den ser ut som en avlesning.
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            and:
+              - not:
+                  - api.connected:
+              - switch.is_off: kalibreringsmodus
+          then:
+            - output.set_level:
+                id: viser_dac
+                level: 0%

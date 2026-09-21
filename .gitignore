@@ -15,3 +15,5 @@ dist/
 .vscode/
 .dogcats/config.local.toml
 .dogcats/.issues.lock
+esphome/secrets.yaml
+esphome/.esphome/
