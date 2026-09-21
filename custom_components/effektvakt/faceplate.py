@@ -56,18 +56,20 @@ KABINETT_TOPP: Final = 44.0
 KABINETT_HJORNE: Final = 36.0
 KABINETT_BUE: Final = 34.0
 
-# Nedre halvdel er prismatisk plast. Paa originalen ligger navet og
-# viserroettene bak den, saa i card-varianten legges feltet over dem med
-# delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
-PRISME_TOPP: Final = 520.0
+# Den prismatiske plasten dekker nedre del av kabinettet og begynner rett
+# under GEHA-METER. Alt som skal leses ligger over den. Paa originalen ligger
+# navet og viserroettene bak plasten, saa card-varianten legger feltet over
+# dem med delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
+PRISME_TOPP: Final = 730.0
 PRISME_INNSLAG: Final = 32.0
 PRISME_DEKK: Final = 0.34
 
-# Stroemtransformatorsymbolet og klassemerket ligger i hjoernene utenfor sveipet,
-# saa viseren verken dekker dem i hvile eller ved fullt utslag.
-SYMBOL_X: Final = 152.0
-SYMBOL_Y: Final = 818.0
-KL_X: Final = 884.0
+# Stroemtransformatorsymbolet og klassemerket staar i lommene mellom vifta,
+# viserens ytterstillinger og prismefeltet: utenfor sveipet (|vinkel| > 60 grader
+# fra navet) og over plasten, saa de er lesbare i alle viserstillinger.
+SYMBOL_X: Final = 136.0
+SYMBOL_Y: Final = 698.0
+KL_X: Final = 898.0
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
 HOVEDMERKER: Final = 6
@@ -381,8 +383,8 @@ def _stromtransformatorsymbol() -> list[str]:
     x0, y0 = SYMBOL_X, SYMBOL_Y
     return [
         f'<g id="stromtransformatorsymbol" transform="translate({_n(x0)} {_n(y0)})">'
-        f'<path d="M -74 0 L 74 0" stroke="{_farge("trykk")}" stroke-width="8" stroke-linecap="butt"/>'
-        f'<circle r="30" fill="none" stroke="{_farge("trykk")}" stroke-width="7"/>'
+        f'<path d="M -66 0 L 66 0" stroke="{_farge("trykk")}" stroke-width="7" stroke-linecap="butt"/>'
+        f'<circle r="27" fill="none" stroke="{_farge("trykk")}" stroke-width="6"/>'
         "</g>"
     ]
 
@@ -407,7 +409,7 @@ def _trykk_tekst(dso_navn: str | None) -> list[str]:
             _tekst(500, 644, "GEHA-METER", storrelse=34, vekt="600", sperring=8),
             # Begge markoerene ligger utenfor viserens sveip (|vinkel| > 50 grader fra
             # navet), ellers dekker viseren dem i hvile og ved fullt utslag.
-            _tekst(KL_X, SYMBOL_Y, "KL.1,5", storrelse=32, sperring=2, anker="end"),
+            _tekst(KL_X, SYMBOL_Y, "KL.1,5", storrelse=30, sperring=2, anker="end"),
         ]
     )
     ut.extend(_stromtransformatorsymbol())
@@ -478,11 +480,11 @@ def _riflet_felt(variant: Variant) -> list[str]:
         f' stroke="{_farge("krom-mork")}" stroke-width="2" opacity="0.65"/>'
     )
     # Skruene staar over hverandre i feltets loddrette midtakse.
-    for skrue_y in (716.0, 806.0):
+    for skrue_y in (772.0, 818.0):
         ut.append(
             f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(skrue_y)})">'
-            f'<circle r="24" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
-            f'<rect x="-16" y="-4" width="32" height="8" fill="{_farge("krom-mork")}"/>'
+            f'<circle r="20" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
+            f'<rect x="-13" y="-3.5" width="26" height="7" fill="{_farge("krom-mork")}"/>'
             "</g>"
         )
     ut.append("</g>")

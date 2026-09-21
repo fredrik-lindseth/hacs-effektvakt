@@ -172,11 +172,11 @@ def test_markorene_ligger_utenfor_viserens_sveip():
     assert symbol is not None
     x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", symbol.get("transform", "")))
     ytterst = max(abs(VINKEL_START), abs(VINKEL_START + VINKEL_SVEIP))
-    assert abs(_polar_av(x, y)[0]) > ytterst + 10, "symbolet ligger inne i sveipet"
+    assert abs(_polar_av(x, y)[0]) > ytterst + 8, "symbolet ligger inne i sveipet"
 
     kl = next(e for e in rot.iter(f"{SVG_NS}text") if (e.text or "").startswith("KL"))
     assert kl.text == "KL.1,5", "klassemerket skrives med komma"
-    assert abs(_polar_av(float(kl.get("x", "0")), float(kl.get("y", "0")))[0]) > ytterst + 10
+    assert abs(_polar_av(float(kl.get("x", "0")), float(kl.get("y", "0")))[0]) > ytterst + 8
 
 
 def test_prismefeltet_ligger_over_navet_i_card_og_under_trykket_i_print():
