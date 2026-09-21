@@ -3,11 +3,11 @@
   "name": "Effektvakt",
   "codeowners": ["@fredrik-lindseth"],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "websocket_api"],
+  "dependencies": ["http", "frontend", "lovelace", "websocket_api"],
   "documentation": "https://github.com/fredrik-lindseth/hacs-effektvakt",
+  "integration_type": "service",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/fredrik-lindseth/hacs-effektvakt/issues",
   "requirements": [],
-  "version": "0.3.0",
-  "integration_type": "service"
+  "version": "0.3.0"
 }

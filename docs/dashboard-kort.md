@@ -6,9 +6,9 @@ effekten akkurat nå, og et lite slepemerke på utsiden av buen for topp-3-snitt
 denne måneden. Utenfor skalaen ligger kapasitetstrinnene som buesegmenter med
 kr/mnd trykt under, og kortet merker trinnet måneden ligger an til og det neste.
 
-Kortet følger med integrasjonen. Ingen HACS-plugin, ingen ressursregistrering i
-Lovelace: filene under `custom_components/effektvakt/www/` serveres på
-`/effektvakt-static`, og URL-en meldes inn med `add_extra_js_url` når HA starter.
+Kortet følger med integrasjonen. Ingen HACS-plugin og ingenting å laste ned:
+filene under `custom_components/effektvakt/www/` serveres på `/effektvakt-static`,
+og integrasjonen melder URL-en inn i Lovelace sine ressurser selv når HA starter.
 Er integrasjonen installert, ligger «Effektvakt» i kortvelgeren.
 
 ## Legg det inn
@@ -164,11 +164,41 @@ andre avlesninger. Vil du ha andre kapasitetstrinn, bytt nettselskap med
 Lys og mørk modus følger operativsystemet, siden benken bruker
 `prefers-color-scheme` slik Home Assistant gjør.
 
+## Ressursen i Lovelace
+
+Integrasjonen legger `/effektvakt-static/effektvakt-card.js?v=<versjon>` inn som
+en modul-ressurs i Lovelace, samme sted HACS legger sine kort. Det må være der:
+Lovelace laster ressursene sine før dashbordet tegnes, mens et løst `import()`
+i index-HTML-en ingen venter på, taper kappløpet mot resten av siden. Uten
+ressursen kommer kortet opp som «Konfigurasjonsfeil» hver gang cachen er kald.
+
+Registeret er ditt, ikke vårt, så integrasjonen tar i det så lite som mulig.
+Oppføringen legges inn én gang, oppdateres når `?v=` endrer seg ved en
+oppgradering framfor å få en ny ved siden av, og fjernes igjen når du sletter
+Effektvakt-oppsettet. Har du flere oppsett, blir den stående til det siste er
+borte. Reload av oppsettet og omstart av HA skriver ingenting.
+
+Kjører Lovelace med ressurser fra `configuration.yaml`, kan ingen integrasjon
+skrive der. Da faller vi tilbake på `add_extra_js_url` og logger en advarsel, og
+kortet tegnes bare pålitelig hvis du selv legger inn:
+
+```yaml
+lovelace:
+  resources:
+    - url: /effektvakt-static/effektvakt-card.js?v=0.3.0
+      type: module
+```
+
+`?v=` må stemme med `version` i `custom_components/effektvakt/manifest.json`, og
+må oppdateres for hånd ved oppgradering. Det er prisen for YAML-modus.
+
 ## Feilsøking
 
-**Kortet finnes ikke i velgeren.** Tøm nettleserens cache og last på nytt. URL-en
-har `?v=<versjon fra manifest.json>` som cache-buster, så etter en oppdatering av
-integrasjonen holder det vanligvis med en hard refresh.
+**Kortet finnes ikke i velgeren, eller står som «Konfigurasjonsfeil».** Sjekk at
+ressursen ligger i Innstillinger → Dashbord → Ressurser. Er den ikke der, kjører
+du trolig Lovelace med YAML-ressurser; se avsnittet over. Ellers holder det
+vanligvis med en hard refresh, siden URL-en har `?v=<versjon fra manifest.json>`
+som cache-buster.
 
 **«Fikk ikke hentet skiven».** Websocket-kommandoen fant ingen Effektvakt-oppsett
 for entiteten. Sjekk at `entity` faktisk hører til integrasjonen, eller at det

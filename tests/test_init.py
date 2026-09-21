@@ -20,6 +20,8 @@ async def test_async_setup_entry_oppretter_coordinator():
     with (
         patch("custom_components.effektvakt.EffektvaktCoordinator") as MockCoord,
         patch("custom_components.effektvakt.async_track_time_interval"),
+        # Kort-registreringen har sine egne tester i test_frontend.py.
+        patch("custom_components.effektvakt.async_register_frontend", AsyncMock()),
     ):
         MockCoord.return_value.async_config_entry_first_refresh = AsyncMock()
         MockCoord.return_value._last_successful_update = None

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.effektvakt import async_setup
+from custom_components.effektvakt import async_remove_entry, async_setup
 from custom_components.effektvakt.const import (
     FRONTEND_CARD_FILENAME,
     FRONTEND_DIR_NAME,
@@ -50,6 +50,80 @@ def integration_mock(versjon: str | None = MANIFEST["version"]) -> AsyncMock:
     return AsyncMock(return_value=integration)
 
 
+KORT_URL = f"{FRONTEND_URL_BASE}/{FRONTEND_CARD_FILENAME}?v={MANIFEST['version']}"
+
+# Ressursene i Fredriks eget register. De skal staa uroert etter alt vi gjoer.
+HACS_RESSURSER = [
+    {"id": "a", "url": "/hacsfiles/battery-state-card/battery-state-card.js?hacstag=1", "type": "module"},
+    {"id": "b", "url": "/hacsfiles/kiosk-mode/kiosk-mode.js?hacstag=2", "type": "module"},
+]
+
+
+class FakeRessurser:
+    """Speiler ResourceStorageCollection saa langt frontend.py bruker den."""
+
+    def __init__(self, items: list | None = None) -> None:
+        self.items = [dict(item) for item in (items or [])]
+        self.opprettet: list[dict] = []
+        self.oppdatert: list[tuple[str, dict]] = []
+        self.slettet: list[str] = []
+        self.lastet = 0
+
+    async def async_get_info(self) -> dict[str, int]:
+        self.lastet += 1
+        return {"resources": len(self.items)}
+
+    def async_items(self) -> list[dict]:
+        return list(self.items)
+
+    async def async_create_item(self, data: dict) -> dict:
+        item = {"id": f"ny-{len(self.items)}", "url": data["url"], "type": data["res_type"]}
+        self.items.append(item)
+        self.opprettet.append(dict(data))
+        return item
+
+    async def async_update_item(self, item_id: str, updates: dict) -> dict:
+        self.oppdatert.append((item_id, dict(updates)))
+        for item in self.items:
+            if item["id"] == item_id:
+                item.update({"url": updates["url"], "type": updates["res_type"]})
+                return item
+        raise KeyError(item_id)
+
+    async def async_delete_item(self, item_id: str) -> None:
+        self.slettet.append(item_id)
+        self.items = [item for item in self.items if item["id"] != item_id]
+
+    def urler(self) -> list[str]:
+        return [item["url"] for item in self.items]
+
+
+class YamlRessurser:
+    """ResourceYAMLCollection: kan leses, men ikke skrives i."""
+
+    def __init__(self, items: list | None = None) -> None:
+        self.items = list(items or [])
+
+    async def async_get_info(self) -> dict[str, int]:
+        return {"resources": len(self.items)}
+
+    def async_items(self) -> list[dict]:
+        return list(self.items)
+
+
+class SprengtRessurser(FakeRessurser):
+    """Et register som feiler, slik en oedelagt lagerfil ville gjort."""
+
+    async def async_get_info(self) -> dict[str, int]:
+        raise OSError("lagerfila er oedelagt")
+
+
+def med_lovelace(hass: MagicMock, ressurser: object) -> MagicMock:
+    """Heng en ressurssamling paa hass.data slik Lovelace gjoer."""
+    hass.data["lovelace"] = MagicMock(resources=ressurser)
+    return hass
+
+
 # --- async_setup ----------------------------------------------------------
 
 
@@ -74,7 +148,8 @@ async def test_async_setup_registrerer_static_path_en_gang():
 
 
 @pytest.mark.asyncio
-async def test_async_setup_melder_js_url_med_cache_buster():
+async def test_async_setup_uten_lovelace_faller_tilbake_paa_js_url():
+    """Uten et skrivbart register er add_extra_js_url det eneste vi har."""
     hass = make_hass()
     with (
         patch("custom_components.effektvakt.frontend.frontend") as ha_frontend,
@@ -85,7 +160,7 @@ async def test_async_setup_melder_js_url_med_cache_buster():
 
     ha_frontend.add_extra_js_url.assert_called_once()
     _hass_arg, url = ha_frontend.add_extra_js_url.call_args.args
-    assert url == f"{FRONTEND_URL_BASE}/{FRONTEND_CARD_FILENAME}?v={MANIFEST['version']}"
+    assert url == KORT_URL
 
 
 @pytest.mark.asyncio
@@ -133,14 +208,151 @@ async def test_async_setup_taaler_manifest_uten_versjon():
 
 
 def test_manifest_har_avhengighetene_frontendregistreringen_krever():
-    """hass.data-nokkelen frontend bruker opprettes i frontends egen async_setup."""
-    assert set(MANIFEST["dependencies"]) == {"http", "frontend", "websocket_api"}
+    """lovelace maa vaere satt opp foer oss, ellers finnes ikke ressursregisteret."""
+    assert set(MANIFEST["dependencies"]) == {"http", "frontend", "lovelace", "websocket_api"}
 
 
 def test_static_katalogen_kolliderer_ikke_med_modulnavnet():
     """En katalog frontend/ ville skygget for frontend.py og stoppet importen."""
     assert (PAKKE / FRONTEND_DIR_NAME).is_dir()
     assert not (PAKKE / "frontend").exists()
+
+
+# --- Lovelace-ressursen ---------------------------------------------------
+
+
+VERSJON = MANIFEST["version"]
+
+
+async def kjor_setup(hass: MagicMock, *, versjon: str | None = VERSJON, ganger: int = 1) -> MagicMock:
+    """Kjoer async_setup med HA-modulene stubbet. Gir frontend-stubben tilbake."""
+    with (
+        patch("custom_components.effektvakt.frontend.frontend") as ha_frontend,
+        patch("custom_components.effektvakt.frontend.websocket_api"),
+        patch("custom_components.effektvakt.frontend.async_get_integration", integration_mock(versjon)),
+    ):
+        for _ in range(ganger):
+            await async_setup(hass, {})
+    return ha_frontend
+
+
+@pytest.mark.asyncio
+async def test_registrerer_kortet_som_lovelace_ressurs():
+    """Lovelace venter paa ressursene sine, saa kortet maa staa der."""
+    ressurser = FakeRessurser(HACS_RESSURSER)
+    hass = med_lovelace(make_hass(), ressurser)
+
+    ha_frontend = await kjor_setup(hass)
+
+    assert ressurser.opprettet == [{"res_type": "module", "url": KORT_URL}]
+    assert ressurser.urler() == [*[r["url"] for r in HACS_RESSURSER], KORT_URL]
+    # Da trengs ikke reserveveien, og to veier inn til samme fil unngaas.
+    ha_frontend.add_extra_js_url.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_skriver_ikke_naar_oppforingen_alt_staar_riktig():
+    """Registeret er brukerens eget: ingen skriving uten grunn."""
+    ressurser = FakeRessurser([*HACS_RESSURSER, {"id": "e", "url": KORT_URL, "type": "module"}])
+    hass = med_lovelace(make_hass(), ressurser)
+
+    await kjor_setup(hass)
+
+    assert ressurser.opprettet == []
+    assert ressurser.oppdatert == []
+    assert ressurser.slettet == []
+
+
+@pytest.mark.asyncio
+async def test_oppdaterer_oppforingen_naar_versjonen_endrer_seg():
+    """Ny ?v= skal oppdatere den samme oppfoeringen, ikke legge en ny ved siden av."""
+    gammel = {"id": "e", "url": f"{FRONTEND_URL_BASE}/{FRONTEND_CARD_FILENAME}?v=0.0.1", "type": "module"}
+    ressurser = FakeRessurser([*HACS_RESSURSER, gammel])
+    hass = med_lovelace(make_hass(), ressurser)
+
+    await kjor_setup(hass)
+
+    assert ressurser.oppdatert == [("e", {"res_type": "module", "url": KORT_URL})]
+    assert ressurser.opprettet == []
+    assert ressurser.urler().count(KORT_URL) == 1
+    assert len(ressurser.items) == len(HACS_RESSURSER) + 1
+
+
+@pytest.mark.asyncio
+async def test_rydder_duplikater_av_vaar_egen_oppforing():
+    """Har en tidligere utgave lagt inn to, skal vi ende paa en."""
+    ressurser = FakeRessurser(
+        [
+            {"id": "e1", "url": KORT_URL, "type": "module"},
+            *HACS_RESSURSER,
+            {"id": "e2", "url": f"{FRONTEND_URL_BASE}/{FRONTEND_CARD_FILENAME}?v=0.0.1", "type": "module"},
+        ]
+    )
+    hass = med_lovelace(make_hass(), ressurser)
+
+    await kjor_setup(hass)
+
+    assert ressurser.slettet == ["e2"]
+    assert ressurser.urler() == [KORT_URL, *[r["url"] for r in HACS_RESSURSER]]
+
+
+@pytest.mark.asyncio
+async def test_reload_og_omstart_gir_bare_en_oppforing():
+    """Flere kall skal ikke kunne legge kortet inn to ganger."""
+    ressurser = FakeRessurser(HACS_RESSURSER)
+    hass = med_lovelace(make_hass(), ressurser)
+
+    await kjor_setup(hass, ganger=3)
+
+    assert ressurser.urler().count(KORT_URL) == 1
+    assert len(ressurser.opprettet) == 1
+
+
+@pytest.mark.asyncio
+async def test_yaml_modus_faller_tilbake_paa_js_url():
+    """YAML-registeret er skrivebeskyttet, og da er reserveveien det vi har."""
+    hass = med_lovelace(make_hass(), YamlRessurser())
+
+    ha_frontend = await kjor_setup(hass, ganger=2)
+
+    # En gang, ikke en per kall: dobbel import() ville definert kortet to ganger.
+    ha_frontend.add_extra_js_url.assert_called_once_with(hass, KORT_URL)
+
+
+@pytest.mark.asyncio
+async def test_feil_i_registeret_velter_ikke_oppstarten():
+    hass = med_lovelace(make_hass(), SprengtRessurser(HACS_RESSURSER))
+
+    ha_frontend = await kjor_setup(hass)
+
+    ha_frontend.add_extra_js_url.assert_called_once_with(hass, KORT_URL)
+
+
+@pytest.mark.asyncio
+async def test_async_remove_entry_fjerner_bare_vaar_oppforing():
+    ressurser = FakeRessurser([*HACS_RESSURSER, {"id": "e", "url": KORT_URL, "type": "module"}])
+    hass = med_lovelace(make_hass(entries=[]), ressurser)
+
+    await async_remove_entry(hass, make_entry())
+
+    assert ressurser.urler() == [r["url"] for r in HACS_RESSURSER]
+
+
+@pytest.mark.asyncio
+async def test_async_remove_entry_beholder_oppforingen_naar_flere_oppsett_staar_igjen():
+    ressurser = FakeRessurser([*HACS_RESSURSER, {"id": "e", "url": KORT_URL, "type": "module"}])
+    hass = med_lovelace(make_hass(entries=[make_entry()]), ressurser)
+
+    await async_remove_entry(hass, make_entry(entry_id="borte"))
+
+    assert KORT_URL in ressurser.urler()
+
+
+@pytest.mark.asyncio
+async def test_async_remove_entry_taaler_yaml_modus_og_feil():
+    for samling in (YamlRessurser([{"id": "e", "url": KORT_URL}]), SprengtRessurser(HACS_RESSURSER)):
+        hass = med_lovelace(make_hass(entries=[]), samling)
+        await async_remove_entry(hass, make_entry())
 
 
 # --- websocket-handleren --------------------------------------------------

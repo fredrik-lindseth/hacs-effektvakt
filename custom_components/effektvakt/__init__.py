@@ -11,7 +11,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, WATCHDOG_INTERVAL_SECONDS
 from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stale
-from .frontend import async_register_frontend
+from .frontend import async_register_frontend, async_unregister_frontend
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -26,8 +26,8 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     """Sett opp det som hoerer til HA-oppstarten, ikke til en enkelt entry.
 
-    Kortet registreres her og ikke i async_setup_entry: en options-endring
-    reloader entryen, og da ville URL-en blitt meldt inn paa nytt hver gang.
+    Kortet serveres og meldes inn i Lovelace her, saa det ligger paa plass
+    ogsaa naar HA starter uten at noen entry er satt opp enda.
     """
     await async_register_frontend(hass)
     return True
@@ -35,6 +35,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Sett opp Effektvakt fra en config entry."""
+    # Kallet er idempotent og skriver ingenting naar ressursen alt staar
+    # riktig. Det maa likevel med: fjerner man oppsettet og legger det inn
+    # igjen uten aa starte HA paa nytt, kjoerer async_setup aldri mer, og uten
+    # dette ville kortet blitt staaende uten ressursoppfoering.
+    await async_register_frontend(hass)
+
     coordinator = EffektvaktCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
@@ -79,3 +85,15 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Avregistrer platforms."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, _entry: ConfigEntry) -> None:
+    """Ta kortet ut av Lovelace-ressursene naar siste oppsett er fjernet.
+
+    Ressursregisteret er brukerens eget og deles med HACS, saa det vi la inn
+    der skal ryddes ut igjen. Har brukeren flere Effektvakt-oppsett, blir
+    oppfoeringen staaende til det siste er borte.
+    """
+    if hass.config_entries.async_entries(DOMAIN):
+        return
+    await async_unregister_frontend(hass)
