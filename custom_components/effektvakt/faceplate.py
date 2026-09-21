@@ -42,6 +42,10 @@ R_TRINN_INN: Final = R_SKALA + 96.0
 R_TRINN_UT: Final = R_SKALA + 120.0
 R_TRINN_BUE: Final = R_SKALA + 108.0
 R_TRINN_TEKST: Final = R_SKALA + 148.0
+# Viserspissene maa naa skalaen for at avlesningen skal vaere mulig: den svarte
+# krysser buen, den roede kilen stopper i innkanten av delstrek-baandet.
+R_VISER_SVART: Final = R_SKALA + 2.0
+R_VISER_ROD: Final = R_SKALA - R_DELMERKE + 2.0
 
 HUB_R: Final = 52.0
 RAMME_INNSLAG: Final = 14.0
@@ -75,8 +79,9 @@ PALETT: Final[dict[str, str]] = {
     "krom-lys": "#e6e4df",
     "krom-mork": "#7e7c75",
     "skygge": "#b6ae9a",
-    "rifle-lys": "#e4dbc8",
-    "rifle-mork": "#d6cdb7",
+    "prisme-lys": "#d7d9d5",
+    "prisme-mork": "#a7aaa5",
+    "prisme-glans": "#eef0ec",
     "deksel-kant": "#8f8878",
     "deksel-glans": "#ffffff",
 }
@@ -269,12 +274,14 @@ def _skala(maks_kw: float) -> list[str]:
         vinkel = VINKEL_START + i * delsteg
         fine.append(_radiell_strek(vinkel, R_SKALA - R_DELMERKE, R_SKALA))
     ut.append(
-        f'<path d="{" ".join(fine)}" fill="none" stroke="{_farge("trykk")}" stroke-width="3" stroke-linecap="butt"/>'
+        f'<path id="delstreker" d="{" ".join(fine)}" fill="none" stroke="{_farge("trykk")}"'
+        ' stroke-width="3" stroke-linecap="butt"/>'
     )
 
     grove = [_radiell_strek(vinkel_for_kw(kw, maks_kw), R_SKALA - R_HOVEDMERKE, R_SKALA) for kw in _hovedtall(maks_kw)]
     ut.append(
-        f'<path d="{" ".join(grove)}" fill="none" stroke="{_farge("trykk")}" stroke-width="8" stroke-linecap="butt"/>'
+        f'<path id="hovedmerker" d="{" ".join(grove)}" fill="none" stroke="{_farge("trykk")}"'
+        ' stroke-width="8" stroke-linecap="butt"/>'
     )
 
     for kw in _hovedtall(maks_kw):
@@ -358,37 +365,56 @@ def _trykk_tekst(dso_navn: str | None) -> list[str]:
     return ut
 
 
+def _diagonaler(x0: float, y0: float, x1: float, y1: float, avstand: float, stigning: int) -> str:
+    """Parallelle 45-graders linjer klippet mot rektangelet, uten clipPath."""
+    steg = avstand * math.sqrt(2)
+    linjer: list[str] = []
+    if stigning > 0:  # y = x + c
+        c = y0 - x1
+        while c <= y1 - x0:
+            xa, xb = max(x0, y0 - c), min(x1, y1 - c)
+            if xb > xa:
+                linjer.append(f"M {_n(xa)} {_n(xa + c)} L {_n(xb)} {_n(xb + c)}")
+            c += steg
+    else:  # y = -x + c
+        c = x0 + y0
+        while c <= x1 + y1:
+            xa, xb = max(x0, c - y1), min(x1, c - y0)
+            if xb > xa:
+                linjer.append(f"M {_n(xa)} {_n(c - xa)} L {_n(xb)} {_n(c - xb)}")
+            c += steg
+    return " ".join(linjer)
+
+
 def _riflet_felt() -> list[str]:
-    """Innfelt prismatisk panel over nederste tredjedel, riflet i to toner, med to skruer."""
+    """Innfelt prismepanel over nederste tredjedel: soelvaktig plast med kryssrutet moenster."""
     topp = RIFLE_TOPP
     venstre = RAMME_INNSLAG + 16.0
     hoyre = 1000.0 - venstre
     bunn = hoyre
     bredde = hoyre - venstre
     hoyde = bunn - topp
+    avstand = 26.0
     ut = [
         '<g id="riflet-felt">',
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}"'
-        f' height="{_n(hoyde)}" fill="{_farge("rifle-lys")}"/>',
+        f' height="{_n(hoyde)}" fill="{_farge("prisme-lys")}"/>',
+        # Lyset faller skraatt, saa den ene diagonalen staar sterkere enn den andre.
+        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, 1)}" fill="none"'
+        f' stroke="{_farge("prisme-mork")}" stroke-width="3" opacity="0.75"/>',
+        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, -1)}" fill="none"'
+        f' stroke="{_farge("prisme-mork")}" stroke-width="2" opacity="0.45"/>',
+        f'<path d="{_diagonaler(venstre + avstand / 2, topp, hoyre, bunn, avstand, 1)}" fill="none"'
+        f' stroke="{_farge("prisme-glans")}" stroke-width="1.5" opacity="0.6"/>',
     ]
-    periode = 30.0
-    x = venstre
-    mork: list[str] = []
-    kant: list[str] = []
-    while x + periode * 0.5 <= hoyre:
-        mork.append(f"M {_n(x)} {_n(topp)} h {_n(periode * 0.5)} v {_n(hoyde)} h {_n(-periode * 0.5)} Z")
-        kant.append(f"M {_n(x + periode * 0.5)} {_n(topp)} v {_n(hoyde)}")
-        x += periode
-    ut.append(f'<path d="{" ".join(mork)}" fill="{_farge("rifle-mork")}"/>')
-    ut.append(f'<path d="{" ".join(kant)}" fill="none" stroke="{_farge("skygge")}" stroke-width="1.5" opacity="0.5"/>')
     # Innfelt: skyggekant oeverst, lys kant rett under, tynn omriss rundt hele.
     ut.append(f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="5" fill="{_farge("skygge")}"/>')
     ut.append(
-        f'<rect x="{_n(venstre)}" y="{_n(topp + 5)}" width="{_n(bredde)}" height="3" fill="{_farge("krom-lys")}"/>'
+        f'<rect x="{_n(venstre)}" y="{_n(topp + 5)}" width="{_n(bredde)}" height="3" fill="{_farge("prisme-glans")}"/>'
     )
     ut.append(
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
-        f' stroke="{_farge("skygge")}" stroke-width="2" opacity="0.65"/>'
+        f' stroke="{_farge("krom-mork")}" stroke-width="2" opacity="0.65"/>'
     )
     skrue_y = topp + hoyde * 0.68
     for skrue_x in (NAV_X - 168.0, NAV_X + 168.0):
@@ -433,7 +459,7 @@ def _visere(maks_kw: float) -> list[str]:
         f' fill="{_farge("trykk")}"/>'
     )
 
-    spiss = NAV_Y - (R_SKALA - 4)
+    spiss = NAV_Y - R_VISER_SVART
     svart = (
         f'<path id="viser-svart" {rot} d="M {_n(NAV_X)} {_n(spiss)}'
         f" L {_n(NAV_X + 5)} {_n(NAV_Y - 150)} L {_n(NAV_X + 9)} {_n(NAV_Y + 36)}"
@@ -441,10 +467,12 @@ def _visere(maks_kw: float) -> list[str]:
         f' fill="{_farge("trykk")}"/>'
     )
 
-    rod_spiss = NAV_Y - (R_SKALA - 170)
+    # Kile: bredest rett over navet, spiss tupp som naar inn i delstrek-baandet.
+    rod_spiss = NAV_Y - R_VISER_ROD
     rod = (
         f'<path id="viser-rod" {rot} d="M {_n(NAV_X)} {_n(rod_spiss)}'
-        f' L {_n(NAV_X + 27)} {_n(NAV_Y - 52)} L {_n(NAV_X - 27)} {_n(NAV_Y - 52)} Z"'
+        f" L {_n(NAV_X + 30)} {_n(NAV_Y - 96)} L {_n(NAV_X + 15)} {_n(NAV_Y + 34)}"
+        f' L {_n(NAV_X - 15)} {_n(NAV_Y + 34)} L {_n(NAV_X - 30)} {_n(NAV_Y - 96)} Z"'
         f' fill="{_farge("viserrod")}"/>'
     )
     return [slepe, rod, svart]

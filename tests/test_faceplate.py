@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 
@@ -9,7 +10,11 @@ import pytest
 
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
 from custom_components.effektvakt.faceplate import (
+    NAV_X,
+    NAV_Y,
     PALETT,
+    R_HOVEDMERKE,
+    R_SKALA,
     VINKEL_START,
     VINKEL_SVEIP,
     generate_faceplate,
@@ -103,6 +108,61 @@ def test_print_uten_filter_visere_og_gradient():
 def test_ingen_gradient_i_card_heller():
     svg = generate_faceplate(kapasitetstrinn=BKK, variant="card")
     assert "Gradient" not in svg
+
+
+def _punkter(d: str) -> list[tuple[float, float]]:
+    tall = [float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", d)]
+    return list(zip(tall[0::2], tall[1::2], strict=True))
+
+
+def _polar_av(x: float, y: float) -> tuple[float, float]:
+    """Vinkel i grader fra loddlinjen og radius fra navet."""
+    dx, dy = x - NAV_X, NAV_Y - y
+    return math.degrees(math.atan2(dx, dy)), math.hypot(dx, dy)
+
+
+def _viserspiss(rot: ET.Element, ident: str) -> tuple[float, float]:
+    element = _med_id(rot, ident)
+    assert element is not None, f"mangler #{ident}"
+    return _punkter(element.get("d", ""))[0]
+
+
+def test_viserspissene_naar_fram_til_skalaen():
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
+    # Den svarte krysser buen, den roede stopper inne i delstrek-baandet.
+    vinkel, radius = _polar_av(*_viserspiss(rot, "viser-svart"))
+    assert vinkel == pytest.approx(0.0, abs=0.01), "viseren skal tegnes loddrett og roteres av kortet"
+    assert radius >= R_SKALA, "svart viser naar ikke buen"
+    vinkel, radius = _polar_av(*_viserspiss(rot, "viser-rod"))
+    assert vinkel == pytest.approx(0.0, abs=0.01)
+    assert R_SKALA - R_HOVEDMERKE < radius <= R_SKALA, "roed viser naar ikke inn i merkebaandet"
+
+
+def test_rod_viser_peker_paa_riktig_merke():
+    """Ved 6 kW skal spissen ligge paa 6-merket, ikke ved siden av."""
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK, maks_kw=15))
+    merker = _med_id(rot, "hovedmerker")
+    assert merker is not None
+    # Hvert hovedmerke er to punkter: indre og ytre ende av samme radielle strek.
+    punkter = _punkter(merker.get("d", ""))
+    # Koordinatene er avrundet til to desimaler i SVG-en, saa endene spriker litt.
+    merkevinkler = sorted({round(_polar_av(*p)[0], 2) for p in punkter})
+    assert len(merkevinkler) == 6
+
+    for kw, forventet in ((0.0, -50.0), (6.0, -10.0), (15.0, 50.0)):
+        vinkel = vinkel_for_kw(kw, 15)
+        assert vinkel == pytest.approx(forventet)
+        assert min(abs(vinkel - m) for m in merkevinkler) == pytest.approx(0.0, abs=0.01)
+
+    # Spissen rotert til 6 kW skal treffe det samme merket.
+    x, y = _viserspiss(rot, "viser-rod")
+    vinkel = math.radians(vinkel_for_kw(6.0, 15))
+    dx, dy = x - NAV_X, y - NAV_Y
+    rotert = (
+        NAV_X + dx * math.cos(vinkel) - dy * math.sin(vinkel),
+        NAV_Y + dx * math.sin(vinkel) + dy * math.cos(vinkel),
+    )
+    assert _polar_av(*rotert)[0] == pytest.approx(-10.0, abs=0.01)
 
 
 def test_visere_hviler_paa_null_kw():
