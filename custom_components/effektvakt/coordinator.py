@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -200,6 +200,105 @@ def lookup_tiers(
     next_kw, next_pris = trinn[next_idx]
     prev_kw = trinn[next_idx - 1][0] if next_idx > 0 else None
     return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=next_kw, next_pris_per_mnd=next_pris)
+
+
+@dataclass(frozen=True)
+class KostnadInfo:
+    """Kostnadsbildet for kapasitetsleddet denne måneden.
+
+    Feltnavnene er også nøklene coordinatoren eksponerer i data-dicten.
+    """
+
+    kostnad_neste_trinn_kr: int
+    trinn_na_kr: int
+    trinn_na_ovre_grense_kw: float | None
+    trinn_neste_kr: int | None
+    besparelse_trinn_under_kr: int
+    trinn_under_oppnaelig: bool
+    kostnad_denne_timen_kr: int
+    topp_3_projisert_kw: float
+    minste_mulige_topp_3_kw: float
+    hoyeste_trinn: bool
+
+
+KOSTNAD_FELT_NAVN: tuple[str, ...] = tuple(f.name for f in fields(KostnadInfo))
+
+
+def _trinn_indeks(kw: float, trinn: list[tuple[float, int]]) -> int:
+    """Indeks til trinnet en kW-verdi havner i, altså laveste trinn med terskel >= kw.
+
+    Over høyeste terskel returneres øverste trinn.
+    """
+    for i, (terskel, _) in enumerate(trinn):
+        if kw <= terskel:
+            return i
+    return len(trinn) - 1
+
+
+def compute_kostnad(
+    *,
+    trinn: list[tuple[float, int]],
+    daily_max_kw: dict[date, float],
+    today: date,
+    projected_kw: float,
+) -> KostnadInfo | None:
+    """Hva kapasitetsleddet koster, og hva som står på spill akkurat nå.
+
+    `topp_3_projisert_kw` er topp-3-snittet der dagens dagsmaks erstattes med
+    max(dagens maks så langt, projisert time-snitt nå). Det er trinnet måneden
+    ligger an til, og `kostnad_neste_trinn_kr` er hoppet derfra til neste trinn.
+
+    `minste_mulige_topp_3_kw` teller bare dagsmaks som alt er låst inn (ferdige
+    timer), delt på 3 uansett antall dager. Den inneværende timen holdes utenfor
+    nettopp fordi den fortsatt kan kuttes, så tallet er en nedre skranke for hva
+    måneden kan ende på. Er den under terskelen til trinnet under, er trinnet
+    fortsatt innen rekkevidde.
+
+    `kostnad_denne_timen_kr` er kronene den inneværende timen er i ferd med å
+    låse inn: prisen for trinnet vi ligger an til minus prisen for trinnet
+    topp-3 gir uten denne timen.
+
+    Tomt trinn-sett (ukjent nettselskap) gir None.
+    """
+    if not trinn:
+        return None
+
+    projiserte_dager = dict(daily_max_kw)
+    projiserte_dager[today] = max(daily_max_kw.get(today, 0.0), projected_kw)
+    topp_3_projisert = top_n_average(projiserte_dager, n=3) or 0.0
+    topp_3_na = top_n_average(daily_max_kw, n=3) or 0.0
+    minste_mulige = sum(sorted(daily_max_kw.values(), reverse=True)[:3]) / 3
+
+    idx = _trinn_indeks(topp_3_projisert, trinn)
+    ovre_grense_kw, trinn_na_kr = trinn[idx]
+    er_hoyeste = idx == len(trinn) - 1
+
+    trinn_neste_kr = None if er_hoyeste else trinn[idx + 1][1]
+    kostnad_neste_trinn_kr = 0 if trinn_neste_kr is None else trinn_neste_kr - trinn_na_kr
+
+    if idx > 0:
+        under_terskel_kw, under_kr = trinn[idx - 1]
+        besparelse_trinn_under_kr = trinn_na_kr - under_kr
+        trinn_under_oppnaelig = minste_mulige <= under_terskel_kw
+    else:
+        besparelse_trinn_under_kr = 0
+        trinn_under_oppnaelig = False
+
+    trinn_uten_denne_timen_kr = trinn[_trinn_indeks(topp_3_na, trinn)][1]
+
+    return KostnadInfo(
+        kostnad_neste_trinn_kr=kostnad_neste_trinn_kr,
+        trinn_na_kr=trinn_na_kr,
+        # float("inf") er ugyldig JSON og knekker recorder og websocket
+        trinn_na_ovre_grense_kw=None if math.isinf(ovre_grense_kw) else ovre_grense_kw,
+        trinn_neste_kr=trinn_neste_kr,
+        besparelse_trinn_under_kr=besparelse_trinn_under_kr,
+        trinn_under_oppnaelig=trinn_under_oppnaelig,
+        kostnad_denne_timen_kr=max(0, trinn_na_kr - trinn_uten_denne_timen_kr),
+        topp_3_projisert_kw=round(topp_3_projisert, 3),
+        minste_mulige_topp_3_kw=round(minste_mulige, 3),
+        hoyeste_trinn=er_hoyeste,
+    )
 
 
 @dataclass
@@ -449,6 +548,17 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         topp_3 = top_n_average(self._daily_max_kw, n=3) or 0.0
         topp_2 = top_n_average(self._daily_max_kw, n=2)
 
+        kostnad = compute_kostnad(
+            trinn=self.kapasitetstrinn,
+            daily_max_kw=self._daily_max_kw,
+            today=now.date(),
+            projected_kw=projected_avg,
+        )
+        # Nøklene er feltnavnene i KostnadInfo. Uten kjente kapasitetstrinn er de alle None.
+        kostnad_felter: dict[str, object | None] = (
+            asdict(kostnad) if kostnad is not None else dict.fromkeys(KOSTNAD_FELT_NAVN)
+        )
+
         await self._persist()
 
         return {
@@ -471,6 +581,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "vvb_power_w": vvb_power_w,
             "ekstra_power_w_total": sum(p for p in ekstra_power_w_list if p is not None) or None,
             "kutt_strategi": self.kutt_strategi,
+            **kostnad_felter,
         }
 
     def _finalize_hour(self) -> None:
