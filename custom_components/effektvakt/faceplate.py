@@ -28,21 +28,24 @@ MAKS_KW_STANDARD: Final = 15.0
 MAKS_KW_KVANT: Final = 15.0
 
 # --- Geometri (intern tegning) -------------------------------------------
+#
+# Tre konsentriske lag utenfra og inn, som paa originalen: kr-band, hovedtall,
+# delstreker. Tallene ligger altsaa utenfor buen, ikke inni den.
 
-R_SKALA: Final = 470.0  # buen viserspissen naar
-R_HOVEDMERKE: Final = 60.0  # lengde innover fra buen
-R_DELMERKE: Final = 27.0
-R_TALL: Final = R_SKALA - 96.0
+R_SKALA: Final = 440.0  # buen viserspissen naar
+R_HOVEDMERKE: Final = 44.0  # lengde innover fra buen
+R_DELMERKE: Final = 19.0
 R_SLEPE_INN: Final = R_SKALA + 6.0
-R_SLEPE_UT: Final = R_SKALA + 38.0
-R_TRINN_INN: Final = R_SKALA + 48.0
-R_TRINN_UT: Final = R_SKALA + 80.0
-R_TRINN_BUE: Final = R_SKALA + 62.0
-R_TRINN_TEKST: Final = R_SKALA + 108.0
+R_SLEPE_UT: Final = R_SKALA + 28.0
+R_TALL: Final = R_SKALA + 60.0
+R_TRINN_INN: Final = R_SKALA + 96.0
+R_TRINN_UT: Final = R_SKALA + 120.0
+R_TRINN_BUE: Final = R_SKALA + 108.0
+R_TRINN_TEKST: Final = R_SKALA + 148.0
 
 HUB_R: Final = 52.0
 RAMME_INNSLAG: Final = 14.0
-RIFLE_TOPP: Final = 908.0
+RIFLE_TOPP: Final = 730.0
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
 HOVEDMERKER: Final = 6
@@ -50,7 +53,9 @@ HOVEDMERKER: Final = 6
 # --- Typografi ------------------------------------------------------------
 
 GROTESK: Final = "'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif"
-SERIF: Final = "'Times New Roman', Times, 'Liberation Serif', serif"
+# Originalen har en bred, noektern bokstavform i KW, ikke en antikva med tykke
+# seriffer. Slab der den finnes, ellers grotesk med vekt.
+SLAB: Final = f"Rockwell, 'Roboto Slab', 'Zilla Slab', {GROTESK}"
 
 TEKST_KR_STORRELSE: Final = 30.0
 TEKST_KR_MINSTE: Final = 19.0
@@ -71,7 +76,7 @@ PALETT: Final[dict[str, str]] = {
     "krom-mork": "#7e7c75",
     "skygge": "#b6ae9a",
     "rifle-lys": "#e4dbc8",
-    "rifle-mork": "#c8bda6",
+    "rifle-mork": "#d6cdb7",
     "deksel-kant": "#8f8878",
     "deksel-glans": "#ffffff",
 }
@@ -161,6 +166,40 @@ def _farge(rolle: str) -> str:
     return PALETT[rolle]
 
 
+# Versalhoeyden er om lag 0,7 em; halve den loefter grunnlinjen slik at y blir
+# den optiske midten. dominant-baseline er ikke brukt, for librsvg og nettlesere
+# behandler den ulikt, og da ville kortet og trykket sprike.
+VERSAL_SENTER: Final = 0.35
+
+
+def _tekst(
+    x: float,
+    y_senter: float,
+    innhold: str,
+    *,
+    storrelse: float,
+    familie: str = GROTESK,
+    vekt: str | None = None,
+    sperring: float | None = None,
+    anker: str = "middle",
+    rotasjon: float | None = None,
+) -> str:
+    """Tekst plassert etter optisk midte, ikke grunnlinje."""
+    deler = [
+        f'<text x="{_n(x)}" y="{_n(y_senter + storrelse * VERSAL_SENTER)}"',
+        f' font-family="{familie}" font-size="{_n(storrelse)}"',
+    ]
+    if vekt:
+        deler.append(f' font-weight="{vekt}"')
+    if sperring:
+        deler.append(f' letter-spacing="{_n(sperring)}"')
+    deler.append(f' fill="{_farge("trykk")}" text-anchor="{anker}"')
+    if rotasjon is not None:
+        deler.append(f' transform="rotate({_n(rotasjon)} {_n(x)} {_n(y_senter)})"')
+    deler.append(f">{escape(innhold)}</text>")
+    return "".join(deler)
+
+
 def _plate(variant: Variant) -> list[str]:
     """Emaljeplate med flat to-tone kromramme."""
     ut = [
@@ -185,10 +224,15 @@ def _plate(variant: Variant) -> list[str]:
 def _slitasje() -> list[str]:
     """Haandplasserte slitasjeflekker i slitt emalje. Ingen tilfeldighet, samme fil hver gang."""
     flekker = [
-        ("M 64 118 q 104 -44 172 -12 q 38 18 -14 44 q -96 46 -152 18 q -32 -16 -6 -50 Z", 0.5),
-        ("M 806 160 q 96 -26 122 10 q 14 22 -46 36 q -86 20 -102 -10 q -10 -20 26 -36 Z", 0.42),
-        ("M 118 736 q 108 -34 146 2 q 16 18 -40 34 q -92 26 -120 -4 q -14 -16 14 -32 Z", 0.38),
-        ("M 622 598 q 78 -26 104 -2 q 12 14 -34 30 q -66 22 -84 2 q -10 -14 14 -30 Z", 0.34),
+        (
+            "M 58 142 q 62 -40 118 -28 q 74 14 96 -2 q 32 -22 46 14 q 14 38 -72 44 q -98 8 -156 22 q -50 12 -32 -50 Z",
+            0.3,
+        ),
+        (
+            "M 786 188 q 58 -34 118 -20 q 52 12 66 -6 q 18 -22 22 12 q 4 34 -78 38 q -84 4 -118 14 q -32 8 -10 -38 Z",
+            0.24,
+        ),
+        ("M 604 452 q 84 -30 118 -6 q 26 18 -18 32 q -54 18 -96 4 q -30 -10 -4 -30 Z", 0.2),
     ]
     ut = [f'<path d="{d}" fill="{_farge("emalje-slitt")}" opacity="{_n(dekk)}"/>' for d, dekk in flekker]
     skrammer = [
@@ -236,11 +280,7 @@ def _skala(maks_kw: float) -> list[str]:
     for kw in _hovedtall(maks_kw):
         vinkel = vinkel_for_kw(kw, maks_kw)
         x, y = _polar(vinkel, R_TALL)
-        ut.append(
-            f'<text x="{_n(x)}" y="{_n(y)}" font-family="{GROTESK}" font-size="68"'
-            f' font-weight="600" fill="{_farge("trykk")}" text-anchor="middle"'
-            f' dominant-baseline="central">{_tall_tekst(kw)}</text>'
-        )
+        ut.append(_tekst(x, y, _tall_tekst(kw), storrelse=56, vekt="600"))
     return ut
 
 
@@ -267,10 +307,15 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list
             v_midt = (v_fra + v_til) / 2
             x, y = _polar(v_midt, R_TRINN_TEKST)
             ut.append(
-                f'<text x="{_n(x)}" y="{_n(y)}" transform="rotate({_n(v_midt)} {_n(x)} {_n(y)})"'
-                f' font-family="{GROTESK}" font-size="{_n(storrelse)}" font-weight="600"'
-                f' letter-spacing="{_n(TEKST_KR_SPERRING)}" fill="{_farge("trykk")}"'
-                f' text-anchor="middle" dominant-baseline="central">{escape(tekst)}</text>'
+                _tekst(
+                    x,
+                    y,
+                    tekst,
+                    storrelse=storrelse,
+                    vekt="600",
+                    sperring=TEKST_KR_SPERRING,
+                    rotasjon=v_midt,
+                )
             )
         ut.append("</g>")
         if terskel is not None:
@@ -288,12 +333,12 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list
 
 def _magnetsymbol() -> list[str]:
     """Dreispolesymbolet: hesteskomagnet med spolen i gapet."""
-    x0, y0 = 96.0, 738.0
+    x0, y0 = 232.0, 634.0
     return [
         f'<g id="dreispolesymbol" transform="translate({_n(x0)} {_n(y0)})">'
-        '<path d="M 0 96 L 0 52 A 52 52 0 0 1 104 52 L 104 96 L 78 96 L 78 52'
-        f' A 26 26 0 0 0 26 52 L 26 96 Z" fill="{_farge("trykk")}"/>'
-        f'<rect x="45" y="30" width="14" height="72" fill="{_farge("trykk")}"/>'
+        '<path d="M 0 78 L 0 42 A 42 42 0 0 1 84 42 L 84 78 L 63 78 L 63 42'
+        f' A 21 21 0 0 0 21 42 L 21 78 Z" fill="{_farge("trykk")}"/>'
+        f'<rect x="36" y="24" width="12" height="58" fill="{_farge("trykk")}"/>'
         "</g>"
     ]
 
@@ -301,22 +346,12 @@ def _magnetsymbol() -> list[str]:
 def _trykk_tekst(dso_navn: str | None) -> list[str]:
     ut: list[str] = []
     if dso_navn:
-        ut.append(
-            f'<text x="500" y="128" font-family="{GROTESK}" font-size="42" font-weight="600"'
-            f' letter-spacing="11" fill="{_farge("trykk")}" text-anchor="middle"'
-            f' dominant-baseline="central">{escape(dso_navn.upper())}</text>'
-        )
+        ut.append(_tekst(500, 92, dso_navn.upper(), storrelse=24, vekt="500", sperring=6))
     ut.extend(
         [
-            f'<text x="500" y="676" font-family="{SERIF}" font-size="118" font-weight="500"'
-            f' letter-spacing="6" fill="{_farge("trykk")}" text-anchor="middle"'
-            f' dominant-baseline="central">KW</text>',
-            f'<text x="500" y="762" font-family="{GROTESK}" font-size="44" font-weight="600"'
-            f' letter-spacing="9" fill="{_farge("trykk")}" text-anchor="middle"'
-            f' dominant-baseline="central">GEHA-METER</text>',
-            f'<text x="880" y="812" font-family="{GROTESK}" font-size="40"'
-            f' letter-spacing="2" fill="{_farge("trykk")}" text-anchor="end"'
-            f' dominant-baseline="central">KL.1.5</text>',
+            _tekst(500, 570, "KW", storrelse=86, familie=SLAB, vekt="700", sperring=10),
+            _tekst(500, 644, "GEHA-METER", storrelse=34, vekt="600", sperring=8),
+            _tekst(768, 684, "KL.1.5", storrelse=32, sperring=2, anker="end"),
         ]
     )
     ut.extend(_magnetsymbol())
@@ -324,36 +359,43 @@ def _trykk_tekst(dso_navn: str | None) -> list[str]:
 
 
 def _riflet_felt() -> list[str]:
-    """Prismatisk riflet felt i to toner, med to skruehoder med spor."""
+    """Innfelt prismatisk panel over nederste tredjedel, riflet i to toner, med to skruer."""
     topp = RIFLE_TOPP
     venstre = RAMME_INNSLAG + 16.0
     hoyre = 1000.0 - venstre
     bunn = hoyre
+    bredde = hoyre - venstre
     hoyde = bunn - topp
     ut = [
         '<g id="riflet-felt">',
-        f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(hoyre - venstre)}"'
+        f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}"'
         f' height="{_n(hoyde)}" fill="{_farge("rifle-lys")}"/>',
     ]
-    periode = 28.0
+    periode = 30.0
     x = venstre
     mork: list[str] = []
     kant: list[str] = []
-    while x + periode * 0.44 <= hoyre:
-        mork.append(f"M {_n(x)} {_n(topp)} h {_n(periode * 0.44)} v {_n(hoyde)} h {_n(-periode * 0.44)} Z")
-        kant.append(f"M {_n(x + periode * 0.44)} {_n(topp)} v {_n(hoyde)}")
+    while x + periode * 0.5 <= hoyre:
+        mork.append(f"M {_n(x)} {_n(topp)} h {_n(periode * 0.5)} v {_n(hoyde)} h {_n(-periode * 0.5)} Z")
+        kant.append(f"M {_n(x + periode * 0.5)} {_n(topp)} v {_n(hoyde)}")
         x += periode
     ut.append(f'<path d="{" ".join(mork)}" fill="{_farge("rifle-mork")}"/>')
-    ut.append(f'<path d="{" ".join(kant)}" fill="none" stroke="{_farge("skygge")}" stroke-width="1.5" opacity="0.55"/>')
+    ut.append(f'<path d="{" ".join(kant)}" fill="none" stroke="{_farge("skygge")}" stroke-width="1.5" opacity="0.5"/>')
+    # Innfelt: skyggekant oeverst, lys kant rett under, tynn omriss rundt hele.
+    ut.append(f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="5" fill="{_farge("skygge")}"/>')
     ut.append(
-        f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(hoyre - venstre)}" height="3" fill="{_farge("skygge")}"/>',
+        f'<rect x="{_n(venstre)}" y="{_n(topp + 5)}" width="{_n(bredde)}" height="3" fill="{_farge("krom-lys")}"/>'
     )
-    skrue_y = (topp + bunn) / 2
-    for skrue_x in (venstre + 76.0, hoyre - 76.0):
+    ut.append(
+        f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
+        f' stroke="{_farge("skygge")}" stroke-width="2" opacity="0.65"/>'
+    )
+    skrue_y = topp + hoyde * 0.68
+    for skrue_x in (NAV_X - 168.0, NAV_X + 168.0):
         ut.append(
             f'<g class="skrue" transform="translate({_n(skrue_x)} {_n(skrue_y)})">'
-            f'<circle r="24" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
-            f'<rect x="-16" y="-4" width="32" height="8" fill="{_farge("krom-mork")}"/>'
+            f'<circle r="26" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
+            f'<rect x="-17" y="-4" width="34" height="8" fill="{_farge("krom-mork")}"/>'
             "</g>"
         )
     ut.append("</g>")
@@ -399,7 +441,7 @@ def _visere(maks_kw: float) -> list[str]:
         f' fill="{_farge("trykk")}"/>'
     )
 
-    rod_spiss = NAV_Y - (R_SKALA - 196)
+    rod_spiss = NAV_Y - (R_SKALA - 170)
     rod = (
         f'<path id="viser-rod" {rot} d="M {_n(NAV_X)} {_n(rod_spiss)}'
         f' L {_n(NAV_X + 27)} {_n(NAV_Y - 52)} L {_n(NAV_X - 27)} {_n(NAV_Y - 52)} Z"'
