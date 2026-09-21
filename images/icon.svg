@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Effektvakt</title>
+  <desc id="desc">Kabinettet til en analog effektmaaler, sett rett forfra. Skivebuen og
+    viseren er skaaret ut av plata, og viseren staar i hoeyt utslag mot slutten av skalaen.</desc>
+  <!--
+    Fargetoken. Denne regelen er det eneste stedet en farge er skrevet, og
+    tests/test_brand_images.py maaler den herfra.
+
+    Ikonet ligger rett paa Home Assistants lyse og moerke bakgrunn, saa fargen maa naa
+    3:1 mot baade hvit og den moerke temabakgrunnen (WCAG 1.4.11, grafiske objekter).
+    Det utelukker hele skivepaletten i faceplate.py: emalje #ece3d0 er 1.28:1 mot hvit,
+    og trykk #241f19 er 1.16:1 mot moerk. Baandet som holder begge veier ligger mellom
+    relativ luminans 0.117 og 0.30, og bare krom-moerk og deksel-kant faller innenfor.
+    viserrod #a32026 er 2.51:1 mot moerk, altsaa en anelse for moerk, saa den er loeftet
+    i lyshet med hue og metning i behold. Det er den samme roeden, ett hakk opp.
+  -->
+  <style>
+    .kabinett { fill: #ce2830; }
+  </style>
+  <!--
+    Bue, viser og nav er skaaret ut, ikke tegnet: masken slipper siden gjennom der den
+    er svart, saa ingenting inne i plata trenger aa holde kontrast paa egen haand. Ordene
+    white og black under er maskedekning og ikke farger i ikonet.
+
+    Geometrien foelger faceplate.py: navet ligger under midten, skalaen sveiper 100 grader
+    (VINKEL_START -50, VINKEL_SVEIP 100), og viseren staar paa 38 grader, som er 88 % av
+    skalaen. Alt som ikke overlever paa 24 px er strøket: delstreker, hovedtall, kr-baandet,
+    instrumentmerkene, prismefeltet og kromringen. Radiene er ikke skalert rett ned fra
+    plata paa 100 mm, men blaast opp saa buen fyller kvadratet: 24 px lar ingen strek som er
+    tynnere enn to piksler overleve, og baandet paa 34 enheter er 3,2 piksler der.
+
+    Viseren stopper 10 enheter innenfor buen i stedet for aa gaa gjennom den. Gjennom buen
+    skar den baandet i to og etterlot en loesrevet stump mellom 38 og 50 grader, som paa
+    24 px ble en klump i hoeyre hjoerne i stedet for en viser mot en skala.
+  -->
+  <mask id="cuts">
+    <rect width="256" height="256" fill="white"/>
+    <g fill="black">
+      <path d="M 11.6 108.3 A 152 152 0 0 1 244.4 108.3 L 218.4 130.2 A 118 118 0 0 0 37.6 130.2 Z"/>
+      <path d="M 135 216.5 L 198 123.7 L 190.9 118.1 L 116.1 201.8 Z"/>
+      <circle cx="128" cy="206" r="18"/>
+    </g>
+  </mask>
+  <!-- Kabinettet: kvadratisk med kurvede hjoerner og en svakt buet overkant, som originalen. -->
+  <g mask="url(#cuts)">
+    <path class="kabinett" d="M 0 42 L 0 222 A 34 34 0 0 0 34 256 L 222 256 A 34 34 0 0 0 256 222
+      L 256 42 A 34 34 0 0 0 222 8 Q 128 -12 34 8 A 34 34 0 0 0 0 42 Z"/>
+  </g>
+</svg>

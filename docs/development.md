@@ -6,6 +6,7 @@
 custom_components/effektvakt/
     __init__.py         # Entry-setup, watchdog, service-registrering
     binary_sensor.py    # binary_sensor.effektvakt_kutt_ned_anbefalt
+    brand/              # icon.png og icon@2x.png, generert (HA leser brand-bilder herfra)
     config_flow.py      # Config flow og options flow
     const.py            # Konstanter og default-verdier
     coordinator.py      # Beregningslogikk, hysterese, persist
@@ -29,8 +30,12 @@ docs/
     sensorer.md
     strategi.md
 
+images/
+    icon.svg            # Kilden til integrasjonsikonet
+
 scripts/
     export_faceplate.py               # Eksporter skiven til SVG for trykk og CAD
+    generate_brand_images.py          # Rendre icon.svg til brand/-PNG-ene
     sync_dso_from_stromkalkulator.py  # Sync DSO-data fra strømkalkulator
 
 tests/
@@ -111,6 +116,44 @@ Scriptet laster `dso.py` og `faceplate.py` rett fra fil med importlib, så det k
 SVG-en er 100 mm i faktisk størrelse. viewBox er `0 0 1000 1000` der én enhet er 0,1 mm, altså 1000 enheter = 100 mm, så filen kan tas rett inn i CAD med kjent skala.
 
 Teksten ligger som ekte `<text>`-elementer med en fontstakk, ikke som baner. Den må konverteres til baner før den går til gravering eller trykk, ellers blir bokstavformene det maskinen tilfeldigvis har installert. Inkscape (`inkscape --export-text-to-path`) finnes ikke på denne maskinen, så konverteringen gjøres i CAD-programmet eller hos trykkeriet.
+
+---
+
+## Regenerere ikonet
+
+Integrasjonsikonet er én SVG, `images/icon.svg`, og PNG-ene Home Assistant leser er
+generert fra den:
+
+```bash
+python3 scripts/generate_brand_images.py          # skriv PNG-ene
+python3 scripts/generate_brand_images.py --sjekk  # exit 1 hvis de er utdaterte
+```
+
+Filene havner i `custom_components/effektvakt/brand/` som `icon.png` (256x256) og
+`icon@2x.png` (512x512). HA serverer brand-bilder for custom integrations derfra før den
+går til brands-CDN-en, og betingelsen er at mappen heter `brand` og ligger rett i
+integrasjonsmappen (`integration.has_branding` i HA sin `loader.py`). De samme PNG-ene er
+materialet til PR-en mot `home-assistant/brands`.
+
+Rendringen trenger `rsvg-convert` (`brew install librsvg`). Hver PNG bærer SHA-256-en av
+SVG-en den kom fra i en tEXt-chunk, så `tests/test_brand_images.py` kjenner igjen en
+utdatert PNG uten å kunne rendre selv. Den testen er fasit på ikonet: størrelser,
+gjennomsiktighet, trimming, at alle fire kantene er nådd, og at fargetokenet holder 3:1
+mot både hvit og HA sin mørke bakgrunn. Rediger aldri PNG-ene for hånd.
+
+Farger skrives bare som klasseregler i `<style>`-blokken i SVG-en, aldri i tegneelementene.
+Ikonet er kabinettet med skivebuen og viseren skåret ut av plata, så ingenting inne i
+motivet trenger å holde kontrast på egen hånd: hullene viser siden bak.
+
+Skal ikonet endres, døm det i liten størrelse før du tror på det. Kontaktark:
+
+```bash
+for s in 256 48 24; do
+  rsvg-convert --width $s --height $s --format png images/icon.svg -o /tmp/e-$s.png
+  magick /tmp/e-$s.png -background "#ffffff" -flatten /tmp/lys-$s.png
+  magick /tmp/e-$s.png -background "#111111" -flatten /tmp/mork-$s.png
+done
+```
 
 ---
 
