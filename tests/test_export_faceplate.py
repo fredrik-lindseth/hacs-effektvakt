@@ -67,12 +67,19 @@ def test_standard_filnavn_i_arbeidskatalogen(tmp_path: Path, monkeypatch: pytest
     assert (tmp_path / "geha-meter-bkk-print.svg").exists()
 
 
-def test_maks_kw_rundes_opp_og_sies_fra(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_maks_kw_loeftes_og_sies_fra(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ut = tmp_path / "bkk.svg"
     export_faceplate.main(["--dso", "bkk", "--maks-kw", "22", "--out", str(ut)])
     utskrift = capsys.readouterr().out
-    assert "30" in utskrift
-    assert 'data-maks-kw="30"' in ut.read_text(encoding="utf-8")
+    assert "25" in utskrift
+    assert 'data-maks-kw="25"' in ut.read_text(encoding="utf-8")
+
+
+def test_skalatopp_brukes_uendret(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ut = tmp_path / "bkk.svg"
+    export_faceplate.main(["--dso", "bkk", "--maks-kw", "10", "--out", str(ut)])
+    assert "løftet" not in capsys.readouterr().out
+    assert 'data-maks-kw="10"' in ut.read_text(encoding="utf-8")
 
 
 def test_ugyldig_maks_kw(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

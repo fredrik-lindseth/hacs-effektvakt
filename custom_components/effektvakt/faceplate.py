@@ -16,9 +16,12 @@ en ny oppfoering og ikke en ny gren gjennom filen.
 from __future__ import annotations
 
 import itertools
+import logging
 import math
 from typing import Final, Literal, NamedTuple
 from xml.sax.saxutils import escape
+
+_LOGGER = logging.getLogger(__name__)
 
 Variant = Literal["card", "print"]
 
@@ -30,7 +33,6 @@ NAV_Y: Final = 790.0
 VINKEL_START: Final = -50.0
 VINKEL_SVEIP: Final = 100.0
 MAKS_KW_STANDARD: Final = 15.0
-MAKS_KW_KVANT: Final = 15.0
 
 # --- Geometri (intern tegning) -------------------------------------------
 #
@@ -72,12 +74,39 @@ FELT_BUNN: Final = 26.0
 FELT_DEKK: Final = 0.34
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
-HOVEDMERKER: Final = 6
+
+# Skalatopper som gir hele hovedtall, med steget mellom dem: (topp, steg).
+# Hovedtallene utledes av toppen, ikke omvendt, saa 10 kW gir 0 2 4 6 8 10 slik
+# GEHA-originalen har det, og 15 kW gir fortsatt 0 3 6 9 12 15.
+SKALATOPPER_SMAA: Final = ((3.0, 1.0), (4.0, 1.0), (5.0, 1.0), (6.0, 2.0), (8.0, 2.0))
+# Fra 10 og opp gjentar trappen seg per dekade, saa 100 kW faar samme form som
+# 10 kW. Alle stegene her gaar opp i hele tall naar de ganges med en tierpotens.
+SKALATOPPER: Final = (
+    (10.0, 2.0),
+    (12.0, 3.0),
+    (15.0, 3.0),
+    (20.0, 4.0),
+    (25.0, 5.0),
+    (30.0, 6.0),
+    (40.0, 8.0),
+    (50.0, 10.0),
+    (60.0, 12.0),
+    (80.0, 16.0),
+)
+MAKS_KW_TAK: Final = 8.0e5  # oeverste trinn i trappen etter fem dekader
 
 # Hovedtall-stigen for komprimerte skalaer: runde tall som blir glissnere der
 # skalaen trykkes sammen, slik instrumentmakerne gjorde det.
-TALLSTIGE: Final = (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0)
+TALLSTIGE: Final = (
+    1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0,
+    10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 80.0,
+    100.0, 120.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0,
+)  # fmt: skip
 MIN_TALLAVSTAND_GRADER: Final = 7.5
+# Vinkelavstand er ikke nok alene: "12" er tre ganger saa bredt som "3", og paa
+# en lav skalatopp havner de brede merkelappene naer hverandre. Luften er maalt
+# i samme enheter som resten av tegningen, langs R_TALL.
+TALL_LUFT: Final = 6.0
 DELSTREKSTIGE: Final = (0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0)
 MIN_DELSTREK_GRADER: Final = 1.6
 
@@ -88,6 +117,7 @@ GROTESK: Final = "'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-se
 # seriffer. Slab der den finnes, ellers grotesk med vekt.
 SLAB: Final = f"Rockwell, 'Roboto Slab', 'Zilla Slab', {GROTESK}"
 
+HOVEDTALL_STORRELSE: Final = 56.0
 TEKST_KR_STORRELSE: Final = 30.0
 TEKST_KR_MINSTE: Final = 19.0
 TEKST_KR_SPERRING: Final = 2.0
@@ -150,11 +180,46 @@ def _radiell_strek(vinkel: float, r_indre: float, r_ytre: float) -> str:
     return f"M {_n(x1)} {_n(y1)} L {_n(x2)} {_n(y2)}"
 
 
+def _fra_trappen(maks_kw: float) -> tuple[float, float]:
+    """Laveste trinn i trappen som rommer verdien. Over hoeyeste trinn blir det taket."""
+    for topp, steg in SKALATOPPER_SMAA:
+        if maks_kw <= topp:
+            return topp, steg
+    faktor = 1.0
+    while True:
+        for topp, steg in SKALATOPPER:
+            if maks_kw <= topp * faktor:
+                return topp * faktor, steg * faktor
+        if faktor * SKALATOPPER[-1][0] >= MAKS_KW_TAK:
+            return SKALATOPPER[-1][0] * faktor, SKALATOPPER[-1][1] * faktor
+        faktor *= 10
+
+
+def skalatopp(maks_kw: float) -> tuple[float, float]:
+    """Skalatoppen som rommer verdien, og steget mellom hovedtallene.
+
+    Trappen velges oppover og aldri nedover: en topp under den oppgitte verdien
+    ville gjort brukerens egen toppeffekt uleselig. Treffer verdien en topp i
+    trappen, brukes den som den er. Ellers sier loggen fra, for en stille
+    endring av oppsettet er verre enn en beskjed.
+    """
+    if not math.isfinite(maks_kw) or maks_kw <= 0:
+        _LOGGER.warning("maks_kw %s duger ikke; skiven tegnes med %g kW", maks_kw, MAKS_KW_STANDARD)
+        maks_kw = MAKS_KW_STANDARD
+    valgt = _fra_trappen(maks_kw)
+    if valgt[0] != maks_kw:
+        _LOGGER.warning(
+            "maks_kw %g kW er ingen lesbar skalatopp; skiven tegnes med %g kW og hovedtall hvert %g kW",
+            maks_kw,
+            valgt[0],
+            valgt[1],
+        )
+    return valgt
+
+
 def normaliser_maks_kw(maks_kw: float) -> float:
-    """Rund opp til naermeste multiplum av 15 saa hovedtallene forblir hele."""
-    if maks_kw <= MAKS_KW_KVANT:
-        return MAKS_KW_KVANT
-    return math.ceil(maks_kw / MAKS_KW_KVANT) * MAKS_KW_KVANT
+    """Skalatoppen som brukes for en oppgitt maks_kw. Se skalatopp()."""
+    return skalatopp(maks_kw)[0]
 
 
 def vinkel_for_kw(
@@ -360,9 +425,15 @@ def _forste_terskel(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) ->
     return 0.0
 
 
-def _jevne_hovedtall(min_kw: float, maks_kw: float) -> tuple[float, ...]:
-    steg = (maks_kw - min_kw) / (HOVEDMERKER - 1)
-    return tuple(min_kw + i * steg for i in range(HOVEDMERKER))
+def _jevne_hovedtall(min_kw: float, maks_kw: float, steg: float) -> tuple[float, ...]:
+    """Hovedtall med fast avstand fra bunnen til toppen av skalaen."""
+    antall = round((maks_kw - min_kw) / steg)
+    return tuple(min_kw + i * steg for i in range(antall + 1))
+
+
+def _merkelappbredde(kw: float) -> float:
+    """Bredden merkelappen legger beslag paa langs skalaen, med luft paa hver side."""
+    return _tekstbredde(_tall_tekst(kw), HOVEDTALL_STORRELSE, 0.0) + TALL_LUFT
 
 
 def _stigehovedtall(
@@ -375,6 +446,10 @@ def _stigehovedtall(
             kw, maks_kw, min_kw=min_kw, eksponent=eksponent, sokkel_kw=sokkel[0], sokkel_andel=sokkel[1]
         )
 
+    def har_plass(forrige: float, kandidat: float) -> bool:
+        krav = math.degrees((_merkelappbredde(forrige) + _merkelappbredde(kandidat)) / 2 / R_TALL)
+        return vinkel(kandidat) - vinkel(forrige) >= max(MIN_TALLAVSTAND_GRADER, krav)
+
     # Sokkelen er et sammentrykt stykke, ikke et omraade med egne runde tall:
     # den faar bare start og terskelen den ender paa, ellers hadde stigen lagt
     # 1,5 og 2,5 inn der 2 og 3 hoerer hjemme.
@@ -383,9 +458,9 @@ def _stigehovedtall(
     for kandidat in TALLSTIGE:
         if kandidat <= nedre or kandidat >= maks_kw:
             continue
-        if vinkel(kandidat) - vinkel(valgt[-1]) >= MIN_TALLAVSTAND_GRADER:
+        if har_plass(valgt[-1], kandidat):
             valgt.append(kandidat)
-    if vinkel(maks_kw) - vinkel(valgt[-1]) < MIN_TALLAVSTAND_GRADER and len(valgt) > 1:
+    while len(valgt) > 1 and not har_plass(valgt[-1], maks_kw):
         valgt.pop()
     valgt.append(maks_kw)
     return tuple(valgt)
@@ -393,7 +468,7 @@ def _stigehovedtall(
 
 def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> Skala:
     """Utled skalaen av stilen og brukerens kapasitetstrinn."""
-    maks = normaliser_maks_kw(maks_kw)
+    maks, steg = skalatopp(maks_kw)
     sokkel_kw = 0.0
     sokkel_andel = 0.0
     if stil.sokkel_andel > 0:
@@ -402,7 +477,7 @@ def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, int]], maks_kw: flo
         sokkel_kw = min(_forste_terskel(kapasitetstrinn, maks), maks / 5)
         sokkel_andel = stil.sokkel_andel if sokkel_kw > 0 else 0.0
     if stil.hovedtall_regel == "jevn":
-        hovedtall = _jevne_hovedtall(0.0, maks)
+        hovedtall = _jevne_hovedtall(0.0, maks, steg)
     else:
         hovedtall = _stigehovedtall(0.0, maks, stil.eksponent, (sokkel_kw, sokkel_andel))
     return Skala(
@@ -611,7 +686,7 @@ def _skala_tegning(skala: Skala, stil: Stil) -> list[str]:
 
     for kw in skala.hovedtall:
         x, y = _polar(skala.vinkel(kw), R_TALL)
-        ut.append(_tekst(x, y, _tall_tekst(kw), storrelse=56, vekt="600", stil=stil))
+        ut.append(_tekst(x, y, _tall_tekst(kw), storrelse=HOVEDTALL_STORRELSE, vekt="600", stil=stil))
     return ut
 
 
@@ -978,7 +1053,9 @@ def generate_faceplate(
     Args:
         kapasitetstrinn: (kW-terskel, kr/mnd) i stigende rekkefoelge, slik
             dso.py oppgir dem. Oeverste terskel kan vaere float("inf").
-        maks_kw: Skalaens toppverdi. Rundes opp til naermeste multiplum av 15.
+        maks_kw: Skalaens toppverdi. Loeftes til naermeste skalatopp som gir
+            hele hovedtall, se skalatopp(). data-maks-kw paa rot-elementet
+            baerer verdien som faktisk ble brukt.
         variant: "card" gir visere, slitasje og plastdeksel. "print" gir flate
             farger for fysisk trykk, uten deksel og uten visere.
         dso_navn: Nettselskap trykt paa skiven.

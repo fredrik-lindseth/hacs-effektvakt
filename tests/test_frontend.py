@@ -455,9 +455,9 @@ async def test_ws_faceplate_respekterer_maks_kw():
         await ws_faceplate(hass, connection, {"id": 3, "maks_kw": 20})
 
     _msg_id, resultat = connection.send_result.call_args.args
-    # 20 rundes opp til naermeste multiplum av 15 saa hovedtallene blir hele.
-    assert resultat["maks_kw"] == 30.0
-    assert 'data-maks-kw="30"' in resultat["svg"]
+    # 20 er en skalatopp som gir hele hovedtall, saa den brukes som den er.
+    assert resultat["maks_kw"] == 20.0
+    assert 'data-maks-kw="20"' in resultat["svg"]
 
 
 @pytest.mark.asyncio

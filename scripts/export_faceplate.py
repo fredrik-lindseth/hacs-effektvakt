@@ -142,7 +142,13 @@ def _bygg_parser(stiler: dict[str, str]) -> argparse.ArgumentParser:
         epilog="SVG-en er 100 mm i faktisk størrelse. Konverter tekst til baner før trykk.",
     )
     parser.add_argument("--dso", help="DSO-id, for eksempel bkk. Se --liste.")
-    parser.add_argument("--maks-kw", type=float, default=15.0, help="Skalaens toppverdi (standard 15)")
+    parser.add_argument(
+        "--maks-kw",
+        type=float,
+        default=15.0,
+        help="Skalaens toppverdi (standard 15). Løftes til nærmeste skalatopp som gir hele hovedtall, "
+        "for eksempel 10, 12, 15, 20, 25 eller 30",
+    )
     parser.add_argument(
         "--variant",
         choices=["print", "card"],
@@ -207,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     synlige = sum(1 for terskel, _ in info["kapasitetstrinn"] if terskel <= maks)
     print(f"Skrev {ut} ({info['navn']}, {stilnavn}, {maks:g} kW, {args.variant}, {synlige} terskler på skiven)")
     if maks != args.maks_kw:
-        print(f"Skalaen ble rundet opp fra {args.maks_kw:g} til {maks:g} kW så hovedtallene forblir hele.")
+        print(f"Skalaen ble løftet fra {args.maks_kw:g} til {maks:g} kW for at hovedtallene skal bli hele.")
 
     if args.png:
         png_sti = til_png(ut)

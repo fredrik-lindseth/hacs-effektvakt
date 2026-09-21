@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -11,21 +12,26 @@ import pytest
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
 from custom_components.effektvakt.faceplate import (
     HUB_R,
+    MAKS_KW_STANDARD,
     NAV_X,
     NAV_Y,
     PALETT,
     R_HOVEDMERKE,
     R_SKALA,
+    SKALATOPPER,
+    SKALATOPPER_SMAA,
     STILER,
     VINKEL_START,
     VINKEL_SVEIP,
     Skala,
     _delstreker,
+    _n,
     _stigehovedtall,
     _valider_stil,
     generate_faceplate,
     lag_skala,
     normaliser_maks_kw,
+    skalatopp,
     tilgjengelige_stiler,
     vinkel_for_kw,
 )
@@ -209,12 +215,14 @@ def _merkevinkler(rot: ET.Element) -> list[float]:
     return [sum(gruppe) / len(gruppe) for gruppe in grupper]
 
 
-def test_avlesningen_stemmer_i_alle_stiler():
+@pytest.mark.parametrize("maks_kw", [5, 10, 15, 20, 30])
+def test_avlesningen_stemmer_i_alle_stiler(maks_kw: float):
     """Viseren rotert til et hovedtall skal peke paa det merket, ogsaa paa komprimert skala."""
     for navn, stil in STILER.items():
-        svg = generate_faceplate(kapasitetstrinn=BKK, stil=navn)
+        svg = generate_faceplate(kapasitetstrinn=BKK, stil=navn, maks_kw=maks_kw)
         rot = _rot(svg)
-        skala = lag_skala(stil, BKK, 15)
+        skala = lag_skala(stil, BKK, maks_kw)
+        assert rot.get("data-maks-kw") == _n(skala.maks_kw), f"{navn}: kortet faar feil skalatopp"
         merkevinkler = _merkevinkler(rot)
         assert len(merkevinkler) == len(skala.hovedtall)
 
@@ -231,6 +239,11 @@ def test_avlesningen_stemmer_i_alle_stiler():
             )
             traff = min(abs(_polar_av(*rotert)[0] - merke) for merke in merkevinkler)
             assert traff == pytest.approx(0.0, abs=0.02), f"{navn}: viseren peker ikke paa {kw} kW"
+
+        # Hvert hovedtall skal ogsaa staa trykt paa skiven, ikke bare ha et merke.
+        tekster = _tekster(rot)
+        for kw in skala.hovedtall:
+            assert _n(kw).replace(".", ",") in tekster, f"{navn}/{maks_kw}: mangler hovedtallet {kw}"
 
 
 def test_komprimert_skala_er_trykket_sammen_mot_toppen():
@@ -370,16 +383,54 @@ def test_visere_hviler_paa_null_kw():
         assert element.get("transform") == f"rotate({VINKEL_START:g} {NAV_X:g} {NAV_Y:g})"
 
 
-def test_maks_kw_rundes_opp_til_multiplum_av_15():
-    assert normaliser_maks_kw(15) == 15
-    assert normaliser_maks_kw(10) == 15
-    assert normaliser_maks_kw(16) == 30
-    assert normaliser_maks_kw(30) == 30
-    rot = _rot(generate_faceplate(kapasitetstrinn=BKK, maks_kw=22))
-    assert rot.get("data-maks-kw") == "30"
+def test_skalatoppen_brukes_som_den_er_naar_den_er_lesbar():
+    """Brukerens egen toppverdi skal overleve, og hovedtallene utledes av den."""
+    for oppgitt, forventet, steg in ((5, 5.0, 1.0), (10, 10.0, 2.0), (15, 15.0, 3.0), (30, 30.0, 6.0)):
+        assert skalatopp(oppgitt) == (forventet, steg)
+        assert normaliser_maks_kw(oppgitt) == forventet
+
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK, maks_kw=10))
+    assert rot.get("data-maks-kw") == "10"
     tekster = _tekster(rot)
-    for tall in ("0", "6", "12", "18", "24", "30"):
-        assert tall in tekster
+    for tall in ("0", "2", "4", "6", "8", "10"):
+        assert tall in tekster, f"mangler hovedtall {tall} paa 10 kW-skiven"
+    assert "15" not in tekster, "skalaen skal ikke ha kroepet opp til 15"
+
+
+def test_hovedtallene_er_hele_paa_alle_skalatopper():
+    for topp, _ in SKALATOPPER_SMAA + SKALATOPPER:
+        hovedtall = lag_skala(STILER["geha"], BKK, topp).hovedtall
+        assert hovedtall[0] == 0 and hovedtall[-1] == topp
+        assert all(float(kw).is_integer() for kw in hovedtall), f"{topp}: hovedtallene skal vaere hele"
+        assert 4 <= len(hovedtall) <= 7, f"{topp}: {len(hovedtall)} hovedtall er ikke en lesbar rekke"
+
+
+def test_verdi_utenfor_trappen_loeftes_og_sies_fra(caplog):
+    """En verdi som ikke kan brukes som den er skal staa i loggen, ikke forsvinne stille."""
+    with caplog.at_level(logging.WARNING, logger="custom_components.effektvakt.faceplate"):
+        assert skalatopp(22) == (25.0, 5.0)
+    assert "22" in caplog.text and "25" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="custom_components.effektvakt.faceplate"):
+        assert skalatopp(15) == (15.0, 3.0)
+    assert caplog.text == "", "en verdi som treffer trappen skal ikke gi varsel"
+
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK, maks_kw=22))
+    assert rot.get("data-maks-kw") == "25", "kortet maa se hvilken skalatopp som faktisk ble brukt"
+
+
+def test_ubrukelig_maks_kw_faller_tilbake_til_standarden(caplog):
+    with caplog.at_level(logging.WARNING, logger="custom_components.effektvakt.faceplate"):
+        assert normaliser_maks_kw(0) == MAKS_KW_STANDARD
+        assert normaliser_maks_kw(float("inf")) == MAKS_KW_STANDARD
+    assert caplog.text.count("duger ikke") == 2
+
+
+def test_hoeye_verdier_stopper_paa_taket():
+    topp, steg = skalatopp(1.0e9)
+    assert topp == pytest.approx(8.0e5)
+    assert steg == pytest.approx(1.6e5)
 
 
 def test_vinkel_for_kw_folger_skalaen():
