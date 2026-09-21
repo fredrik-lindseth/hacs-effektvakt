@@ -237,10 +237,11 @@ def test_replay_ingen_false_positives_lavt_forbruk():
             dt = datetime.fromisoformat(h["start_local"])
             d = dt.date()
             kwh = float(h["kwh"])
-            # Cutoff at 1.0 kWh: ensures margin > 1.0 is achievable against
-            # BKK's lowest tier (2.0 kW). Values between 1.0 and 2.0 are
-            # legitimately borderline and not tested here.
-            if kwh > 1.0:
+            # BKKs laveste trinn er 2.0 kW og safety_buffer er 1.0 kW, så en time på
+            # nøyaktig 1.0 kWh treffer grensen der classify_raw_risk med vilje slår
+            # over i medium. Den og alt over er ekte grensetilfeller, ikke false
+            # positives, så de hører ikke hjemme i denne testen.
+            if kwh >= 1.0:
                 if kwh > daily_max_so_far.get(d, 0.0):
                     daily_max_so_far[d] = kwh
                 continue
@@ -253,9 +254,8 @@ def test_replay_ingen_false_positives_lavt_forbruk():
                 daily_max_kw=daily_max_so_far,
             )
             margin = effective_threshold - kwh
-            assert margin > 1.0, (
-                f"{path.stem} {dt}: lav forbruks-time {kwh:.2f} kWh " f"gir margin {margin:.2f} (forventet > 1.0)"
-            )
+            melding = f"{path.stem} {dt}: lav forbruks-time {kwh:.2f} kWh gir margin {margin:.2f}, ventet > 1.0"
+            assert margin > 1.0, melding
 
             if kwh > daily_max_so_far.get(d, 0.0):
                 daily_max_so_far[d] = kwh
