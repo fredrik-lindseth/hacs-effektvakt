@@ -49,7 +49,25 @@ R_VISER_ROD: Final = R_SKALA - R_DELMERKE + 2.0
 
 HUB_R: Final = 52.0
 RAMME_INNSLAG: Final = 14.0
-RIFLE_TOPP: Final = 730.0
+
+# Kabinettet er ikke et rett kvadrat: overkanten buer svakt oppover og alle
+# hjoerner er kurvede.
+KABINETT_TOPP: Final = 44.0
+KABINETT_HJORNE: Final = 36.0
+KABINETT_BUE: Final = 34.0
+
+# Nedre halvdel er prismatisk plast. Paa originalen ligger navet og
+# viserroettene bak den, saa i card-varianten legges feltet over dem med
+# delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
+PRISME_TOPP: Final = 520.0
+PRISME_INNSLAG: Final = 32.0
+PRISME_DEKK: Final = 0.34
+
+# Stroemtransformatorsymbolet og klassemerket ligger i hjoernene utenfor sveipet,
+# saa viseren verken dekker dem i hvile eller ved fullt utslag.
+SYMBOL_X: Final = 152.0
+SYMBOL_Y: Final = 818.0
+KL_X: Final = 884.0
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
 HOVEDMERKER: Final = 6
@@ -205,21 +223,36 @@ def _tekst(
     return "".join(deler)
 
 
+def kabinettbane(innslag: float = 0.0) -> str:
+    """Omrisset av kabinettet: svakt buet overkant og kurvede hjoerner, ikke et rett kvadrat."""
+    v = innslag
+    h = VIEWBOX - innslag
+    b = VIEWBOX - innslag
+    topp = KABINETT_TOPP + innslag
+    hj = KABINETT_HJORNE
+    return (
+        f"M {_n(v)} {_n(topp + hj)}"
+        f" Q {_n(v)} {_n(topp)} {_n(v + hj)} {_n(topp)}"
+        f" Q {_n(VIEWBOX / 2)} {_n(topp - 2 * KABINETT_BUE)} {_n(h - hj)} {_n(topp)}"
+        f" Q {_n(h)} {_n(topp)} {_n(h)} {_n(topp + hj)}"
+        f" L {_n(h)} {_n(b - hj)}"
+        f" Q {_n(h)} {_n(b)} {_n(h - hj)} {_n(b)}"
+        f" L {_n(v + hj)} {_n(b)}"
+        f" Q {_n(v)} {_n(b)} {_n(v)} {_n(b - hj)} Z"
+    )
+
+
 def _plate(variant: Variant) -> list[str]:
-    """Emaljeplate med flat to-tone kromramme."""
+    """Emaljeplate i kabinettform med flat to-tone kromramme."""
     ut = [
-        f'<rect x="0" y="0" width="1000" height="1000" rx="18" fill="{_farge("emalje")}"/>',
+        f'<path id="kabinett" d="{kabinettbane()}" fill="{_farge("emalje")}"/>',
     ]
     if variant == "card":
         ut.extend(_slitasje())
-    innslag = RAMME_INNSLAG
     ut.extend(
         [
-            f'<rect x="{_n(innslag)}" y="{_n(innslag)}" width="{_n(1000 - 2 * innslag)}"'
-            f' height="{_n(1000 - 2 * innslag)}" rx="12" fill="none"'
-            f' stroke="{_farge("krom-lys")}" stroke-width="12"/>',
-            f'<rect x="{_n(innslag + 9)}" y="{_n(innslag + 9)}" width="{_n(1000 - 2 * innslag - 18)}"'
-            f' height="{_n(1000 - 2 * innslag - 18)}" rx="8" fill="none"'
+            f'<path d="{kabinettbane(RAMME_INNSLAG)}" fill="none" stroke="{_farge("krom-lys")}" stroke-width="12"/>',
+            f'<path d="{kabinettbane(RAMME_INNSLAG + 9)}" fill="none"'
             f' stroke="{_farge("krom-mork")}" stroke-width="3"/>',
         ]
     )
@@ -252,8 +285,7 @@ def _slitasje() -> list[str]:
         for d, bredde, dekk in skrammer
     )
     ut.append(
-        '<rect x="0" y="0" width="1000" height="1000" rx="18" fill="none"'
-        f' stroke="{_farge("skygge")}" stroke-width="26" opacity="0.18"/>'
+        f'<path d="{kabinettbane(13)}" fill="none" stroke="{_farge("skygge")}" stroke-width="26" opacity="0.18"/>'
     )
     return ut
 
@@ -338,19 +370,34 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list
     return ut
 
 
-def _magnetsymbol() -> list[str]:
-    """Dreispolesymbolet: hesteskomagnet med spolen i gapet."""
-    x0, y0 = 232.0, 634.0
+def _stromtransformatorsymbol() -> list[str]:
+    """Symbolet nede til venstre: instrumentet er drevet av en magnetisk stroemtransformator.
+
+    Tegnet som stroemtransformatorsymbolet fra enlinjeskjema, altsaa primaerlederen
+    som gaar tvers gjennom en ring. Den eksakte skalamarkoeren i IEC 60051 tabell 6
+    ligger bak betalingsmur og er ikke verifisert; avviker originalen, er det denne
+    funksjonen som skal rettes.
+    """
+    x0, y0 = SYMBOL_X, SYMBOL_Y
     return [
-        f'<g id="dreispolesymbol" transform="translate({_n(x0)} {_n(y0)})">'
-        '<path d="M 0 78 L 0 42 A 42 42 0 0 1 84 42 L 84 78 L 63 78 L 63 42'
-        f' A 21 21 0 0 0 21 42 L 21 78 Z" fill="{_farge("trykk")}"/>'
-        f'<rect x="36" y="24" width="12" height="58" fill="{_farge("trykk")}"/>'
+        f'<g id="stromtransformatorsymbol" transform="translate({_n(x0)} {_n(y0)})">'
+        f'<path d="M -74 0 L 74 0" stroke="{_farge("trykk")}" stroke-width="8" stroke-linecap="butt"/>'
+        f'<circle r="30" fill="none" stroke="{_farge("trykk")}" stroke-width="7"/>'
         "</g>"
     ]
 
 
 def _trykk_tekst(dso_navn: str | None) -> list[str]:
+    """Trykket paa skiven.
+
+    KL.1,5 er noeyaktighetsklassen: inntil 1,5 prosent feilmargin paa fullt utslag.
+
+    Originalinstrumentet maaler stroem, ikke effekt. Skalaen er trykket i kW under
+    en antatt spenning, derav "230V" og "43.4B/0.1A" paa originalskiven og derav
+    symbolet for stroemtransformator. Den visningen glipper saa snart spenningen
+    avviker eller effektfaktoren ikke er 1. Var skive ser lik ut, men tallene bak
+    er ekte kW fra Home Assistant, saa vi arver ikke den feilkilden.
+    """
     ut: list[str] = []
     if dso_navn:
         ut.append(_tekst(500, 92, dso_navn.upper(), storrelse=24, vekt="500", sperring=6))
@@ -358,10 +405,12 @@ def _trykk_tekst(dso_navn: str | None) -> list[str]:
         [
             _tekst(500, 570, "KW", storrelse=86, familie=SLAB, vekt="700", sperring=10),
             _tekst(500, 644, "GEHA-METER", storrelse=34, vekt="600", sperring=8),
-            _tekst(768, 684, "KL.1.5", storrelse=32, sperring=2, anker="end"),
+            # Begge markoerene ligger utenfor viserens sveip (|vinkel| > 50 grader fra
+            # navet), ellers dekker viseren dem i hvile og ved fullt utslag.
+            _tekst(KL_X, SYMBOL_Y, "KL.1,5", storrelse=32, sperring=2, anker="end"),
         ]
     )
-    ut.extend(_magnetsymbol())
+    ut.extend(_stromtransformatorsymbol())
     return ut
 
 
@@ -386,27 +435,39 @@ def _diagonaler(x0: float, y0: float, x1: float, y1: float, avstand: float, stig
     return " ".join(linjer)
 
 
-def _riflet_felt() -> list[str]:
-    """Innfelt prismepanel over nederste tredjedel: soelvaktig plast med kryssrutet moenster."""
-    topp = RIFLE_TOPP
-    venstre = RAMME_INNSLAG + 16.0
-    hoyre = 1000.0 - venstre
-    bunn = hoyre
+def _riflet_felt(variant: Variant) -> list[str]:
+    """Prismatisk plastfelt over nederste halvdel: soelvaktig, kryssrutet, to skruer i loddrett akse.
+
+    Card-varianten er delvis gjennomskinnelig og tegnes etter visere og nav, slik at
+    navkapselen og viserroettene skimtes bak plasten som paa originalen. Trykkvarianten
+    er flat og ugjennomsiktig og ligger under trykket.
+    """
+    topp = PRISME_TOPP
+    venstre = PRISME_INNSLAG
+    hoyre = VIEWBOX - PRISME_INNSLAG
+    bunn = VIEWBOX - PRISME_INNSLAG
     bredde = hoyre - venstre
     hoyde = bunn - topp
     avstand = 26.0
+
+    # Plasten slipper gjennom det som ligger bak, men skraveringen skal fortsatt
+    # sees. Derfor daemper card-varianten flaten mer enn selve moensteret.
+    kort = variant == "card"
+    flate = PRISME_DEKK if kort else 1.0
+    moenster = 0.8 if kort else 1.0
     ut = [
         '<g id="riflet-felt">',
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}"'
-        f' height="{_n(hoyde)}" fill="{_farge("prisme-lys")}"/>',
+        f' height="{_n(hoyde)}" fill="{_farge("prisme-lys")}" opacity="{_n(flate)}"/>',
         # Lyset faller skraatt, saa den ene diagonalen staar sterkere enn den andre.
         f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, 1)}" fill="none"'
-        f' stroke="{_farge("prisme-mork")}" stroke-width="3" opacity="0.75"/>',
+        f' stroke="{_farge("prisme-mork")}" stroke-width="3" opacity="{_n(0.75 * moenster)}"/>',
         f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, -1)}" fill="none"'
-        f' stroke="{_farge("prisme-mork")}" stroke-width="2" opacity="0.45"/>',
+        f' stroke="{_farge("prisme-mork")}" stroke-width="2" opacity="{_n(0.45 * moenster)}"/>',
         f'<path d="{_diagonaler(venstre + avstand / 2, topp, hoyre, bunn, avstand, 1)}" fill="none"'
-        f' stroke="{_farge("prisme-glans")}" stroke-width="1.5" opacity="0.6"/>',
+        f' stroke="{_farge("prisme-glans")}" stroke-width="1.5" opacity="{_n(0.6 * moenster)}"/>',
     ]
+
     # Innfelt: skyggekant oeverst, lys kant rett under, tynn omriss rundt hele.
     ut.append(f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="5" fill="{_farge("skygge")}"/>')
     ut.append(
@@ -416,12 +477,12 @@ def _riflet_felt() -> list[str]:
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
         f' stroke="{_farge("krom-mork")}" stroke-width="2" opacity="0.65"/>'
     )
-    skrue_y = topp + hoyde * 0.68
-    for skrue_x in (NAV_X - 168.0, NAV_X + 168.0):
+    # Skruene staar over hverandre i feltets loddrette midtakse.
+    for skrue_y in (716.0, 806.0):
         ut.append(
-            f'<g class="skrue" transform="translate({_n(skrue_x)} {_n(skrue_y)})">'
-            f'<circle r="26" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
-            f'<rect x="-17" y="-4" width="34" height="8" fill="{_farge("krom-mork")}"/>'
+            f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(skrue_y)})">'
+            f'<circle r="24" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
+            f'<rect x="-16" y="-4" width="32" height="8" fill="{_farge("krom-mork")}"/>'
             "</g>"
         )
     ut.append("</g>")
@@ -484,17 +545,17 @@ def _deksel() -> list[str]:
         "<defs>"
         '<filter id="korn" x="0" y="0" width="100%" height="100%">'
         '<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="stoy"/>'
-        '<feColorMatrix in="stoy" type="saturate" values="0"/>'
+        '<feColorMatrix in="stoy" type="saturate" values="0" result="graa"/>'
+        # Uten denne fyller stoeyen hele filterrektangelet og legger seg utenfor kabinettet.
+        '<feComposite in="graa" in2="SourceGraphic" operator="in"/>'
         "</filter>"
         "</defs>",
-        '<rect x="6" y="6" width="988" height="988" rx="22" fill="none"'
-        f' stroke="{_farge("deksel-kant")}" stroke-width="3" opacity="0.55"/>',
-        '<rect x="12" y="12" width="976" height="976" rx="18" fill="none"'
-        f' stroke="{_farge("krom-lys")}" stroke-width="2" opacity="0.7"/>',
-        '<rect x="6" y="6" width="988" height="988" rx="22" filter="url(#korn)" opacity="0.07"/>',
-        f'<path d="M 108 92 L 372 42" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="3"'
+        f'<path d="{kabinettbane(6)}" fill="none" stroke="{_farge("deksel-kant")}" stroke-width="3" opacity="0.55"/>',
+        f'<path d="{kabinettbane(12)}" fill="none" stroke="{_farge("krom-lys")}" stroke-width="2" opacity="0.7"/>',
+        f'<path d="{kabinettbane(6)}" fill="{_farge("trykk")}" filter="url(#korn)" opacity="0.07"/>',
+        f'<path d="M 128 116 L 380 72" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="3"'
         ' stroke-linecap="round" opacity="0.3"/>',
-        f'<path d="M 636 966 L 902 928" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="2"'
+        f'<path d="M 636 952 L 892 916" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="2"'
         ' stroke-linecap="round" opacity="0.22"/>',
     ]
 
@@ -544,14 +605,16 @@ def generate_faceplate(
         f"<desc>{escape(beskrivelse)}</desc>",
     ]
     deler.extend(_plate(variant))
+    if not kort:
+        deler.extend(_riflet_felt(variant))
     deler.extend(_skala(maks))
     deler.extend(_trinnband(kapasitetstrinn, maks))
     deler.extend(_trykk_tekst(dso_navn))
-    deler.extend(_riflet_felt())
     if kort:
         deler.extend(_visere(maks))
     deler.extend(_hub(variant))
     if kort:
+        deler.extend(_riflet_felt(variant))
         deler.extend(_deksel())
     deler.append("</svg>")
     return "\n".join(deler)

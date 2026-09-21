@@ -165,6 +165,41 @@ def test_rod_viser_peker_paa_riktig_merke():
     assert _polar_av(*rotert)[0] == pytest.approx(-10.0, abs=0.01)
 
 
+def test_markorene_ligger_utenfor_viserens_sveip():
+    """Symbolet og klassemerket maa ikke dekkes av viseren, verken i hvile eller ved fullt utslag."""
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
+    symbol = _med_id(rot, "stromtransformatorsymbol")
+    assert symbol is not None
+    x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", symbol.get("transform", "")))
+    ytterst = max(abs(VINKEL_START), abs(VINKEL_START + VINKEL_SVEIP))
+    assert abs(_polar_av(x, y)[0]) > ytterst + 10, "symbolet ligger inne i sveipet"
+
+    kl = next(e for e in rot.iter(f"{SVG_NS}text") if (e.text or "").startswith("KL"))
+    assert kl.text == "KL.1,5", "klassemerket skrives med komma"
+    assert abs(_polar_av(float(kl.get("x", "0")), float(kl.get("y", "0")))[0]) > ytterst + 10
+
+
+def test_prismefeltet_ligger_over_navet_i_card_og_under_trykket_i_print():
+    kort = generate_faceplate(kapasitetstrinn=BKK, variant="card")
+    assert kort.index('id="riflet-felt"') > kort.index(
+        'id="viser-rod"'
+    ), "plasten skal ligge foran navet og viserroettene"
+    trykk = generate_faceplate(kapasitetstrinn=BKK, variant="print")
+    assert trykk.index('id="riflet-felt"') < trykk.index(
+        'id="hovedmerker"'
+    ), "trykkvarianten har feltet som flat bunnflate"
+
+
+def test_kabinettet_er_buet_ikke_et_rett_kvadrat():
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
+    kabinett = _med_id(rot, "kabinett")
+    assert kabinett is not None
+    bane = kabinett.get("d", "")
+    assert bane.count("Q") >= 5, "omrisset skal ha buet overkant og kurvede hjoerner"
+    punkter = _punkter(bane)
+    assert min(y for _, y in punkter) < 44, "overkanten skal bue oppover midt paa"
+
+
 def test_visere_hviler_paa_null_kw():
     rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
     for ident in ("viser-rod", "viser-svart", "slepemerke"):
