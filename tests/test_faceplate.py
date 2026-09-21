@@ -1,4 +1,4 @@
-"""Tester for SVG-generatoren til GEHA-METER-skiven."""
+"""Tester for SVG-generatoren til skivene."""
 
 from __future__ import annotations
 
@@ -16,10 +16,16 @@ from custom_components.effektvakt.faceplate import (
     PALETT,
     R_HOVEDMERKE,
     R_SKALA,
+    STILER,
     VINKEL_START,
     VINKEL_SVEIP,
+    Skala,
+    _delstreker,
+    _stigehovedtall,
     generate_faceplate,
+    lag_skala,
     normaliser_maks_kw,
+    tilgjengelige_stiler,
     vinkel_for_kw,
 )
 
@@ -56,14 +62,16 @@ def _kontrast(hex_a: str, hex_b: str) -> float:
 def test_alle_dso_gir_gyldig_xml():
     assert len(KAPASITETSTRINN_PER_DSO) >= 60, "Forventer at hele DSO-tabellen er lastet"
     for dso_id, info in KAPASITETSTRINN_PER_DSO.items():
-        for variant in ("card", "print"):
-            svg = generate_faceplate(
-                kapasitetstrinn=info["kapasitetstrinn"],
-                variant=variant,
-                dso_navn=info["navn"],
-            )
-            rot = _rot(svg)
-            assert rot.tag == f"{SVG_NS}svg", f"{dso_id}/{variant}: feil rot-element"
+        for stil in STILER:
+            for variant in ("card", "print"):
+                svg = generate_faceplate(
+                    kapasitetstrinn=info["kapasitetstrinn"],
+                    variant=variant,
+                    dso_navn=info["navn"],
+                    stil=stil,
+                )
+                rot = _rot(svg)
+                assert rot.tag == f"{SVG_NS}svg", f"{dso_id}/{stil}/{variant}: feil rot-element"
 
 
 def test_rot_har_geometrikontrakten():
@@ -142,12 +150,7 @@ def test_viserspissene_naar_fram_til_skalaen():
 def test_rod_viser_peker_paa_riktig_merke():
     """Ved 6 kW skal spissen ligge paa 6-merket, ikke ved siden av."""
     rot = _rot(generate_faceplate(kapasitetstrinn=BKK, maks_kw=15))
-    merker = _med_id(rot, "hovedmerker")
-    assert merker is not None
-    # Hvert hovedmerke er to punkter: indre og ytre ende av samme radielle strek.
-    punkter = _punkter(merker.get("d", ""))
-    # Koordinatene er avrundet til to desimaler i SVG-en, saa endene spriker litt.
-    merkevinkler = sorted({round(_polar_av(*p)[0], 2) for p in punkter})
+    merkevinkler = _merkevinkler(rot)
     assert len(merkevinkler) == 6
 
     for kw, forventet in ((0.0, -50.0), (6.0, -10.0), (15.0, 50.0)):
@@ -166,18 +169,136 @@ def test_rod_viser_peker_paa_riktig_merke():
     assert _polar_av(*rotert)[0] == pytest.approx(-10.0, abs=0.01)
 
 
-def test_markorene_ligger_utenfor_viserens_sveip():
-    """Symbolet og klassemerket maa ikke dekkes av viseren, verken i hvile eller ved fullt utslag."""
-    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
-    symbol = _med_id(rot, "stromtransformatorsymbol")
-    assert symbol is not None
-    x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", symbol.get("transform", "")))
-    ytterst = max(abs(VINKEL_START), abs(VINKEL_START + VINKEL_SVEIP))
-    assert abs(_polar_av(x, y)[0]) > ytterst + 8, "symbolet ligger inne i sveipet"
+def _vinkel_fra_kontrakten(rot: ET.Element, kw: float) -> float:
+    """Samme regnestykke som kortet gjør, bare ut fra data-attributtene."""
+    start = float(rot.get("data-vinkel-start", "0"))
+    sveip = float(rot.get("data-vinkel-sveip", "0"))
+    maks = float(rot.get("data-maks-kw", "0"))
+    min_kw = float(rot.get("data-skala-min-kw", "0"))
+    eksponent = float(rot.get("data-skala-eksponent", "1"))
+    klemt = max(kw, min_kw)
+    andel = (klemt**eksponent - min_kw**eksponent) / (maks**eksponent - min_kw**eksponent)
+    return start + andel * sveip
 
+
+def _merkevinkler(rot: ET.Element) -> list[float]:
+    """Vinkelen til hvert hovedmerke, slaatt sammen fra de to endene av streken.
+
+    Koordinatene er avrundet til to desimaler i SVG-en, saa endene av samme
+    strek spriker noen hundredeler.
+    """
+    merker = _med_id(rot, "hovedmerker")
+    assert merker is not None
+    vinkler = sorted(_polar_av(*punkt)[0] for punkt in _punkter(merker.get("d", "")))
+    grupper: list[list[float]] = []
+    for vinkel in vinkler:
+        if grupper and vinkel - grupper[-1][-1] < 0.05:
+            grupper[-1].append(vinkel)
+        else:
+            grupper.append([vinkel])
+    return [sum(gruppe) / len(gruppe) for gruppe in grupper]
+
+
+def test_avlesningen_stemmer_i_alle_stiler():
+    """Viseren rotert til et hovedtall skal peke paa det merket, ogsaa paa komprimert skala."""
+    for navn, stil in STILER.items():
+        svg = generate_faceplate(kapasitetstrinn=BKK, stil=navn)
+        rot = _rot(svg)
+        skala = lag_skala(stil, BKK, 15)
+        merkevinkler = _merkevinkler(rot)
+        assert len(merkevinkler) == len(skala.hovedtall)
+
+        spiss = _viserspiss(rot, "viser-rod")
+        for kw in skala.hovedtall:
+            fra_kontrakten = _vinkel_fra_kontrakten(rot, kw)
+            forventet = skala.vinkel(kw)
+            assert fra_kontrakten == pytest.approx(forventet, abs=1e-9), f"{navn}: kontrakten spriker"
+            radianer = math.radians(fra_kontrakten)
+            dx, dy = spiss[0] - NAV_X, spiss[1] - NAV_Y
+            rotert = (
+                NAV_X + dx * math.cos(radianer) - dy * math.sin(radianer),
+                NAV_Y + dx * math.sin(radianer) + dy * math.cos(radianer),
+            )
+            traff = min(abs(_polar_av(*rotert)[0] - merke) for merke in merkevinkler)
+            assert traff == pytest.approx(0.0, abs=0.02), f"{navn}: viseren peker ikke paa {kw} kW"
+
+
+def test_komprimert_skala_er_trykket_sammen_mot_toppen():
+    for navn, stil in STILER.items():
+        if stil.eksponent >= 1.0:
+            continue
+        skala = lag_skala(stil, BKK, 15)
+        nederst = skala.hovedtall[1] - skala.hovedtall[0]
+        overst = skala.hovedtall[-1] - skala.hovedtall[-2]
+        assert overst > nederst, f"{navn}: toppen skal romme flere kW per grad enn bunnen"
+        assert skala.min_kw > 0, f"{navn}: skalaen skal starte paa foerste terskel"
+
+
+def test_stilregisteret_er_eksponert():
+    stiler = tilgjengelige_stiler()
+    assert set(stiler) == set(STILER)
+    assert all(visningsnavn for visningsnavn in stiler.values())
+    for navn in stiler:
+        assert _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn)).get("data-stil") == navn
+
+
+def test_skala_uten_terskler_starter_paa_null():
+    for navn in STILER:
+        rot = _rot(generate_faceplate(kapasitetstrinn=[], stil=navn))
+        assert rot.get("data-skala-min-kw") == "0", f"{navn}: uten terskler finnes ingen startverdi"
+
+
+def test_vinkel_for_kw_avviser_ugyldig_spenn():
+    with pytest.raises(ValueError, match="maa vaere stoerre enn"):
+        vinkel_for_kw(5, 2, min_kw=3)
+
+
+def test_gjerdene_i_skalautledningen():
+    """Vaktene som holder en framtidig stil fra aa lage ulesbare merker."""
+    # Siste stigeverdi for naer toppen: da faller den ut til fordel for toppen.
+    assert _stigehovedtall(2.0, 12.5, 0.5)[-2:] == (10.0, 12.5)
+    # Et hovedintervall som er for trangt til delstreker faar ingen.
+    trang = Skala(min_kw=0.0, maks_kw=15.0, eksponent=1.0, hovedtall=(14.9, 15.0))
+    assert _delstreker(trang, "steg") == []
+
+
+def test_ukjent_stil_avvises():
+    with pytest.raises(ValueError, match="Ukjent stil"):
+        generate_faceplate(kapasitetstrinn=BKK, stil="pluss")
+
+
+def _avstand_til_sveipekanten(x: float, y: float) -> float:
+    """Korteste avstand fra et punkt til viserens ytterstillinger."""
+    vinkel, radius = _polar_av(x, y)
+    ytterkanter = (VINKEL_START, VINKEL_START + VINKEL_SVEIP)
+    if min(ytterkanter) <= vinkel <= max(ytterkanter):
+        return 0.0
+    return min(radius * abs(math.sin(math.radians(vinkel - kant))) for kant in ytterkanter)
+
+
+def test_ikonrekken_ligger_utenfor_viserens_sveip():
+    """Symbolene maa ikke dekkes av viseren, verken i hvile eller ved fullt utslag."""
+    for navn, stil in STILER.items():
+        rot = _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn))
+        for symbol in stil.symboler:
+            element = _med_id(rot, f"symbol-{symbol.art}")
+            assert element is not None, f"{navn}: mangler symbol-{symbol.art}"
+            x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", element.get("transform", "")))
+            avstand = _avstand_til_sveipekanten(x, y)
+            assert avstand > 30, f"{navn}/{symbol.art} ligger {avstand:.0f} fra viserens bane"
+
+
+def test_dreiejernsymbolet_finnes_i_alle_stiler():
+    for navn in STILER:
+        rot = _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn))
+        assert _med_id(rot, "symbol-dreiejern") is not None, f"{navn}: mangler dreiejernsymbolet"
+
+
+def test_klassemerket_skrives_med_komma():
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
     kl = next(e for e in rot.iter(f"{SVG_NS}text") if (e.text or "").startswith("KL"))
-    assert kl.text == "KL.1,5", "klassemerket skrives med komma"
-    assert abs(_polar_av(float(kl.get("x", "0")), float(kl.get("y", "0")))[0]) > ytterst + 8
+    assert kl.text == "KL.1,5"
+    assert _avstand_til_sveipekanten(float(kl.get("x", "0")), float(kl.get("y", "0"))) > 30
 
 
 def test_skruen_sitter_under_navet_der_viseren_aldri_kommer():
@@ -282,11 +403,19 @@ def test_ukjent_variant_avvises():
 
 
 def test_alle_farger_kommer_fra_paletten():
-    tillatt = set(PALETT.values())
-    for variant in ("card", "print"):
-        svg = generate_faceplate(kapasitetstrinn=BKK, variant=variant, dso_navn="BKK")
-        for farge in re.findall(r"#[0-9a-fA-F]{3,8}", svg):
-            assert farge in tillatt, f"{variant}: hardkodet farge {farge} utenfor paletten"
+    for navn, stil in STILER.items():
+        tillatt = set(PALETT.values()) | set(stil.palett.values())
+        for variant in ("card", "print"):
+            svg = generate_faceplate(kapasitetstrinn=BKK, variant=variant, dso_navn="BKK", stil=navn)
+            for farge in re.findall(r"#[0-9a-fA-F]{3,8}", svg):
+                assert farge in tillatt, f"{navn}/{variant}: hardkodet farge {farge} utenfor paletten"
+
+
+def test_stilpalettene_har_maalt_kontrast():
+    for navn, stil in STILER.items():
+        emalje = stil.palett.get("emalje", PALETT["emalje"])
+        assert _kontrast(PALETT["trykk"], emalje) >= 7.0, f"{navn}: trykket må være lesbart"
+        assert _kontrast(PALETT["viserrod"], emalje) >= 3.0, f"{navn}: viserrød må skille seg ut"
 
 
 def test_palett_har_maalt_kontrast():

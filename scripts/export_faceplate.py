@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Eksporter GEHA-METER-skiven til SVG for trykk og CAD.
+"""Eksporter skiven til SVG for trykk og CAD.
 
 Skiven er 100 mm i faktisk størrelse: viewBox 1000x1000 der én enhet er 0,1 mm,
 så filen kan tas rett inn i CAD med kjent skala. Teksten ligger som ekte tekst,
@@ -10,6 +10,9 @@ Bruk:
     python3 scripts/export_faceplate.py --dso bkk --out bkk.svg
     python3 scripts/export_faceplate.py --dso bkk --png
     python3 scripts/export_faceplate.py --dso sygnir --maks-kw 30 --variant card
+    python3 scripts/export_faceplate.py --dso bkk --stil gossen
+
+Stilene ligger i faceplate.STILER, saa en ny skive dukker opp i --hjelp av seg selv.
 """
 
 from __future__ import annotations
@@ -106,8 +109,8 @@ def skriv_liste(tabell: dict) -> None:
         print(f"  {dso_id:<{bredde}}  {info['navn']} ({info['prisomrade']}, {terskler} trinn)")
 
 
-def standard_filnavn(dso_id: str, variant: str) -> Path:
-    return Path(f"geha-meter-{dso_id}-{variant}.svg")
+def standard_filnavn(dso_id: str, variant: str, stilnavn: str = "geha-meter") -> Path:
+    return Path(f"{stilnavn.lower()}-{dso_id}-{variant}.svg")
 
 
 def til_png(svg_sti: Path) -> Path:
@@ -132,10 +135,10 @@ def til_png(svg_sti: Path) -> Path:
     return png_sti
 
 
-def _bygg_parser() -> argparse.ArgumentParser:
+def _bygg_parser(stiler: dict[str, str]) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="export_faceplate.py",
-        description="Eksporter GEHA-METER-skiven til SVG for trykk og CAD.",
+        description="Eksporter skiven til SVG for trykk og CAD.",
         epilog="SVG-en er 100 mm i faktisk størrelse. Konverter tekst til baner før trykk.",
     )
     parser.add_argument("--dso", help="DSO-id, for eksempel bkk. Se --liste.")
@@ -146,17 +149,23 @@ def _bygg_parser() -> argparse.ArgumentParser:
         default="print",
         help="print gir flate farger uten visere (standard), card gir visere og plastdeksel",
     )
-    parser.add_argument("--out", type=Path, help="Sti til SVG-filen (standard geha-meter-<dso>-<variant>.svg)")
+    stilhjelp = ", ".join(f"{nokkel} ({navn})" for nokkel, navn in stiler.items())
+    parser.add_argument(
+        "--stil",
+        choices=list(stiler),
+        default=next(iter(stiler)),
+        help=f"Skivevariant: {stilhjelp}",
+    )
+    parser.add_argument("--out", type=Path, help="Sti til SVG-filen (standard <stil>-<dso>-<variant>.svg)")
     parser.add_argument("--liste", action="store_true", help="Vis tilgjengelige DSO-id-er og avslutt")
     parser.add_argument("--png", action="store_true", help="Render også en PNG med rsvg-convert")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _bygg_parser()
-    args = parser.parse_args(argv)
-
     tabell, faceplate = last_moduler()
+    parser = _bygg_parser(faceplate.tilgjengelige_stiler())
+    args = parser.parse_args(argv)
 
     if args.liste:
         skriv_liste(tabell)
@@ -187,14 +196,16 @@ def main(argv: list[str] | None = None) -> int:
         maks_kw=maks,
         variant=args.variant,
         dso_navn=info["navn"],
+        stil=args.stil,
     )
 
-    ut = args.out or standard_filnavn(dso_id, args.variant)
+    stilnavn = faceplate.tilgjengelige_stiler()[args.stil]
+    ut = args.out or standard_filnavn(dso_id, args.variant, stilnavn)
     ut.parent.mkdir(parents=True, exist_ok=True)
     ut.write_text(svg, encoding="utf-8")
 
     synlige = sum(1 for terskel, _ in info["kapasitetstrinn"] if terskel <= maks)
-    print(f"Skrev {ut} ({info['navn']}, {maks:g} kW, {args.variant}, {synlige} terskler på skiven)")
+    print(f"Skrev {ut} ({info['navn']}, {stilnavn}, {maks:g} kW, {args.variant}, {synlige} terskler på skiven)")
     if maks != args.maks_kw:
         print(f"Skalaen ble rundet opp fra {args.maks_kw:g} til {maks:g} kW så hovedtallene forblir hele.")
 

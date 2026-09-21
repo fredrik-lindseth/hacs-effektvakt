@@ -1,4 +1,4 @@
-"""SVG-generator for GEHA-METER-skiven.
+"""SVG-generator for skiven paa effektmaaleren.
 
 Ren modul uten Home Assistant-import, slik at den kan brukes tre steder:
 dashboard-kortet (som roterer visere i SVG-en), eksportscriptet for fysisk
@@ -7,12 +7,17 @@ slik at kortet regner ut viservinkler uten aa duplisere skalaen.
 
 Koordinatsystemet er viewBox 0 0 1000 1000 der en enhet er 0,1 mm paa en
 100 mm plate, saa filen kan tas rett inn i CAD med kjent skala.
+
+Skivene ligger i STILER. En stil er en oppfoering med skalaform, hovedtall-
+regel, tekstblokk, bunnfelt, palett og kabinettdetaljer, saa en ny skive er
+en ny oppfoering og ikke en ny gren gjennom filen.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
-from typing import Final, Literal
+from typing import Final, Literal, NamedTuple
 from xml.sax.saxutils import escape
 
 Variant = Literal["card", "print"]
@@ -29,7 +34,7 @@ MAKS_KW_KVANT: Final = 15.0
 
 # --- Geometri (intern tegning) -------------------------------------------
 #
-# Tre konsentriske lag utenfra og inn, som paa originalen: kr-band, hovedtall,
+# Tre konsentriske lag utenfra og inn, som paa originalene: kr-band, hovedtall,
 # delstreker. Tallene ligger altsaa utenfor buen, ikke inni den.
 
 R_SKALA: Final = 440.0  # buen viserspissen naar
@@ -56,32 +61,28 @@ KABINETT_TOPP: Final = 44.0
 KABINETT_HJORNE: Final = 36.0
 KABINETT_BUE: Final = 34.0
 
-# Den prismatiske plasten dekker nedre del av kabinettet og begynner rett
-# under GEHA-METER. Alt som skal leses ligger over den. Paa originalen ligger
-# navet og viserroettene bak plasten, saa card-varianten legger feltet over
-# dem med delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
-PRISME_TOPP: Final = 730.0
-PRISME_INNSLAG: Final = 32.0
-PRISME_BUNN: Final = 26.0
-PRISME_DEKK: Final = 0.34
-
-# Stroemtransformatorsymbolet og klassemerket staar i lommene mellom vifta,
-# viserens ytterstillinger og prismefeltet: utenfor sveipet (|vinkel| > 60 grader
-# fra navet) og over plasten, saa de er lesbare i alle viserstillinger.
-SYMBOL_X: Final = 136.0
-SYMBOL_Y: Final = 698.0
-KL_X: Final = 898.0
-
-SKRUE_Y: Final = 956.0
-SKRUE_R: Final = 13.0
+# Bunnfeltet dekker nedre del av kabinettet og begynner rett under
+# produsentlinjen. Alt som skal leses ligger over det. Paa originalene ligger
+# navet og viserroettene bak feltet, saa card-varianten legger det over dem med
+# delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
+FELT_INNSLAG: Final = 32.0
+FELT_BUNN: Final = 26.0
+FELT_DEKK: Final = 0.34
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
 HOVEDMERKER: Final = 6
 
+# Hovedtall-stigen for komprimerte skalaer: runde tall som blir glissnere der
+# skalaen trykkes sammen, slik instrumentmakerne gjorde det.
+TALLSTIGE: Final = (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0)
+MIN_TALLAVSTAND_GRADER: Final = 8.0
+DELSTREKSTIGE: Final = (0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0)
+MIN_DELSTREK_GRADER: Final = 1.6
+
 # --- Typografi ------------------------------------------------------------
 
 GROTESK: Final = "'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif"
-# Originalen har en bred, noektern bokstavform i KW, ikke en antikva med tykke
+# Originalene har en bred, noektern bokstavform i kW, ikke en antikva med tykke
 # seriffer. Slab der den finnes, ellers grotesk med vekt.
 SLAB: Final = f"Rockwell, 'Roboto Slab', 'Zilla Slab', {GROTESK}"
 
@@ -93,7 +94,8 @@ TEKST_KR_SPERRING: Final = 2.0
 #
 # Rollenavn, ikke fargenavn: kortets shadow-DOM definerer de samme rollene
 # som CSS custom properties. Kontrasten mot emalje er maalt (WCAG):
-# trykk 12,8:1, viserrod 5,9:1, krom-mork 3,2:1.
+# trykk 12,8:1, viserrod 5,9:1, krom-mork 3,2:1. Stiler overstyrer enkeltroller
+# i sin egen palett.
 
 PALETT: Final[dict[str, str]] = {
     "emalje": "#ece3d0",
@@ -108,6 +110,15 @@ PALETT: Final[dict[str, str]] = {
     "prisme-glans": "#eef0ec",
     "deksel-kant": "#8f8878",
     "deksel-glans": "#ffffff",
+    "deksel-gulning": "#d9c27f",
+}
+
+PALETT_GOSSEN: Final[dict[str, str]] = {
+    # Kaldere hvit skive; gulningen ligger i plasten, ikke i trykket.
+    "emalje": "#f0f1ed",
+    "emalje-slitt": "#e5e6e2",
+    "prisme-lys": "#d2d5d2",
+    "prisme-mork": "#a2a6a3",
 }
 
 
@@ -144,33 +155,232 @@ def normaliser_maks_kw(maks_kw: float) -> float:
     return math.ceil(maks_kw / MAKS_KW_KVANT) * MAKS_KW_KVANT
 
 
-def vinkel_for_kw(kw: float, maks_kw: float) -> float:
-    """Viservinkel for en effekt. Samme formel som kortet bruker."""
-    return VINKEL_START + (kw / maks_kw) * VINKEL_SVEIP
+def vinkel_for_kw(kw: float, maks_kw: float, *, min_kw: float = 0.0, eksponent: float = 1.0) -> float:
+    """Viservinkel for en effekt. Samme formel som kortet bruker.
+
+    Kortet leser min_kw og eksponent av data-attributtene paa rot-elementet og
+    regner det samme uttrykket, saa lineaere og komprimerte skalaer havner paa
+    samme sted i kort, trykk og test. eksponent 1 gir en lineaer skala.
+    """
+    if maks_kw <= min_kw:
+        raise ValueError(f"maks_kw {maks_kw} maa vaere stoerre enn min_kw {min_kw}")
+    klemt = max(kw, min_kw)
+    # math.pow framfor ** saa typen blir float og ikke Any.
+    spenn = math.pow(maks_kw, eksponent) - math.pow(min_kw, eksponent)
+    andel = (math.pow(klemt, eksponent) - math.pow(min_kw, eksponent)) / spenn
+    return VINKEL_START + andel * VINKEL_SVEIP
 
 
-def _hovedtall(maks_kw: float) -> list[float]:
-    steg = maks_kw / (HOVEDMERKER - 1)
-    return [i * steg for i in range(HOVEDMERKER)]
+class Skala(NamedTuple):
+    """Utledet skala for en konkret skive."""
+
+    min_kw: float
+    maks_kw: float
+    eksponent: float
+    hovedtall: tuple[float, ...]
+
+    def vinkel(self, kw: float) -> float:
+        return vinkel_for_kw(kw, self.maks_kw, min_kw=self.min_kw, eksponent=self.eksponent)
 
 
-def _tall_tekst(kw: float) -> str:
-    return _n(kw)
+class Tekstlinje(NamedTuple):
+    """En linje i tekstblokken. {dso}, {min} og {maks} fylles inn ved tegning."""
+
+    x: float
+    y: float
+    mal: str
+    storrelse: float
+    familie: str = GROTESK
+    vekt: str | None = None
+    sperring: float | None = None
+    anker: str = "middle"
 
 
-def _segmenter(
-    kapasitetstrinn: list[tuple[float, int]], maks_kw: float
-) -> list[tuple[float, float, int, float | None]]:
-    """Band mellom tersklene: (fra_kw, til_kw, kr, terskel_i_skala_eller_None)."""
+class Symbol(NamedTuple):
+    """Et merke i ikonrekken. Se _symbolbane for hva hvert av dem betyr."""
+
+    art: Literal["dreiejern", "veksel", "loddrett", "stjerne"]
+    x: float
+    y: float
+    verdi: str = ""
+
+
+class Bunnfelt(NamedTuple):
+    """Feltet nederst paa kabinettet."""
+
+    moenster: Literal["kryss", "riller"]
+    topp: float
+    skruer: tuple[float, ...]  # y-posisjoner i loddaksen
+    skrue_r: float
+
+
+class Stil(NamedTuple):
+    """En skivevariant. Ny skive er en ny oppfoering her, ikke en ny gren i koden."""
+
+    navn: str
+    eksponent: float
+    start_ved_forste_terskel: bool
+    hovedtall_regel: Literal["jevn", "stige"]
+    delstrek_regel: Literal["antall", "steg"]
+    bunnfelt: Bunnfelt
+    symboler: tuple[Symbol, ...]
+    tekst: tuple[Tekstlinje, ...]
+    palett: dict[str, str]
+    slitasje: bool
+    gulning: float
+
+
+STILER: Final[dict[str, Stil]] = {
+    "geha": Stil(
+        navn="GEHA-METER",
+        eksponent=1.0,
+        start_ved_forste_terskel=False,
+        hovedtall_regel="jevn",
+        delstrek_regel="antall",
+        bunnfelt=Bunnfelt(moenster="kryss", topp=730.0, skruer=(956.0,), skrue_r=13.0),
+        # GEHA-skiven har dreiejernsymbolet og klassemerket. Originalfotoet har
+        # noe gulaktig rett ved KL.1.5 som kan vaere en proevespenningsstjerne,
+        # men det er ikke lesbart nok til aa slaa fast, saa den er utelatt.
+        symboler=(Symbol("dreiejern", 124.0, 690.0),),
+        tekst=(
+            Tekstlinje(500, 92, "{dso}", 24, vekt="500", sperring=6),
+            Tekstlinje(500, 570, "KW", 86, familie=SLAB, vekt="700", sperring=10),
+            Tekstlinje(500, 644, "GEHA-METER", 34, vekt="600", sperring=8),
+            Tekstlinje(898, 698, "KL.1,5", 30, sperring=2, anker="end"),
+        ),
+        palett={},
+        slitasje=True,
+        gulning=0.0,
+    ),
+    "gossen": Stil(
+        navn="GOSSEN",
+        # Dreiejernskalaen paa originalen er trykket sammen mot toppen og
+        # starter ved foerste brukbare verdi, ikke ved null.
+        eksponent=0.5,
+        start_ved_forste_terskel=True,
+        hovedtall_regel="stige",
+        delstrek_regel="steg",
+        bunnfelt=Bunnfelt(moenster="riller", topp=770.0, skruer=(796.0, 838.0), skrue_r=18.0),
+        # Ikonrekken er delt i to fordi midten av skiven sveipes av viseren:
+        # maaleverk, stroemart og bruksstilling til venstre, klasse og
+        # proevespenning til hoeyre.
+        symboler=(
+            Symbol("dreiejern", 90.0, 706.0),
+            Symbol("veksel", 164.0, 706.0),
+            Symbol("loddrett", 216.0, 706.0),
+            Symbol("stjerne", 886.0, 706.0, verdi="2"),
+        ),
+        tekst=(
+            Tekstlinje(500, 556, "kW", 84, familie=SLAB, vekt="700", sperring=4),
+            Tekstlinje(500, 622, "100 mA", 34, vekt="500", sperring=4),
+            Tekstlinje(790, 706, "1,5", 28, sperring=2),
+            Tekstlinje(880, 750, "{dso}", 28, vekt="600", sperring=4, anker="end"),
+        ),
+        palett=PALETT_GOSSEN,
+        slitasje=False,
+        gulning=0.16,
+    ),
+}
+
+STILNAVN: Final = tuple(STILER)
+
+
+def tilgjengelige_stiler() -> dict[str, str]:
+    """Stil-id mot visningsnavn, for export-scriptet og kortets konfigurasjon."""
+    return {nokkel: stil.navn for nokkel, stil in STILER.items()}
+
+
+def _farge(rolle: str, stil: Stil | None = None) -> str:
+    if stil is not None and rolle in stil.palett:
+        return stil.palett[rolle]
+    return PALETT[rolle]
+
+
+def _forste_terskel(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> float:
+    for terskel, _ in kapasitetstrinn:
+        if math.isfinite(terskel) and 0 < terskel < maks_kw:
+            return terskel
+    return 0.0
+
+
+def _jevne_hovedtall(min_kw: float, maks_kw: float) -> tuple[float, ...]:
+    steg = (maks_kw - min_kw) / (HOVEDMERKER - 1)
+    return tuple(min_kw + i * steg for i in range(HOVEDMERKER))
+
+
+def _stigehovedtall(min_kw: float, maks_kw: float, eksponent: float) -> tuple[float, ...]:
+    """Runde tall fra stigen, med nok vinkelavstand til at de ikke kolliderer."""
+
+    def vinkel(kw: float) -> float:
+        return vinkel_for_kw(kw, maks_kw, min_kw=min_kw, eksponent=eksponent)
+
+    valgt = [min_kw]
+    for kandidat in TALLSTIGE:
+        if kandidat <= min_kw or kandidat >= maks_kw:
+            continue
+        if vinkel(kandidat) - vinkel(valgt[-1]) >= MIN_TALLAVSTAND_GRADER:
+            valgt.append(kandidat)
+    if vinkel(maks_kw) - vinkel(valgt[-1]) < MIN_TALLAVSTAND_GRADER and len(valgt) > 1:
+        valgt.pop()
+    valgt.append(maks_kw)
+    return tuple(valgt)
+
+
+def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> Skala:
+    """Utled skalaen av stilen og brukerens kapasitetstrinn."""
+    maks = normaliser_maks_kw(maks_kw)
+    min_kw = _forste_terskel(kapasitetstrinn, maks) if stil.start_ved_forste_terskel else 0.0
+    if stil.hovedtall_regel == "jevn":
+        hovedtall = _jevne_hovedtall(min_kw, maks)
+    else:
+        hovedtall = _stigehovedtall(min_kw, maks, stil.eksponent)
+    return Skala(min_kw=min_kw, maks_kw=maks, eksponent=stil.eksponent, hovedtall=hovedtall)
+
+
+def _delstreker(skala: Skala, regel: str) -> list[float]:
+    """kW-verdiene delstrekene skal staa paa.
+
+    "antall" deler hvert hovedintervall i like mange biter, som paa en lineaer
+    skala gir jevn avstand. "steg" velger minste steg fra stigen som fortsatt
+    gir lesbar avstand, saa strekene blir tette der skalaen er trukket ut og
+    glissne der den er trykket sammen.
+    """
+    verdier: list[float] = []
+    for fra, til in itertools.pairwise(skala.hovedtall):
+        spenn_grader = skala.vinkel(til) - skala.vinkel(fra)
+        if regel == "antall":
+            antall = DELSTREKER_PER_HOVEDMERKE + 1
+        else:
+            antall = 0
+            for steg in DELSTREKSTIGE:
+                kandidat = round((til - fra) / steg)
+                if kandidat < 2:
+                    continue
+                if spenn_grader / kandidat >= MIN_DELSTREK_GRADER:
+                    antall = kandidat
+                    break
+            if antall == 0:
+                continue
+        for i in range(1, antall):
+            verdier.append(fra + (til - fra) * i / antall)
+    return verdier
+
+
+def _segmenter(kapasitetstrinn: list[tuple[float, int]], skala: Skala) -> list[tuple[float, float, int, float | None]]:
+    """Band mellom tersklene: (fra_kw, til_kw, kr, terskel_i_skala_eller_None).
+
+    Naar skalaen starter over null (komprimerte stiler) faller trinnene under
+    startverdien utenfor skiven. Det er aerlig: skiven kan ikke vise dem.
+    """
     segmenter: list[tuple[float, float, int, float | None]] = []
-    fra = 0.0
+    fra = skala.min_kw
     for terskel, kr in kapasitetstrinn:
-        if fra >= maks_kw:
+        if fra >= skala.maks_kw:
             break
-        til = min(terskel, maks_kw) if math.isfinite(terskel) else maks_kw
+        til = min(terskel, skala.maks_kw) if math.isfinite(terskel) else skala.maks_kw
         if til <= fra:
             continue
-        i_skala = terskel if math.isfinite(terskel) and terskel <= maks_kw else None
+        i_skala = terskel if math.isfinite(terskel) and terskel <= skala.maks_kw else None
         segmenter.append((fra, til, kr, i_skala))
         fra = til
     return segmenter
@@ -191,10 +401,6 @@ def _tilpasset_storrelse(tekst: str, plass: float) -> float | None:
     return None
 
 
-def _farge(rolle: str) -> str:
-    return PALETT[rolle]
-
-
 # Versalhoeyden er om lag 0,7 em; halve den loefter grunnlinjen slik at y blir
 # den optiske midten. dominant-baseline er ikke brukt, for librsvg og nettlesere
 # behandler den ulikt, og da ville kortet og trykket sprike.
@@ -212,6 +418,7 @@ def _tekst(
     sperring: float | None = None,
     anker: str = "middle",
     rotasjon: float | None = None,
+    stil: Stil | None = None,
 ) -> str:
     """Tekst plassert etter optisk midte, ikke grunnlinje."""
     deler = [
@@ -222,7 +429,7 @@ def _tekst(
         deler.append(f' font-weight="{vekt}"')
     if sperring:
         deler.append(f' letter-spacing="{_n(sperring)}"')
-    deler.append(f' fill="{_farge("trykk")}" text-anchor="{anker}"')
+    deler.append(f' fill="{_farge("trykk", stil)}" text-anchor="{anker}"')
     if rotasjon is not None:
         deler.append(f' transform="rotate({_n(rotasjon)} {_n(x)} {_n(y_senter)})"')
     deler.append(f">{escape(innhold)}</text>")
@@ -248,24 +455,25 @@ def kabinettbane(innslag: float = 0.0) -> str:
     )
 
 
-def _plate(variant: Variant) -> list[str]:
-    """Emaljeplate i kabinettform med flat to-tone kromramme."""
+def _plate(variant: Variant, stil: Stil) -> list[str]:
+    """Skiveflaten i kabinettform med flat to-tone kromramme."""
     ut = [
-        f'<path id="kabinett" d="{kabinettbane()}" fill="{_farge("emalje")}"/>',
+        f'<path id="kabinett" d="{kabinettbane()}" fill="{_farge("emalje", stil)}"/>',
     ]
-    if variant == "card":
-        ut.extend(_slitasje())
+    if variant == "card" and stil.slitasje:
+        ut.extend(_slitasje(stil))
     ut.extend(
         [
-            f'<path d="{kabinettbane(RAMME_INNSLAG)}" fill="none" stroke="{_farge("krom-lys")}" stroke-width="12"/>',
+            f'<path d="{kabinettbane(RAMME_INNSLAG)}" fill="none"'
+            f' stroke="{_farge("krom-lys", stil)}" stroke-width="12"/>',
             f'<path d="{kabinettbane(RAMME_INNSLAG + 9)}" fill="none"'
-            f' stroke="{_farge("krom-mork")}" stroke-width="3"/>',
+            f' stroke="{_farge("krom-mork", stil)}" stroke-width="3"/>',
         ]
     )
     return ut
 
 
-def _slitasje() -> list[str]:
+def _slitasje(stil: Stil) -> list[str]:
     """Haandplasserte slitasjeflekker i slitt emalje. Ingen tilfeldighet, samme fil hver gang."""
     flekker = [
         (
@@ -278,7 +486,7 @@ def _slitasje() -> list[str]:
         ),
         ("M 604 452 q 84 -30 118 -6 q 26 18 -18 32 q -54 18 -96 4 q -30 -10 -4 -30 Z", 0.2),
     ]
-    ut = [f'<path d="{d}" fill="{_farge("emalje-slitt")}" opacity="{_n(dekk)}"/>' for d, dekk in flekker]
+    ut = [f'<path d="{d}" fill="{_farge("emalje-slitt", stil)}" opacity="{_n(dekk)}"/>' for d, dekk in flekker]
     skrammer = [
         ("M 214 318 q 96 46 186 34", 2.0, 0.28),
         ("M 660 828 q 74 -32 158 -18", 1.6, 0.22),
@@ -286,64 +494,64 @@ def _slitasje() -> list[str]:
         ("M 742 352 q 44 62 58 130", 1.8, 0.24),
     ]
     ut.extend(
-        f'<path d="{d}" fill="none" stroke="{_farge("skygge")}" stroke-width="{_n(bredde)}"'
+        f'<path d="{d}" fill="none" stroke="{_farge("skygge", stil)}" stroke-width="{_n(bredde)}"'
         f' stroke-linecap="round" opacity="{_n(dekk)}"/>'
         for d, bredde, dekk in skrammer
     )
     ut.append(
-        f'<path d="{kabinettbane(13)}" fill="none" stroke="{_farge("skygge")}" stroke-width="26" opacity="0.18"/>'
+        f'<path d="{kabinettbane(13)}" fill="none" stroke="{_farge("skygge", stil)}" stroke-width="26" opacity="0.18"/>'
     )
     return ut
 
 
-def _skala(maks_kw: float) -> list[str]:
+def _tall_tekst(kw: float) -> str:
+    return _n(kw).replace(".", ",")
+
+
+def _skala_tegning(skala: Skala, stil: Stil) -> list[str]:
     """Bue, hovedmerker, delstreker og hovedtall."""
     ut = [
         f'<path d="{_bue(R_SKALA, VINKEL_START, VINKEL_START + VINKEL_SVEIP)}" fill="none"'
-        f' stroke="{_farge("trykk")}" stroke-width="5"/>',
+        f' stroke="{_farge("trykk", stil)}" stroke-width="5"/>',
     ]
 
-    delsteg = VINKEL_SVEIP / ((HOVEDMERKER - 1) * (DELSTREKER_PER_HOVEDMERKE + 1))
-    fine: list[str] = []
-    antall_fine = (HOVEDMERKER - 1) * (DELSTREKER_PER_HOVEDMERKE + 1)
-    for i in range(antall_fine + 1):
-        if i % (DELSTREKER_PER_HOVEDMERKE + 1) == 0:
-            continue
-        vinkel = VINKEL_START + i * delsteg
-        fine.append(_radiell_strek(vinkel, R_SKALA - R_DELMERKE, R_SKALA))
-    ut.append(
-        f'<path id="delstreker" d="{" ".join(fine)}" fill="none" stroke="{_farge("trykk")}"'
-        ' stroke-width="3" stroke-linecap="butt"/>'
-    )
+    fine = [
+        _radiell_strek(skala.vinkel(kw), R_SKALA - R_DELMERKE, R_SKALA)
+        for kw in _delstreker(skala, stil.delstrek_regel)
+    ]
+    if fine:
+        ut.append(
+            f'<path id="delstreker" d="{" ".join(fine)}" fill="none" stroke="{_farge("trykk", stil)}"'
+            ' stroke-width="3" stroke-linecap="butt"/>'
+        )
 
-    grove = [_radiell_strek(vinkel_for_kw(kw, maks_kw), R_SKALA - R_HOVEDMERKE, R_SKALA) for kw in _hovedtall(maks_kw)]
+    grove = [_radiell_strek(skala.vinkel(kw), R_SKALA - R_HOVEDMERKE, R_SKALA) for kw in skala.hovedtall]
     ut.append(
-        f'<path id="hovedmerker" d="{" ".join(grove)}" fill="none" stroke="{_farge("trykk")}"'
+        f'<path id="hovedmerker" d="{" ".join(grove)}" fill="none" stroke="{_farge("trykk", stil)}"'
         ' stroke-width="8" stroke-linecap="butt"/>'
     )
 
-    for kw in _hovedtall(maks_kw):
-        vinkel = vinkel_for_kw(kw, maks_kw)
-        x, y = _polar(vinkel, R_TALL)
-        ut.append(_tekst(x, y, _tall_tekst(kw), storrelse=56, vekt="600"))
+    for kw in skala.hovedtall:
+        x, y = _polar(skala.vinkel(kw), R_TALL)
+        ut.append(_tekst(x, y, _tall_tekst(kw), storrelse=56, vekt="600", stil=stil))
     return ut
 
 
-def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list[str]:
-    """Kapasitetstrinn: buesegment per trinn, radielle merker ved tersklene, kr/mnd under."""
-    segmenter = _segmenter(kapasitetstrinn, maks_kw)
+def _trinnband(kapasitetstrinn: list[tuple[float, int]], skala: Skala, stil: Stil) -> list[str]:
+    """Kapasitetstrinn: buesegment per trinn, radielle merker ved tersklene, kr/mnd utenfor."""
+    segmenter = _segmenter(kapasitetstrinn, skala)
     if not segmenter:
         return []
 
     ut = ['<g id="trinnband">']
     terskler: list[float] = []
     for indeks, (fra, til, kr, terskel) in enumerate(segmenter):
-        v_fra = vinkel_for_kw(fra, maks_kw)
-        v_til = vinkel_for_kw(til, maks_kw)
+        v_fra = skala.vinkel(fra)
+        v_til = skala.vinkel(til)
         ut.append(
             f'<g id="trinn-{indeks}" data-kw-fra="{_n(fra)}" data-kw-til="{_n(til)}" data-kr="{kr}">'
             f'<path class="trinn-bue" d="{_bue(R_TRINN_BUE, v_fra + 0.7, v_til - 0.7)}" fill="none"'
-            f' stroke="{_farge("trykk")}" stroke-width="9" stroke-linecap="butt"/>'
+            f' stroke="{_farge("trykk", stil)}" stroke-width="9" stroke-linecap="butt"/>'
         )
         tekst = f"{kr} KR"
         buelengde = math.radians(v_til - v_fra) * R_TRINN_TEKST
@@ -360,6 +568,7 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list
                     vekt="600",
                     sperring=TEKST_KR_SPERRING,
                     rotasjon=v_midt,
+                    stil=stil,
                 )
             )
         ut.append("</g>")
@@ -367,56 +576,106 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> list
             terskler.append(terskel)
 
     if terskler:
-        merker = [_radiell_strek(vinkel_for_kw(kw, maks_kw), R_TRINN_INN, R_TRINN_UT) for kw in terskler]
+        merker = [_radiell_strek(skala.vinkel(kw), R_TRINN_INN, R_TRINN_UT) for kw in terskler]
         ut.append(
             f'<path id="trinnmerker" d="{" ".join(merker)}" fill="none"'
-            f' stroke="{_farge("trykk")}" stroke-width="6" stroke-linecap="butt"/>'
+            f' stroke="{_farge("trykk", stil)}" stroke-width="6" stroke-linecap="butt"/>'
         )
     ut.append("</g>")
     return ut
 
 
-def _stromtransformatorsymbol() -> list[str]:
-    """Symbolet nede til venstre: instrumentet er drevet av en magnetisk stroemtransformator.
+def _stjernebane(ytre: float) -> str:
+    """Femtakket stjerne, spiss opp."""
+    indre = ytre * 0.42
+    punkter: list[str] = []
+    for i in range(10):
+        radius = ytre if i % 2 == 0 else indre
+        vinkel = math.radians(-90 + i * 36)
+        punkter.append(f"{_n(radius * math.cos(vinkel))} {_n(radius * math.sin(vinkel))}")
+    return "M " + " L ".join(punkter) + " Z"
 
-    Tegnet som stroemtransformatorsymbolet fra enlinjeskjema, altsaa primaerlederen
-    som gaar tvers gjennom en ring. Den eksakte skalamarkoeren i IEC 60051 tabell 6
-    ligger bak betalingsmur og er ikke verifisert; avviker originalen, er det denne
-    funksjonen som skal rettes.
+
+def _symbolbane(symbol: Symbol, stil: Stil) -> str:
+    """Ett merke fra ikonrekken.
+
+    Betydningene er fra Fredrik og en kollega som kjenner instrumentene. IEC
+    60051 ligger bak betalingsmur, saa dette lar seg ikke slaa opp fritt, og da
+    maa det staa her:
+
+    dreiejern: opp-ned U med loddrett strek inni, altsaa spolen over
+        jernkjernen. Maaleverket i originalene. Dreiejern maaler stroem og er
+        ikke-lineaert, og det er derfor Gossen-skalaen er trykket sammen mot
+        toppen. Vaar fysiske utgave planlegges med dreispoleverk, siden det er
+        det som lar seg drive fra DC, saa skiven baerer symbolet til et annet
+        verk enn det den sitter paa. Det er med vilje: skiven er en kopi.
+    veksel: tilde, altsaa vekselstroem.
+    loddrett: ⊥, instrumentet skal henge loddrett.
+    stjerne: isolasjonsproevespenning, og tallet inni er antall kV.
     """
-    x0, y0 = SYMBOL_X, SYMBOL_Y
+    blekk = _farge("trykk", stil)
+    if symbol.art == "dreiejern":
+        return (
+            '<path d="M -36 32 L -36 -6 A 36 36 0 0 1 36 -6 L 36 32" fill="none"'
+            f' stroke="{blekk}" stroke-width="11" stroke-linecap="butt"/>'
+            f'<rect x="-6" y="-14" width="12" height="46" fill="{blekk}"/>'
+        )
+    if symbol.art == "veksel":
+        return (
+            '<path d="M -24 6 C -16 -16 -8 -16 0 0 C 8 16 16 16 24 -6" fill="none"'
+            f' stroke="{blekk}" stroke-width="6" stroke-linecap="round"/>'
+        )
+    if symbol.art == "loddrett":
+        return f'<path d="M 0 -24 V 20 M -20 20 H 20" fill="none" stroke="{blekk}" stroke-width="6"/>'
+    tall = _tekst(0, 2, symbol.verdi, storrelse=26, vekt="600", stil=stil)
+    return f'<path d="{_stjernebane(30)}" fill="none" stroke="{blekk}" stroke-width="5" stroke-linejoin="round"/>{tall}'
+
+
+def _symboler(stil: Stil) -> list[str]:
     return [
-        f'<g id="stromtransformatorsymbol" transform="translate({_n(x0)} {_n(y0)})">'
-        f'<path d="M -66 0 L 66 0" stroke="{_farge("trykk")}" stroke-width="7" stroke-linecap="butt"/>'
-        f'<circle r="27" fill="none" stroke="{_farge("trykk")}" stroke-width="6"/>'
-        "</g>"
+        f'<g id="symbol-{symbol.art}" transform="translate({_n(symbol.x)} {_n(symbol.y)})">'
+        f"{_symbolbane(symbol, stil)}</g>"
+        for symbol in stil.symboler
     ]
 
 
-def _trykk_tekst(dso_navn: str | None) -> list[str]:
-    """Trykket paa skiven.
+def _trykk_tekst(stil: Stil, skala: Skala, dso_navn: str | None) -> list[str]:
+    """Tekstblokken fra stilregisteret.
 
-    KL.1,5 er noeyaktighetsklassen: inntil 1,5 prosent feilmargin paa fullt utslag.
+    Klassemerket (KL.1,5 paa GEHA, 1,5 i ikonrekken paa Gossen) er
+    noeyaktighetsklassen: inntil 1,5 prosent feil paa fullt utslag. Gossen-skiven har i tillegg
+    stroemmerkingen fra originalen ("100 mA"), som hoerer til maaleverket den
+    satt paa; bytt den om det fysiske bygget faar et annet verk.
 
-    Originalinstrumentet maaler stroem, ikke effekt. Skalaen er trykket i kW under
-    en antatt spenning, derav "230V" og "43.4B/0.1A" paa originalskiven og derav
-    symbolet for stroemtransformator. Den visningen glipper saa snart spenningen
-    avviker eller effektfaktoren ikke er 1. Var skive ser lik ut, men tallene bak
-    er ekte kW fra Home Assistant, saa vi arver ikke den feilkilden.
+    Originalinstrumentene maaler stroem, ikke effekt. Skalaen er trykket i kW
+    under en antatt spenning, derav "230V" og "43.4B/0.1A" paa originalskiven.
+    Den visningen glipper saa snart spenningen avviker eller effektfaktoren ikke
+    er 1. Vaare skiver ser like ut, men tallene bak er ekte kW fra Home
+    Assistant, saa vi arver ikke den feilkilden.
+
+    Symbolet og klassemerket staar i lommene mellom vifta, viserens
+    ytterstillinger og bunnfeltet, saa de er lesbare i alle viserstillinger.
     """
+    felter = {"dso": (dso_navn or "").upper(), "min": _tall_tekst(skala.min_kw), "maks": _tall_tekst(skala.maks_kw)}
     ut: list[str] = []
-    if dso_navn:
-        ut.append(_tekst(500, 92, dso_navn.upper(), storrelse=24, vekt="500", sperring=6))
-    ut.extend(
-        [
-            _tekst(500, 570, "KW", storrelse=86, familie=SLAB, vekt="700", sperring=10),
-            _tekst(500, 644, "GEHA-METER", storrelse=34, vekt="600", sperring=8),
-            # Begge markoerene ligger utenfor viserens sveip (|vinkel| > 50 grader fra
-            # navet), ellers dekker viseren dem i hvile og ved fullt utslag.
-            _tekst(KL_X, SYMBOL_Y, "KL.1,5", storrelse=30, sperring=2, anker="end"),
-        ]
-    )
-    ut.extend(_stromtransformatorsymbol())
+    for linje in stil.tekst:
+        innhold = linje.mal.format(**felter)
+        if not innhold.strip():
+            continue
+        ut.append(
+            _tekst(
+                linje.x,
+                linje.y,
+                innhold,
+                storrelse=linje.storrelse,
+                familie=linje.familie,
+                vekt=linje.vekt,
+                sperring=linje.sperring,
+                anker=linje.anker,
+                stil=stil,
+            )
+        )
+    ut.extend(_symboler(stil))
     return ut
 
 
@@ -441,82 +700,114 @@ def _diagonaler(x0: float, y0: float, x1: float, y1: float, avstand: float, stig
     return " ".join(linjer)
 
 
-def _riflet_felt(variant: Variant) -> list[str]:
-    """Prismatisk plastfelt over nederste halvdel: soelvaktig, kryssrutet, to skruer i loddrett akse.
+def _krysset(venstre: float, topp: float, hoyre: float, bunn: float, stil: Stil, moenster: float) -> list[str]:
+    """Kryssrutet prisme, som paa GEHA."""
+    avstand = 26.0
+    return [
+        # Lyset faller skraatt, saa den ene diagonalen staar sterkere enn den andre.
+        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, 1)}" fill="none"'
+        f' stroke="{_farge("prisme-mork", stil)}" stroke-width="3" opacity="{_n(0.75 * moenster)}"/>',
+        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, -1)}" fill="none"'
+        f' stroke="{_farge("prisme-mork", stil)}" stroke-width="2" opacity="{_n(0.45 * moenster)}"/>',
+        f'<path d="{_diagonaler(venstre + avstand / 2, topp, hoyre, bunn, avstand, 1)}" fill="none"'
+        f' stroke="{_farge("prisme-glans", stil)}" stroke-width="1.5" opacity="{_n(0.6 * moenster)}"/>',
+    ]
 
-    Card-varianten er delvis gjennomskinnelig og tegnes etter visere og nav, slik at
-    navkapselen og viserroettene skimtes bak plasten som paa originalen. Trykkvarianten
-    er flat og ugjennomsiktig og ligger under trykket.
+
+def _riller(venstre: float, topp: float, hoyre: float, bunn: float, stil: Stil, moenster: float) -> list[str]:
+    """Tette loddrette riller, som paa Gossen-dekselet."""
+    periode = 22.0
+    hoyde = bunn - topp
+    mork: list[str] = []
+    glans: list[str] = []
+    x = venstre
+    while x + periode * 0.5 <= hoyre:
+        mork.append(f"M {_n(x)} {_n(topp)} h {_n(periode * 0.5)} v {_n(hoyde)} h {_n(-periode * 0.5)} Z")
+        glans.append(f"M {_n(x + periode * 0.62)} {_n(topp)} v {_n(hoyde)}")
+        x += periode
+    return [
+        f'<path d="{" ".join(mork)}" fill="{_farge("prisme-mork", stil)}" opacity="{_n(0.55 * moenster)}"/>',
+        f'<path d="{" ".join(glans)}" fill="none" stroke="{_farge("prisme-glans", stil)}"'
+        f' stroke-width="2" opacity="{_n(0.7 * moenster)}"/>',
+    ]
+
+
+def _bunnfelt(stil: Stil, variant: Variant) -> list[str]:
+    """Feltet nederst: kryssrutet prisme eller loddrette riller, med skruer i loddaksen.
+
+    Card-varianten er delvis gjennomskinnelig og tegnes etter visere og nav, slik
+    at navkapselen og viserroettene skimtes bak plasten som paa originalene.
+    Trykkvarianten er flat og ugjennomsiktig og ligger under trykket.
     """
-    topp = PRISME_TOPP
-    venstre = PRISME_INNSLAG
-    hoyre = VIEWBOX - PRISME_INNSLAG
-    bunn = VIEWBOX - PRISME_BUNN
+    felt = stil.bunnfelt
+    topp = felt.topp
+    venstre = FELT_INNSLAG
+    hoyre = VIEWBOX - FELT_INNSLAG
+    bunn = VIEWBOX - FELT_BUNN
     bredde = hoyre - venstre
     hoyde = bunn - topp
-    avstand = 26.0
 
-    # Plasten slipper gjennom det som ligger bak, men skraveringen skal fortsatt
+    # Plasten slipper gjennom det som ligger bak, men moensteret skal fortsatt
     # sees. Derfor daemper card-varianten flaten mer enn selve moensteret.
     kort = variant == "card"
-    flate = PRISME_DEKK if kort else 1.0
+    flate = FELT_DEKK if kort else 1.0
     moenster = 0.8 if kort else 1.0
     ut = [
         '<g id="riflet-felt">',
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}"'
-        f' height="{_n(hoyde)}" fill="{_farge("prisme-lys")}" opacity="{_n(flate)}"/>',
-        # Lyset faller skraatt, saa den ene diagonalen staar sterkere enn den andre.
-        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, 1)}" fill="none"'
-        f' stroke="{_farge("prisme-mork")}" stroke-width="3" opacity="{_n(0.75 * moenster)}"/>',
-        f'<path d="{_diagonaler(venstre, topp, hoyre, bunn, avstand, -1)}" fill="none"'
-        f' stroke="{_farge("prisme-mork")}" stroke-width="2" opacity="{_n(0.45 * moenster)}"/>',
-        f'<path d="{_diagonaler(venstre + avstand / 2, topp, hoyre, bunn, avstand, 1)}" fill="none"'
-        f' stroke="{_farge("prisme-glans")}" stroke-width="1.5" opacity="{_n(0.6 * moenster)}"/>',
+        f' height="{_n(hoyde)}" fill="{_farge("prisme-lys", stil)}" opacity="{_n(flate)}"/>',
     ]
+    tegner = _krysset if felt.moenster == "kryss" else _riller
+    ut.extend(tegner(venstre, topp, hoyre, bunn, stil, moenster))
 
     # Innfelt: skyggekant oeverst, lys kant rett under, tynn omriss rundt hele.
-    ut.append(f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="5" fill="{_farge("skygge")}"/>')
     ut.append(
-        f'<rect x="{_n(venstre)}" y="{_n(topp + 5)}" width="{_n(bredde)}" height="3" fill="{_farge("prisme-glans")}"/>'
+        f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="5" fill="{_farge("skygge", stil)}"/>'
+    )
+    ut.append(
+        f'<rect x="{_n(venstre)}" y="{_n(topp + 5)}" width="{_n(bredde)}" height="3"'
+        f' fill="{_farge("prisme-glans", stil)}"/>'
     )
     ut.append(
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
-        f' stroke="{_farge("krom-mork")}" stroke-width="2" opacity="0.65"/>'
+        f' stroke="{_farge("krom-mork", stil)}" stroke-width="2" opacity="0.65"/>'
     )
-    # Skruen sitter under navkapselen i feltets loddrette midtakse, der viseren
-    # aldri kommer. Det er bare plass til en: navet ligger paa y=900 og
-    # kabinettkanten paa 974, saa den andre skruen fra originalen faar ikke plass.
-    ut.append(
-        f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(SKRUE_Y)})">'
-        f'<circle r="{_n(SKRUE_R)}" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="3"/>'
-        f'<rect x="{_n(-SKRUE_R + 3)}" y="-3" width="{_n(2 * SKRUE_R - 6)}" height="6" fill="{_farge("krom-mork")}"/>'
-        "</g>"
-    )
+    # Skruene staar i feltets loddrette midtakse, stablet over hverandre.
+    for skrue_y in felt.skruer:
+        r = felt.skrue_r
+        ut.append(
+            f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(skrue_y)})">'
+            f'<circle r="{_n(r)}" fill="{_farge("krom-lys", stil)}"'
+            f' stroke="{_farge("krom-mork", stil)}" stroke-width="3"/>'
+            f'<rect x="{_n(-r + 3)}" y="-3" width="{_n(2 * r - 6)}" height="6"'
+            f' fill="{_farge("krom-mork", stil)}"/>'
+            "</g>"
+        )
     ut.append("</g>")
     return ut
 
 
-def _hub(variant: Variant) -> list[str]:
+def _hub(variant: Variant, stil: Stil) -> list[str]:
     """Navkapsel som flate to-tone-ringer. Trykkvarianten markerer bare akselhullet."""
     if variant == "print":
         return [
             f'<g id="nav" transform="translate({_n(NAV_X)} {_n(NAV_Y)})">'
-            f'<circle r="{_n(HUB_R - 22)}" fill="none" stroke="{_farge("trykk")}" stroke-width="4"/>'
+            f'<circle r="{_n(HUB_R - 22)}" fill="none" stroke="{_farge("trykk", stil)}" stroke-width="4"/>'
             "</g>"
         ]
     return [
         f'<g id="nav" transform="translate({_n(NAV_X)} {_n(NAV_Y)})">'
-        f'<circle r="{_n(HUB_R)}" fill="{_farge("krom-mork")}"/>'
-        f'<circle r="{_n(HUB_R - 7)}" fill="{_farge("krom-lys")}"/>'
-        f'<circle r="{_n(HUB_R - 18)}" fill="{_farge("krom-mork")}"/>'
-        f'<circle r="{_n(HUB_R - 25)}" fill="{_farge("trykk")}"/>'
+        f'<circle r="{_n(HUB_R)}" fill="{_farge("krom-mork", stil)}"/>'
+        f'<circle r="{_n(HUB_R - 7)}" fill="{_farge("krom-lys", stil)}"/>'
+        f'<circle r="{_n(HUB_R - 18)}" fill="{_farge("krom-mork", stil)}"/>'
+        f'<circle r="{_n(HUB_R - 25)}" fill="{_farge("trykk", stil)}"/>'
         "</g>"
     ]
 
 
-def _visere(maks_kw: float) -> list[str]:
+def _visere(skala: Skala, stil: Stil) -> list[str]:
     """Visere i hvileposisjon. Kortet roterer dem om navet."""
-    hvile = vinkel_for_kw(0.0, maks_kw)
+    hvile = skala.vinkel(skala.min_kw)
     rot = f'transform="rotate({_n(hvile)} {_n(NAV_X)} {_n(NAV_Y)})"'
 
     slepe_topp = NAV_Y - R_SLEPE_INN
@@ -524,7 +815,7 @@ def _visere(maks_kw: float) -> list[str]:
     slepe = (
         f'<path id="slepemerke" {rot} d="M {_n(NAV_X)} {_n(slepe_topp)}'
         f' L {_n(NAV_X - 16)} {_n(slepe_bunn)} L {_n(NAV_X + 16)} {_n(slepe_bunn)} Z"'
-        f' fill="{_farge("trykk")}"/>'
+        f' fill="{_farge("trykk", stil)}"/>'
     )
 
     spiss = NAV_Y - R_VISER_SVART
@@ -532,7 +823,7 @@ def _visere(maks_kw: float) -> list[str]:
         f'<path id="viser-svart" {rot} d="M {_n(NAV_X)} {_n(spiss)}'
         f" L {_n(NAV_X + 5)} {_n(NAV_Y - 150)} L {_n(NAV_X + 9)} {_n(NAV_Y + 36)}"
         f' L {_n(NAV_X - 9)} {_n(NAV_Y + 36)} L {_n(NAV_X - 5)} {_n(NAV_Y - 150)} Z"'
-        f' fill="{_farge("trykk")}"/>'
+        f' fill="{_farge("trykk", stil)}"/>'
     )
 
     # Kile: bredest rett over navet, spiss tupp som naar inn i delstrek-baandet.
@@ -541,14 +832,14 @@ def _visere(maks_kw: float) -> list[str]:
         f'<path id="viser-rod" {rot} d="M {_n(NAV_X)} {_n(rod_spiss)}'
         f" L {_n(NAV_X + 30)} {_n(NAV_Y - 96)} L {_n(NAV_X + 15)} {_n(NAV_Y + 34)}"
         f' L {_n(NAV_X - 15)} {_n(NAV_Y + 34)} L {_n(NAV_X - 30)} {_n(NAV_Y - 96)} Z"'
-        f' fill="{_farge("viserrod")}"/>'
+        f' fill="{_farge("viserrod", stil)}"/>'
     )
     return [slepe, rod, svart]
 
 
-def _deksel() -> list[str]:
-    """Gjennomsiktig plastdeksel: avrundet rektangel med tynn synlig kant og korn."""
-    return [
+def _deksel(stil: Stil) -> list[str]:
+    """Gjennomsiktig plastdeksel i kabinettform, med tynn synlig kant og korn."""
+    ut = [
         "<defs>"
         '<filter id="korn" x="0" y="0" width="100%" height="100%">'
         '<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="stoy"/>'
@@ -557,14 +848,25 @@ def _deksel() -> list[str]:
         '<feComposite in="graa" in2="SourceGraphic" operator="in"/>'
         "</filter>"
         "</defs>",
-        f'<path d="{kabinettbane(6)}" fill="none" stroke="{_farge("deksel-kant")}" stroke-width="3" opacity="0.55"/>',
-        f'<path d="{kabinettbane(12)}" fill="none" stroke="{_farge("krom-lys")}" stroke-width="2" opacity="0.7"/>',
-        f'<path d="{kabinettbane(6)}" fill="{_farge("trykk")}" filter="url(#korn)" opacity="0.07"/>',
-        f'<path d="M 128 116 L 380 72" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="3"'
-        ' stroke-linecap="round" opacity="0.3"/>',
-        f'<path d="M 636 952 L 892 916" fill="none" stroke="{_farge("deksel-glans")}" stroke-width="2"'
-        ' stroke-linecap="round" opacity="0.22"/>',
     ]
+    if stil.gulning:
+        # Gulnet klar plast: gulningen ligger i dekselet, ikke i skiven.
+        ut.append(f'<path d="{kabinettbane(6)}" fill="{_farge("deksel-gulning", stil)}" opacity="{_n(stil.gulning)}"/>')
+    ut.extend(
+        [
+            f'<path d="{kabinettbane(6)}" fill="none"'
+            f' stroke="{_farge("deksel-kant", stil)}" stroke-width="{"5" if stil.gulning else "3"}"'
+            f' opacity="{"0.7" if stil.gulning else "0.55"}"/>',
+            f'<path d="{kabinettbane(12)}" fill="none"'
+            f' stroke="{_farge("krom-lys", stil)}" stroke-width="2" opacity="0.7"/>',
+            f'<path d="{kabinettbane(6)}" fill="{_farge("trykk", stil)}" filter="url(#korn)" opacity="0.07"/>',
+            f'<path d="M 128 116 L 380 72" fill="none" stroke="{_farge("deksel-glans", stil)}" stroke-width="3"'
+            ' stroke-linecap="round" opacity="0.3"/>',
+            f'<path d="M 636 952 L 892 916" fill="none" stroke="{_farge("deksel-glans", stil)}" stroke-width="2"'
+            ' stroke-linecap="round" opacity="0.22"/>',
+        ]
+    )
+    return ut
 
 
 def generate_faceplate(
@@ -573,6 +875,7 @@ def generate_faceplate(
     maks_kw: float = MAKS_KW_STANDARD,
     variant: Variant = "card",
     dso_navn: str | None = None,
+    stil: str = "geha",
 ) -> str:
     """Bygg hele skiven som SVG-streng.
 
@@ -582,18 +885,22 @@ def generate_faceplate(
         maks_kw: Skalaens toppverdi. Rundes opp til naermeste multiplum av 15.
         variant: "card" gir visere, slitasje og plastdeksel. "print" gir flate
             farger for fysisk trykk, uten deksel og uten visere.
-        dso_navn: Nettselskap trykt oeverst paa skiven.
+        dso_navn: Nettselskap trykt paa skiven.
+        stil: Nokkel i STILER. Se tilgjengelige_stiler().
 
     Returns:
         SVG-dokument som streng.
     """
     if variant not in {"card", "print"}:
         raise ValueError(f"Ukjent variant: {variant!r}")
+    if stil not in STILER:
+        raise ValueError(f"Ukjent stil: {stil!r}. Velg mellom {', '.join(STILER)}")
 
-    maks = normaliser_maks_kw(maks_kw)
+    valgt = STILER[stil]
+    skala = lag_skala(valgt, kapasitetstrinn, maks_kw)
     kort = variant == "card"
 
-    tittel = f"GEHA-METER, {_n(maks)} kW"
+    tittel = f"{valgt.navn}, {_tall_tekst(skala.min_kw)}-{_tall_tekst(skala.maks_kw)} kW"
     if dso_navn:
         tittel = f"{tittel}, {dso_navn}"
     beskrivelse = (
@@ -605,23 +912,24 @@ def generate_faceplate(
     deler: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"'
         f' viewBox="0 0 {_n(VIEWBOX)} {_n(VIEWBOX)}" width="{_n(VIEWBOX)}" height="{_n(VIEWBOX)}"'
-        f' role="img" aria-label="{escape(tittel)}" data-variant="{variant}"'
-        f' data-maks-kw="{_n(maks)}" data-nav-x="{_n(NAV_X)}" data-nav-y="{_n(NAV_Y)}"'
-        f' data-vinkel-start="{_n(VINKEL_START)}" data-vinkel-sveip="{_n(VINKEL_SVEIP)}">',
+        f' role="img" aria-label="{escape(tittel)}" data-variant="{variant}" data-stil="{stil}"'
+        f' data-maks-kw="{_n(skala.maks_kw)}" data-nav-x="{_n(NAV_X)}" data-nav-y="{_n(NAV_Y)}"'
+        f' data-vinkel-start="{_n(VINKEL_START)}" data-vinkel-sveip="{_n(VINKEL_SVEIP)}"'
+        f' data-skala-min-kw="{_n(skala.min_kw)}" data-skala-eksponent="{_n(skala.eksponent)}">',
         f"<title>{escape(tittel)}</title>",
         f"<desc>{escape(beskrivelse)}</desc>",
     ]
-    deler.extend(_plate(variant))
+    deler.extend(_plate(variant, valgt))
     if not kort:
-        deler.extend(_riflet_felt(variant))
-    deler.extend(_skala(maks))
-    deler.extend(_trinnband(kapasitetstrinn, maks))
-    deler.extend(_trykk_tekst(dso_navn))
+        deler.extend(_bunnfelt(valgt, variant))
+    deler.extend(_skala_tegning(skala, valgt))
+    deler.extend(_trinnband(kapasitetstrinn, skala, valgt))
+    deler.extend(_trykk_tekst(valgt, skala, dso_navn))
     if kort:
-        deler.extend(_visere(maks))
-    deler.extend(_hub(variant))
+        deler.extend(_visere(skala, valgt))
+    deler.extend(_hub(variant, valgt))
     if kort:
-        deler.extend(_riflet_felt(variant))
-        deler.extend(_deksel())
+        deler.extend(_bunnfelt(valgt, variant))
+        deler.extend(_deksel(valgt))
     deler.append("</svg>")
     return "\n".join(deler)
