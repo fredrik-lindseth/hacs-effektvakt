@@ -21,11 +21,20 @@ sys.modules["homeassistant.const"] = MagicMock()
 sys.modules["homeassistant.core"] = MagicMock()
 sys.modules["homeassistant.config_entries"] = MagicMock()
 sys.modules["homeassistant.data_entry_flow"] = MagicMock()
-sys.modules["homeassistant.helpers"] = MagicMock()
+sys.modules["homeassistant.loader"] = MagicMock()
+
+_helpers_mod = MagicMock()
+sys.modules["homeassistant.helpers"] = _helpers_mod
 sys.modules["homeassistant.helpers.device_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
 sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.storage"] = MagicMock()
+
+# entity_registry hentes som `from homeassistant.helpers import entity_registry`,
+# saa stubben maa ligge som attributt paa helpers-pakken og ikke bare i sys.modules.
+_entity_registry_mod = MagicMock()
+_helpers_mod.entity_registry = _entity_registry_mod
+sys.modules["homeassistant.helpers.entity_registry"] = _entity_registry_mod
 
 
 # DataUpdateCoordinator must be a real class so subclasses work with normal
@@ -85,6 +94,49 @@ _binary_sensor_mod = MagicMock()
 _binary_sensor_mod.BinarySensorEntity = _BinarySensorEntityStub
 _binary_sensor_mod.BinarySensorDeviceClass = MagicMock()
 sys.modules["homeassistant.components.binary_sensor"] = _binary_sensor_mod
+
+
+class StaticPathConfigStub:
+    """Speiler HA sin StaticPathConfig slik at testene kan lese feltene."""
+
+    def __init__(self, url_path: str, path: str, cache_headers: bool = True) -> None:
+        self.url_path = url_path
+        self.path = path
+        self.cache_headers = cache_headers
+
+
+_http_mod = MagicMock()
+_http_mod.StaticPathConfig = StaticPathConfigStub
+sys.modules["homeassistant.components.http"] = _http_mod
+
+_frontend_mod = MagicMock()
+sys.modules["homeassistant.components.frontend"] = _frontend_mod
+
+
+def _identity(func):
+    return func
+
+
+def _identity_decorator(*_args, **_kwargs):
+    """websocket_command(schema) skal gi tilbake handleren uroert."""
+    return _identity
+
+
+_websocket_api_mod = MagicMock()
+_websocket_api_mod.websocket_command = _identity_decorator
+_websocket_api_mod.async_response = _identity
+_websocket_api_mod.ERR_NOT_FOUND = "not_found"
+sys.modules["homeassistant.components.websocket_api"] = _websocket_api_mod
+
+# `from homeassistant.components import frontend, websocket_api` slaar opp
+# attributter paa pakken, ikke i sys.modules, saa de maa settes eksplisitt.
+_components_mod = MagicMock()
+_components_mod.sensor = _sensor_mod
+_components_mod.binary_sensor = _binary_sensor_mod
+_components_mod.http = _http_mod
+_components_mod.frontend = _frontend_mod
+_components_mod.websocket_api = _websocket_api_mod
+sys.modules["homeassistant.components"] = _components_mod
 
 _dt_util_mock = MagicMock()
 _dt_util_mock.now.return_value = datetime(2026, 6, 15, 12, 0, 0)

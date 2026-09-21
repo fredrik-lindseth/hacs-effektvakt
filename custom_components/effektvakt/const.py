@@ -68,6 +68,11 @@ WATCHDOG_STALE_THRESHOLD_SECONDS: Final[int] = 120
 # Storage
 STORAGE_VERSION: Final[int] = 1
 
+# Frontend: kortet serveres av integrasjonen selv, ingen HACS-plugin
+FRONTEND_URL_BASE: Final[str] = "/effektvakt-static"
+FRONTEND_CARD_FILENAME: Final[str] = "effektvakt-card.js"
+WS_TYPE_FACEPLATE: Final[str] = "effektvakt/faceplate"
+
 # Peak-sensor-detection mønstre
 PEAK_SENSOR_NAME_PATTERNS: Final[list[str]] = [
     "_max_power",

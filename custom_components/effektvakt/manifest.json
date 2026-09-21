@@ -3,7 +3,7 @@
   "name": "Effektvakt",
   "codeowners": ["@fredrik-lindseth"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["http", "frontend", "websocket_api"],
   "documentation": "https://github.com/fredrik-lindseth/hacs-effektvakt",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/fredrik-lindseth/hacs-effektvakt/issues",

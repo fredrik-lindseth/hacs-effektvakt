@@ -1,6 +1,7 @@
 """Vulture whitelist - exports som vulture ikke ser brukt fra eksterne kallere."""
 
 # Home Assistant entry points
+async_setup  # noqa: F821,B018
 async_setup_entry  # noqa: F821,B018
 async_unload_entry  # noqa: F821,B018
 async_get_options_flow  # noqa: F821,B018

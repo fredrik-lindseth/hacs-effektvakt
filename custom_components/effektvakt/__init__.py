@@ -11,14 +11,26 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, WATCHDOG_INTERVAL_SECONDS
 from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stale
+from .frontend import async_register_frontend
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Sett opp det som hoerer til HA-oppstarten, ikke til en enkelt entry.
+
+    Kortet registreres her og ikke i async_setup_entry: en options-endring
+    reloader entryen, og da ville URL-en blitt meldt inn paa nytt hver gang.
+    """
+    await async_register_frontend(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
