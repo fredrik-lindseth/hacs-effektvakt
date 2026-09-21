@@ -9,6 +9,10 @@
 
 Prediktiv kapasitetstrinn-styring for norske strømkunder i Home Assistant.
 
+<p align="center">
+  <img src="docs/bilder/skive-gossen.png" alt="Effektvakt-kortet: en gjenskapt analog effektvakt med kW-skala, kapasitetstrinn med månedspris, og tre visere" width="420">
+</p>
+
 ## Hva du får
 
 Effektvakt projiserer time-snittet ditt og varsler deg før du krysser neste kapasitetstrinn i nettleien:
@@ -23,7 +27,9 @@ Effektvakt projiserer time-snittet ditt og varsler deg før du krysser neste kap
 
 ## Hvordan det virker
 
-Norske nettselskap fakturerer kapasitetsleddet etter snittet av de tre høyeste time-snittene fra ulike dager i måneden (NVE-modellen). Krysser du neste trinn én eneste time, betaler du for det trinnet resten av måneden.
+Norske nettselskap fakturerer kapasitetsleddet etter snittet av de tre høyeste time-snittene fra ulike dager i måneden (NVE-modellen). Drar én time snittet av de tre over neste terskel, betaler du det høyere trinnet for hele måneden, uansett hvor lite du bruker resten av tiden.
+
+Det betyr også det motsatte, og det er verdt å vite: er dagens topp allerede blant de tre høyeste, koster en ny time på samme nivå ingenting.
 
 Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund. Den projiserer time-snittet ved time-slutt basert på hva som er brukt og hva som brukes nå. Marginen sammenlignes mot terskelen for neste trinn, justert for hvilke av topp-3-dagene som allerede er registrert denne måneden. Risiko-nivået oppdateres med hysterese for å unngå hyppig av/på-flakking.
 
@@ -79,6 +85,30 @@ Se [docs/input-sensorer.md](docs/input-sensorer.md) for detaljer om sensorkrav o
 | `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | on når risiko >= min_risiko_for_kutt                         |
 
 Alle sensorer har felles attributter med detaljer om beregningene. Se [docs/sensorer.md](docs/sensorer.md).
+
+## Dashbord
+
+Integrasjonen har med et eget Lovelace-kort som gjenskaper de gamle analoge effektvaktene som hang i norske sikringsskap. Skiven tegnes fra dine egne kapasitetstrinn, så kronebeløpene på buen er prisene ditt nettselskap faktisk tar.
+
+<p align="center">
+  <img src="docs/bilder/dashboard.png" alt="Dashbordet med skive, kort for resten av timen, kutt-kilder og ukesgraf" width="900">
+</p>
+
+Rød viser er projisert time-snitt, den tynne svarte er effekten akkurat nå, og trekanten utenfor buen er topp-3-snittet for måneden. Den går aldri ned igjen, for det er den du kommer til å betale for uansett hva du gjør resten av måneden.
+
+Kortene ved siden av svarer på det du faktisk lurer på:
+
+<p align="center">
+  <img src="docs/bilder/resten-av-timen.png" alt="Kort som viser minutter igjen av timen, hvor mye som kan legges til, og hva kuttes nå" width="520">
+</p>
+
+Og ukesgrafen viser de faktiske timesnittene, altså tallene nettselskapet fakturerer etter:
+
+<p align="center">
+  <img src="docs/bilder/timesnitt-uke.png" alt="Søylegraf med timesnitt for de siste sju dagene" width="640">
+</p>
+
+Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full forklaring av merkene på skiven.
 
 ## Kutt-strategi
 
