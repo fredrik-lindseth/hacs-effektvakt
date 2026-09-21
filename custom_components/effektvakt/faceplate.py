@@ -26,7 +26,7 @@ Variant = Literal["card", "print"]
 
 VIEWBOX: Final = 1000.0
 NAV_X: Final = 500.0
-NAV_Y: Final = 900.0
+NAV_Y: Final = 790.0
 VINKEL_START: Final = -50.0
 VINKEL_SVEIP: Final = 100.0
 MAKS_KW_STANDARD: Final = 15.0
@@ -62,7 +62,9 @@ KABINETT_HJORNE: Final = 36.0
 KABINETT_BUE: Final = 34.0
 
 # Bunnfeltet dekker nedre del av kabinettet og begynner rett under
-# produsentlinjen. Alt som skal leses ligger over det. Paa originalene ligger
+# produsentlinjen. Navet ligger like ved overkanten av feltet, slik
+# originalene er bygget, og da er det plass til to stablede skruer under det
+# i loddaksen, der viseren aldri kommer. Alt som skal leses ligger over det. Paa originalene ligger
 # navet og viserroettene bak feltet, saa card-varianten legger det over dem med
 # delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
 FELT_INNSLAG: Final = 32.0
@@ -75,7 +77,7 @@ HOVEDMERKER: Final = 6
 # Hovedtall-stigen for komprimerte skalaer: runde tall som blir glissnere der
 # skalaen trykkes sammen, slik instrumentmakerne gjorde det.
 TALLSTIGE: Final = (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0)
-MIN_TALLAVSTAND_GRADER: Final = 8.0
+MIN_TALLAVSTAND_GRADER: Final = 7.5
 DELSTREKSTIGE: Final = (0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0)
 MIN_DELSTREK_GRADER: Final = 1.6
 
@@ -155,19 +157,40 @@ def normaliser_maks_kw(maks_kw: float) -> float:
     return math.ceil(maks_kw / MAKS_KW_KVANT) * MAKS_KW_KVANT
 
 
-def vinkel_for_kw(kw: float, maks_kw: float, *, min_kw: float = 0.0, eksponent: float = 1.0) -> float:
+def vinkel_for_kw(
+    kw: float,
+    maks_kw: float,
+    *,
+    min_kw: float = 0.0,
+    eksponent: float = 1.0,
+    sokkel_kw: float = 0.0,
+    sokkel_andel: float = 0.0,
+) -> float:
     """Viservinkel for en effekt. Samme formel som kortet bruker.
 
-    Kortet leser min_kw og eksponent av data-attributtene paa rot-elementet og
-    regner det samme uttrykket, saa lineaere og komprimerte skalaer havner paa
-    samme sted i kort, trykk og test. eksponent 1 gir en lineaer skala.
+    Kortet leser min_kw, eksponent, sokkel_kw og sokkel_andel av data-
+    attributtene paa rot-elementet og regner det samme uttrykket, saa lineaere
+    og komprimerte skalaer havner paa samme sted i kort, trykk og test.
+
+    eksponent 1 uten sokkel gir en lineaer skala. Sokkelen er et sammentrykt
+    stykke nederst: alt under sokkel_kw deler paa sokkel_andel av sveipet, og
+    resten av skalaen foelger potensformen over. Dreiejernskivene bruker den
+    slik at de laveste kapasitetstrinnene blir med uten at formen ryker.
     """
     if maks_kw <= min_kw:
         raise ValueError(f"maks_kw {maks_kw} maa vaere stoerre enn min_kw {min_kw}")
     klemt = max(kw, min_kw)
     # math.pow framfor ** saa typen blir float og ikke Any.
-    spenn = math.pow(maks_kw, eksponent) - math.pow(min_kw, eksponent)
-    andel = (math.pow(klemt, eksponent) - math.pow(min_kw, eksponent)) / spenn
+    if sokkel_kw > min_kw and sokkel_andel > 0:
+        if klemt <= sokkel_kw:
+            andel = sokkel_andel * (klemt - min_kw) / (sokkel_kw - min_kw)
+        else:
+            nedre = math.pow(sokkel_kw, eksponent)
+            spenn = math.pow(maks_kw, eksponent) - nedre
+            andel = sokkel_andel + (1 - sokkel_andel) * (math.pow(klemt, eksponent) - nedre) / spenn
+    else:
+        spenn = math.pow(maks_kw, eksponent) - math.pow(min_kw, eksponent)
+        andel = (math.pow(klemt, eksponent) - math.pow(min_kw, eksponent)) / spenn
     return VINKEL_START + andel * VINKEL_SVEIP
 
 
@@ -178,9 +201,18 @@ class Skala(NamedTuple):
     maks_kw: float
     eksponent: float
     hovedtall: tuple[float, ...]
+    sokkel_kw: float = 0.0
+    sokkel_andel: float = 0.0
 
     def vinkel(self, kw: float) -> float:
-        return vinkel_for_kw(kw, self.maks_kw, min_kw=self.min_kw, eksponent=self.eksponent)
+        return vinkel_for_kw(
+            kw,
+            self.maks_kw,
+            min_kw=self.min_kw,
+            eksponent=self.eksponent,
+            sokkel_kw=self.sokkel_kw,
+            sokkel_andel=self.sokkel_andel,
+        )
 
 
 class Tekstlinje(NamedTuple):
@@ -199,7 +231,7 @@ class Tekstlinje(NamedTuple):
 class Symbol(NamedTuple):
     """Et merke i ikonrekken. Se _symbolbane for hva hvert av dem betyr."""
 
-    art: Literal["dreiejern", "veksel", "loddrett", "stjerne"]
+    art: Literal["maaleverk", "veksel", "loddrett", "stjerne"]
     x: float
     y: float
     verdi: str = ""
@@ -218,8 +250,9 @@ class Stil(NamedTuple):
     """En skivevariant. Ny skive er en ny oppfoering her, ikke en ny gren i koden."""
 
     navn: str
+    maaleverk: Literal["dreispole", "dreiejern"]
     eksponent: float
-    start_ved_forste_terskel: bool
+    sokkel_andel: float
     hovedtall_regel: Literal["jevn", "stige"]
     delstrek_regel: Literal["antall", "steg"]
     bunnfelt: Bunnfelt
@@ -233,15 +266,16 @@ class Stil(NamedTuple):
 STILER: Final[dict[str, Stil]] = {
     "geha": Stil(
         navn="GEHA-METER",
+        maaleverk="dreispole",
         eksponent=1.0,
-        start_ved_forste_terskel=False,
+        sokkel_andel=0.0,
         hovedtall_regel="jevn",
         delstrek_regel="antall",
-        bunnfelt=Bunnfelt(moenster="kryss", topp=730.0, skruer=(956.0,), skrue_r=13.0),
+        bunnfelt=Bunnfelt(moenster="kryss", topp=760.0, skruer=(872.0, 930.0), skrue_r=22.0),
         # GEHA-skiven har dreiejernsymbolet og klassemerket. Originalfotoet har
         # noe gulaktig rett ved KL.1.5 som kan vaere en proevespenningsstjerne,
         # men det er ikke lesbart nok til aa slaa fast, saa den er utelatt.
-        symboler=(Symbol("dreiejern", 124.0, 690.0),),
+        symboler=(Symbol("maaleverk", 124.0, 690.0),),
         tekst=(
             Tekstlinje(500, 92, "{dso}", 24, vekt="500", sperring=6),
             Tekstlinje(500, 570, "KW", 86, familie=SLAB, vekt="700", sperring=10),
@@ -254,33 +288,56 @@ STILER: Final[dict[str, Stil]] = {
     ),
     "gossen": Stil(
         navn="GOSSEN",
+        maaleverk="dreiejern",
         # Dreiejernskalaen paa originalen er trykket sammen mot toppen og
         # starter ved foerste brukbare verdi, ikke ved null.
         eksponent=0.5,
-        start_ved_forste_terskel=True,
+        # Originalen starter paa 2 fordi dreiejernet ikke leser lavere. Vi har
+        # ikke den begrensningen, saa i stedet klemmes alt under foerste terskel
+        # inn i en tiendedel av sveipet. Da er alle kapasitetstrinn med, og
+        # formen er fortsatt Gossens: sammentrykt mot toppen.
+        sokkel_andel=0.1,
         hovedtall_regel="stige",
         delstrek_regel="steg",
-        bunnfelt=Bunnfelt(moenster="riller", topp=770.0, skruer=(796.0, 838.0), skrue_r=18.0),
+        bunnfelt=Bunnfelt(moenster="riller", topp=760.0, skruer=(872.0, 930.0), skrue_r=22.0),
         # Ikonrekken er delt i to fordi midten av skiven sveipes av viseren:
         # maaleverk, stroemart og bruksstilling til venstre, klasse og
         # proevespenning til hoeyre.
         symboler=(
-            Symbol("dreiejern", 90.0, 706.0),
-            Symbol("veksel", 164.0, 706.0),
-            Symbol("loddrett", 216.0, 706.0),
-            Symbol("stjerne", 886.0, 706.0, verdi="2"),
+            Symbol("maaleverk", 90.0, 690.0),
+            Symbol("veksel", 164.0, 690.0),
+            Symbol("loddrett", 216.0, 690.0),
+            Symbol("stjerne", 886.0, 690.0, verdi="2"),
         ),
         tekst=(
             Tekstlinje(500, 556, "kW", 84, familie=SLAB, vekt="700", sperring=4),
             Tekstlinje(500, 622, "100 mA", 34, vekt="500", sperring=4),
-            Tekstlinje(790, 706, "1,5", 28, sperring=2),
-            Tekstlinje(880, 750, "{dso}", 28, vekt="600", sperring=4, anker="end"),
+            Tekstlinje(790, 690, "1,5", 28, sperring=2),
+            Tekstlinje(880, 738, "{dso}", 28, vekt="600", sperring=4, anker="end"),
         ),
         palett=PALETT_GOSSEN,
         slitasje=False,
         gulning=0.16,
     ),
 }
+
+
+def _valider_stil(navn: str, stil: Stil) -> None:
+    """Maaleverk og skalaform hoerer parvis sammen, og maa ikke kunne sprike.
+
+    Dreispole er lineaert, dreiejern er ikke det. Har en stil dreispolesymbol og
+    komprimert skala, eller omvendt, er skiven selvmotsigende. Det var nettopp
+    den feilen GEHA-skiven hadde foer den ble rettet, saa den fanges her.
+    """
+    lineaer = stil.eksponent == 1.0 and stil.sokkel_andel == 0.0
+    if stil.maaleverk == "dreispole" and not lineaer:
+        raise ValueError(f"{navn}: dreispole er lineaert, men skalaen er komprimert")
+    if stil.maaleverk == "dreiejern" and lineaer:
+        raise ValueError(f"{navn}: dreiejern er ikke-lineaert, men skalaen er lineaer")
+
+
+for _navn, _stil in STILER.items():
+    _valider_stil(_navn, _stil)
 
 STILNAVN: Final = tuple(STILER)
 
@@ -308,15 +365,23 @@ def _jevne_hovedtall(min_kw: float, maks_kw: float) -> tuple[float, ...]:
     return tuple(min_kw + i * steg for i in range(HOVEDMERKER))
 
 
-def _stigehovedtall(min_kw: float, maks_kw: float, eksponent: float) -> tuple[float, ...]:
+def _stigehovedtall(
+    min_kw: float, maks_kw: float, eksponent: float, sokkel: tuple[float, float] = (0.0, 0.0)
+) -> tuple[float, ...]:
     """Runde tall fra stigen, med nok vinkelavstand til at de ikke kolliderer."""
 
     def vinkel(kw: float) -> float:
-        return vinkel_for_kw(kw, maks_kw, min_kw=min_kw, eksponent=eksponent)
+        return vinkel_for_kw(
+            kw, maks_kw, min_kw=min_kw, eksponent=eksponent, sokkel_kw=sokkel[0], sokkel_andel=sokkel[1]
+        )
 
-    valgt = [min_kw]
+    # Sokkelen er et sammentrykt stykke, ikke et omraade med egne runde tall:
+    # den faar bare start og terskelen den ender paa, ellers hadde stigen lagt
+    # 1,5 og 2,5 inn der 2 og 3 hoerer hjemme.
+    nedre = max(min_kw, sokkel[0])
+    valgt = [min_kw] if nedre == min_kw else [min_kw, nedre]
     for kandidat in TALLSTIGE:
-        if kandidat <= min_kw or kandidat >= maks_kw:
+        if kandidat <= nedre or kandidat >= maks_kw:
             continue
         if vinkel(kandidat) - vinkel(valgt[-1]) >= MIN_TALLAVSTAND_GRADER:
             valgt.append(kandidat)
@@ -329,12 +394,25 @@ def _stigehovedtall(min_kw: float, maks_kw: float, eksponent: float) -> tuple[fl
 def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> Skala:
     """Utled skalaen av stilen og brukerens kapasitetstrinn."""
     maks = normaliser_maks_kw(maks_kw)
-    min_kw = _forste_terskel(kapasitetstrinn, maks) if stil.start_ved_forste_terskel else 0.0
+    sokkel_kw = 0.0
+    sokkel_andel = 0.0
+    if stil.sokkel_andel > 0:
+        # Sokkelen ender paa foerste terskel, men aldri saa hoeyt at den spiser
+        # skalaen: en femtedel av toppverdien er taket.
+        sokkel_kw = min(_forste_terskel(kapasitetstrinn, maks), maks / 5)
+        sokkel_andel = stil.sokkel_andel if sokkel_kw > 0 else 0.0
     if stil.hovedtall_regel == "jevn":
-        hovedtall = _jevne_hovedtall(min_kw, maks)
+        hovedtall = _jevne_hovedtall(0.0, maks)
     else:
-        hovedtall = _stigehovedtall(min_kw, maks, stil.eksponent)
-    return Skala(min_kw=min_kw, maks_kw=maks, eksponent=stil.eksponent, hovedtall=hovedtall)
+        hovedtall = _stigehovedtall(0.0, maks, stil.eksponent, (sokkel_kw, sokkel_andel))
+    return Skala(
+        min_kw=0.0,
+        maks_kw=maks,
+        eksponent=stil.eksponent,
+        hovedtall=hovedtall,
+        sokkel_kw=sokkel_kw,
+        sokkel_andel=sokkel_andel,
+    )
 
 
 def _delstreker(skala: Skala, regel: str) -> list[float]:
@@ -603,23 +681,29 @@ def _symbolbane(symbol: Symbol, stil: Stil) -> str:
     60051 ligger bak betalingsmur, saa dette lar seg ikke slaa opp fritt, og da
     maa det staa her:
 
-    dreiejern: opp-ned U med loddrett strek inni, altsaa spolen over
-        jernkjernen. Maaleverket i originalene. Dreiejern maaler stroem og er
-        ikke-lineaert, og det er derfor Gossen-skalaen er trykket sammen mot
-        toppen. Vaar fysiske utgave planlegges med dreispoleverk, siden det er
-        det som lar seg drive fra DC, saa skiven baerer symbolet til et annet
-        verk enn det den sitter paa. Det er med vilje: skiven er en kopi.
+    maaleverk: opp-ned U, og streken avgjoer hvilket verk det er. Strek under
+        buen er dreispole (permanentmagnet, dreiespole), strek inni buen er
+        dreiejern. De to hoerer parvis sammen med skalaformen: dreispole er
+        lineaert, dreiejern er det ikke. GEHA har jevn skala og dreispole,
+        Gossen har sammentrykt skala og dreiejern, og _valider_stil passer paa
+        at en ny stil ikke kan faa symbol og skalaform som motsier hverandre.
+        Det fysiske bygget vaart bruker dreispoleverk, siden det er det som lar
+        seg drive fra DC, saa GEHA-skiva baerer riktig symbol for verket den
+        sitter paa. En Gossen-skive paa samme verk ville ikke gjort det.
     veksel: tilde, altsaa vekselstroem.
     loddrett: ⊥, instrumentet skal henge loddrett.
     stjerne: isolasjonsproevespenning, og tallet inni er antall kV.
     """
     blekk = _farge("trykk", stil)
-    if symbol.art == "dreiejern":
-        return (
+    if symbol.art == "maaleverk":
+        bue = (
             '<path d="M -36 32 L -36 -6 A 36 36 0 0 1 36 -6 L 36 32" fill="none"'
             f' stroke="{blekk}" stroke-width="11" stroke-linecap="butt"/>'
-            f'<rect x="-6" y="-14" width="12" height="46" fill="{blekk}"/>'
         )
+        if stil.maaleverk == "dreispole":
+            return bue + f'<rect x="-30" y="42" width="60" height="11" fill="{blekk}"/>'
+        return bue + f'<rect x="-6" y="-14" width="12" height="46" fill="{blekk}"/>'
+
     if symbol.art == "veksel":
         return (
             '<path d="M -24 6 C -16 -16 -8 -16 0 0 C 8 16 16 16 24 -6" fill="none"'
@@ -633,7 +717,8 @@ def _symbolbane(symbol: Symbol, stil: Stil) -> str:
 
 def _symboler(stil: Stil) -> list[str]:
     return [
-        f'<g id="symbol-{symbol.art}" transform="translate({_n(symbol.x)} {_n(symbol.y)})">'
+        f'<g id="symbol-{stil.maaleverk if symbol.art == "maaleverk" else symbol.art}"'
+        f' transform="translate({_n(symbol.x)} {_n(symbol.y)})">'
         f"{_symbolbane(symbol, stil)}</g>"
         for symbol in stil.symboler
     ]
@@ -772,7 +857,18 @@ def _bunnfelt(stil: Stil, variant: Variant) -> list[str]:
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
         f' stroke="{_farge("krom-mork", stil)}" stroke-width="2" opacity="0.65"/>'
     )
-    # Skruene staar i feltets loddrette midtakse, stablet over hverandre.
+    # Skruene staar stablet i feltets loddrette midtakse, paa en litt moerkere
+    # innfelt firkant som bryter moensteret, slik originalene har det.
+    if felt.skruer:
+        plate_topp = min(felt.skruer) - felt.skrue_r - 12
+        plate_bunn = max(felt.skruer) + felt.skrue_r + 12
+        plate_bredde = (plate_bunn - plate_topp) * 0.86
+        ut.append(
+            f'<rect x="{_n(NAV_X - plate_bredde / 2)}" y="{_n(plate_topp)}" width="{_n(plate_bredde)}"'
+            f' height="{_n(plate_bunn - plate_topp)}" fill="{_farge("prisme-mork", stil)}"'
+            f' opacity="{_n(0.55 * moenster)}" stroke="{_farge("krom-mork", stil)}"'
+            ' stroke-width="2" stroke-opacity="0.5"/>'
+        )
     for skrue_y in felt.skruer:
         r = felt.skrue_r
         ut.append(
@@ -915,7 +1011,8 @@ def generate_faceplate(
         f' role="img" aria-label="{escape(tittel)}" data-variant="{variant}" data-stil="{stil}"'
         f' data-maks-kw="{_n(skala.maks_kw)}" data-nav-x="{_n(NAV_X)}" data-nav-y="{_n(NAV_Y)}"'
         f' data-vinkel-start="{_n(VINKEL_START)}" data-vinkel-sveip="{_n(VINKEL_SVEIP)}"'
-        f' data-skala-min-kw="{_n(skala.min_kw)}" data-skala-eksponent="{_n(skala.eksponent)}">',
+        f' data-skala-min-kw="{_n(skala.min_kw)}" data-skala-eksponent="{_n(skala.eksponent)}"'
+        f' data-skala-sokkel-kw="{_n(skala.sokkel_kw)}" data-skala-sokkel-andel="{_n(skala.sokkel_andel)}">',
         f"<title>{escape(tittel)}</title>",
         f"<desc>{escape(beskrivelse)}</desc>",
     ]

@@ -22,6 +22,7 @@ from custom_components.effektvakt.faceplate import (
     Skala,
     _delstreker,
     _stigehovedtall,
+    _valider_stil,
     generate_faceplate,
     lag_skala,
     normaliser_maks_kw,
@@ -77,8 +78,8 @@ def test_alle_dso_gir_gyldig_xml():
 def test_rot_har_geometrikontrakten():
     rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
     assert rot.get("data-maks-kw") == "15"
-    assert rot.get("data-nav-x") == "500"
-    assert rot.get("data-nav-y") == "900"
+    assert rot.get("data-nav-x") == str(int(NAV_X))
+    assert rot.get("data-nav-y") == str(int(NAV_Y)), "navet ligger ved overkanten av bunnfeltet"
     assert rot.get("data-vinkel-start") == "-50"
     assert rot.get("data-vinkel-sveip") == "100"
     assert rot.get("viewBox") == "0 0 1000 1000"
@@ -176,8 +177,17 @@ def _vinkel_fra_kontrakten(rot: ET.Element, kw: float) -> float:
     maks = float(rot.get("data-maks-kw", "0"))
     min_kw = float(rot.get("data-skala-min-kw", "0"))
     eksponent = float(rot.get("data-skala-eksponent", "1"))
+    sokkel_kw = float(rot.get("data-skala-sokkel-kw", "0"))
+    sokkel_andel = float(rot.get("data-skala-sokkel-andel", "0"))
     klemt = max(kw, min_kw)
-    andel = (klemt**eksponent - min_kw**eksponent) / (maks**eksponent - min_kw**eksponent)
+    if sokkel_kw > min_kw and sokkel_andel > 0:
+        if klemt <= sokkel_kw:
+            andel = sokkel_andel * (klemt - min_kw) / (sokkel_kw - min_kw)
+        else:
+            nedre = sokkel_kw**eksponent
+            andel = sokkel_andel + (1 - sokkel_andel) * (klemt**eksponent - nedre) / (maks**eksponent - nedre)
+    else:
+        andel = (klemt**eksponent - min_kw**eksponent) / (maks**eksponent - min_kw**eksponent)
     return start + andel * sveip
 
 
@@ -231,7 +241,8 @@ def test_komprimert_skala_er_trykket_sammen_mot_toppen():
         nederst = skala.hovedtall[1] - skala.hovedtall[0]
         overst = skala.hovedtall[-1] - skala.hovedtall[-2]
         assert overst > nederst, f"{navn}: toppen skal romme flere kW per grad enn bunnen"
-        assert skala.min_kw > 0, f"{navn}: skalaen skal starte paa foerste terskel"
+        assert skala.sokkel_kw > 0, f"{navn}: sokkelen skal ende paa foerste terskel"
+        assert skala.min_kw == 0, f"{navn}: alle kapasitetstrinn skal vaere med"
 
 
 def test_stilregisteret_er_eksponert():
@@ -242,10 +253,20 @@ def test_stilregisteret_er_eksponert():
         assert _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn)).get("data-stil") == navn
 
 
-def test_skala_uten_terskler_starter_paa_null():
+def test_skala_uten_terskler_faar_ingen_sokkel():
     for navn in STILER:
         rot = _rot(generate_faceplate(kapasitetstrinn=[], stil=navn))
-        assert rot.get("data-skala-min-kw") == "0", f"{navn}: uten terskler finnes ingen startverdi"
+        assert rot.get("data-skala-min-kw") == "0"
+        assert rot.get("data-skala-sokkel-andel") == "0", f"{navn}: uten terskler er det ingenting aa klemme"
+
+
+def test_alle_trinn_er_med_i_alle_stiler():
+    """Sokkelen finnes nettopp for at det laveste trinnet ikke skal falle utenfor."""
+    for navn in STILER:
+        rot = _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn))
+        trinn = [e for e in rot.iter() if (e.get("id") or "").startswith("trinn-")]
+        assert [e.get("data-kw-til") for e in trinn] == ["2", "5", "10", "15"], f"{navn}: mangler trinn"
+        assert "155 KR" in _tekster(rot), f"{navn}: laveste trinn mangler pris"
 
 
 def test_vinkel_for_kw_avviser_ugyldig_spenn():
@@ -281,17 +302,30 @@ def test_ikonrekken_ligger_utenfor_viserens_sveip():
     for navn, stil in STILER.items():
         rot = _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn))
         for symbol in stil.symboler:
-            element = _med_id(rot, f"symbol-{symbol.art}")
-            assert element is not None, f"{navn}: mangler symbol-{symbol.art}"
+            ident = stil.maaleverk if symbol.art == "maaleverk" else symbol.art
+            element = _med_id(rot, f"symbol-{ident}")
+            assert element is not None, f"{navn}: mangler symbol-{ident}"
             x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", element.get("transform", "")))
             avstand = _avstand_til_sveipekanten(x, y)
-            assert avstand > 30, f"{navn}/{symbol.art} ligger {avstand:.0f} fra viserens bane"
+            assert avstand > 30, f"{navn}/{ident} ligger {avstand:.0f} fra viserens bane"
 
 
-def test_dreiejernsymbolet_finnes_i_alle_stiler():
-    for navn in STILER:
+def test_maaleverk_og_skalaform_hoerer_sammen():
+    """Dreispole er lineaert, dreiejern er det ikke. Symbolet skal si det samme som skalaen."""
+    for navn, stil in STILER.items():
         rot = _rot(generate_faceplate(kapasitetstrinn=BKK, stil=navn))
-        assert _med_id(rot, "symbol-dreiejern") is not None, f"{navn}: mangler dreiejernsymbolet"
+        assert _med_id(rot, f"symbol-{stil.maaleverk}") is not None, f"{navn}: mangler maaleverksymbolet"
+        lineaer = stil.eksponent == 1.0 and stil.sokkel_andel == 0.0
+        assert lineaer == (stil.maaleverk == "dreispole"), f"{navn}: symbol og skalaform spriker"
+
+
+def test_selvmotsigende_stil_avvises():
+    forvridd = STILER["geha"]._replace(maaleverk="dreiejern")
+    with pytest.raises(ValueError, match="ikke-lineaert"):
+        _valider_stil("forvridd", forvridd)
+    forvridd = STILER["gossen"]._replace(maaleverk="dreispole")
+    with pytest.raises(ValueError, match="lineaert"):
+        _valider_stil("forvridd", forvridd)
 
 
 def test_klassemerket_skrives_med_komma():
@@ -333,7 +367,7 @@ def test_visere_hviler_paa_null_kw():
     for ident in ("viser-rod", "viser-svart", "slepemerke"):
         element = _med_id(rot, ident)
         assert element is not None
-        assert element.get("transform") == "rotate(-50 500 900)"
+        assert element.get("transform") == f"rotate({VINKEL_START:g} {NAV_X:g} {NAV_Y:g})"
 
 
 def test_maks_kw_rundes_opp_til_multiplum_av_15():
