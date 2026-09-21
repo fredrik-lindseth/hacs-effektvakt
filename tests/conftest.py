@@ -146,7 +146,13 @@ sys.modules["homeassistant.util"] = _ha_util_mock
 sys.modules["homeassistant.util.dt"] = _dt_util_mock
 
 
-def make_state(value, *, unit: str | None = None, state_class: str | None = None):
+def make_state(
+    value,
+    *,
+    unit: str | None = None,
+    state_class: str | None = None,
+    friendly_name: str | None = None,
+):
     """Mock HA state-objekt."""
     state = MagicMock()
     state.state = str(value)
@@ -155,6 +161,8 @@ def make_state(value, *, unit: str | None = None, state_class: str | None = None
         state.attributes["unit_of_measurement"] = unit
     if state_class is not None:
         state.attributes["state_class"] = state_class
+    if friendly_name is not None:
+        state.attributes["friendly_name"] = friendly_name
     return state
 
 

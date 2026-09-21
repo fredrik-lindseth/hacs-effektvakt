@@ -55,6 +55,24 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Rollene en kuttbar last kan ha. Verdiene går ut i attributtet kutt_kilder,
+# så de er en del av kontrakten mot dashboards.
+ROLLE_VVB = "vvb"
+ROLLE_EKSTRA = "ekstra"
+
+TERSKEL_PER_ROLLE: dict[str, float] = {
+    ROLLE_VVB: VVB_ACTIVE_THRESHOLD_W,
+    ROLLE_EKSTRA: EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
+}
+
+# Hvilke roller som faktisk teller med i summen, per strategi. blind leser ingen
+# sensorer i det hele tatt, og ukjent strategi teller ingenting.
+ROLLER_PER_STRATEGI: dict[str, frozenset[str]] = {
+    STRATEGI_BLIND: frozenset(),
+    STRATEGI_VVB_STATUS: frozenset({ROLLE_VVB}),
+    STRATEGI_VVB_PLUSS_EKSTRA: frozenset({ROLLE_VVB, ROLLE_EKSTRA}),
+}
+
 
 def dt_util_now() -> datetime:
     """Wrapper for monkeypatch-vennlig now()."""
@@ -87,6 +105,15 @@ def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
             return None
         return value / 1000
     return value  # kW
+
+
+def read_friendly_name(hass: HomeAssistant, entity_id: str) -> str | None:
+    """HA sitt friendly_name for en entitet, None hvis den ikke finnes ennå."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    navn = (state.attributes or {}).get("friendly_name")
+    return navn if isinstance(navn, str) else None
 
 
 def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:
@@ -493,22 +520,16 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         current_kw = read_power_kw(self.hass, self.power_sensor) or 0.0
         energy_now = read_energy_kwh(self.hass, self.energy_sensor)
 
-        vvb_power_w = None
-        if self.vvb_power_sensor:
-            vvb_kw = read_power_kw(self.hass, self.vvb_power_sensor)
-            if vvb_kw is not None:
-                vvb_power_w = vvb_kw * 1000.0
-
-        ekstra_power_w_list: list[float | None] = []
-        for sensor in self.ekstra_power_sensors:
-            kw = read_power_kw(self.hass, sensor)
-            ekstra_power_w_list.append(kw * 1000.0 if kw is not None else None)
+        avlesninger = self._les_kutt_kilder()
+        vvb_power_w = next((a.effekt_w for a in avlesninger if a.rolle == ROLLE_VVB), None)
+        ekstra_power_w_list = [a.effekt_w for a in avlesninger if a.rolle == ROLLE_EKSTRA]
 
         tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(
             strategi=self.kutt_strategi,
             vvb_power_w=vvb_power_w,
             ekstra_power_w=ekstra_power_w_list,
         )
+        kutt_kilder = build_kutt_kilder(strategi=self.kutt_strategi, avlesninger=avlesninger)
 
         if energy_now is not None:
             if self._energy_at_hour_start is None:
@@ -581,8 +602,33 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "vvb_power_w": vvb_power_w,
             "ekstra_power_w_total": sum(p for p in ekstra_power_w_list if p is not None) or None,
             "kutt_strategi": self.kutt_strategi,
+            "kutt_kilder": [asdict(k) for k in kutt_kilder],
             **kostnad_felter,
         }
+
+    def _les_kutt_kilder(self) -> list[KildeAvlesning]:
+        """Les effekten til hver konfigurerte kuttkilde, VVB først.
+
+        Kilden er med i lista uansett strategi. Om den teller med er et eget
+        spørsmål som build_kutt_kilder svarer på.
+        """
+        konfigurert: list[tuple[str, str]] = []
+        if self.vvb_power_sensor:
+            konfigurert.append((self.vvb_power_sensor, ROLLE_VVB))
+        konfigurert.extend((sensor, ROLLE_EKSTRA) for sensor in self.ekstra_power_sensors)
+
+        avlesninger = []
+        for entity_id, rolle in konfigurert:
+            kw = read_power_kw(self.hass, entity_id)
+            avlesninger.append(
+                KildeAvlesning(
+                    entity_id=entity_id,
+                    navn=read_friendly_name(self.hass, entity_id),
+                    effekt_w=None if kw is None else kw * 1000.0,
+                    rolle=rolle,
+                )
+            )
+        return avlesninger
 
     def _finalize_hour(self) -> None:
         if self._current_hour_kwh > 0 and self._current_hour_start is not None:
@@ -600,6 +646,67 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self._daily_max_kw = {}
 
 
+@dataclass(frozen=True)
+class KildeAvlesning:
+    """Rå avlesning av en konfigurert kuttkilde, før strategien har sagt sitt.
+
+    `effekt_w` er None når sensoren er unavailable, unknown eller ulesbar. Det
+    er noe annet enn 0 W: da vet vi ikke hva lasten trekker.
+    """
+
+    entity_id: str
+    navn: str | None
+    effekt_w: float | None
+    rolle: str
+
+
+@dataclass(frozen=True)
+class KuttKilde:
+    """En kuttbar last slik den ser ut akkurat nå.
+
+    Feltnavnene er nøklene i attributtet kutt_kilder.
+    """
+
+    entity_id: str
+    navn: str | None
+    effekt_w: float | None
+    teller_med: bool
+    rolle: str
+    terskel_w: float
+
+
+def teller_med(*, strategi: str, rolle: str, effekt_w: float | None) -> bool:
+    """Om en kilde faktisk bidrar til tilgjengelig kutt akkurat nå.
+
+    Tre ting må stemme: strategien må bruke rollen, sensoren må ha en lesbar
+    verdi, og verdien må ligge over terskelen for rollen.
+    """
+    if effekt_w is None:
+        return False
+    if rolle not in ROLLER_PER_STRATEGI.get(strategi, frozenset()):
+        return False
+    return effekt_w > TERSKEL_PER_ROLLE[rolle]
+
+
+def build_kutt_kilder(*, strategi: str, avlesninger: list[KildeAvlesning]) -> list[KuttKilde]:
+    """Gjør avlesningene om til kutt_kilder-oppføringer.
+
+    Alle konfigurerte kilder er med, også de strategien ikke bruker. Forskjellen
+    mellom "finnes ikke" og "teller ikke nå" er nettopp det som er verdt å se.
+    """
+    return [
+        KuttKilde(
+            entity_id=a.entity_id,
+            navn=a.navn,
+            effekt_w=None if a.effekt_w is None else round(a.effekt_w, 1),
+            teller_med=teller_med(strategi=strategi, rolle=a.rolle, effekt_w=a.effekt_w),
+            rolle=a.rolle,
+            terskel_w=TERSKEL_PER_ROLLE[a.rolle],
+        )
+        for a in avlesninger
+    ]
+
+
 def compute_tilgjengelig_kutt_kw(
     *,
     strategi: str,
@@ -611,25 +718,21 @@ def compute_tilgjengelig_kutt_kw(
     blind: antar BLIND_ASSUMED_KUTT_KW
     vvb_status: bruker faktisk VVB-effekt, kun over VVB_ACTIVE_THRESHOLD_W
     vvb_pluss_ekstra: VVB pluss sum av ekstra-sensorer over EKSTRA_SENSOR_ACTIVE_THRESHOLD_W
+
+    Summen går over de samme kildene som får teller_med i kutt_kilder, så de to
+    tallene kan ikke drifte fra hverandre. blind er unntaket: der er tilstanden
+    en antagelse, ikke en sum av kilder.
     """
     if strategi == STRATEGI_BLIND:
         return BLIND_ASSUMED_KUTT_KW
 
-    vvb_kw = 0.0
-    if vvb_power_w is not None and vvb_power_w > VVB_ACTIVE_THRESHOLD_W:
-        vvb_kw = vvb_power_w / 1000.0
-
-    if strategi == STRATEGI_VVB_STATUS:
-        return vvb_kw
-
-    if strategi == STRATEGI_VVB_PLUSS_EKSTRA:
-        ekstra_kw = 0.0
-        for p in ekstra_power_w or []:
-            if p is not None and p > EKSTRA_SENSOR_ACTIVE_THRESHOLD_W:
-                ekstra_kw += p / 1000.0
-        return vvb_kw + ekstra_kw
-
-    return 0.0  # ukjent strategi
+    total_w = 0.0
+    if vvb_power_w is not None and teller_med(strategi=strategi, rolle=ROLLE_VVB, effekt_w=vvb_power_w):
+        total_w += vvb_power_w
+    for p in ekstra_power_w or []:
+        if p is not None and teller_med(strategi=strategi, rolle=ROLLE_EKSTRA, effekt_w=p):
+            total_w += p
+    return total_w / 1000.0
 
 
 def is_coordinator_stale(

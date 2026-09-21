@@ -156,6 +156,20 @@ class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
     def native_value(self) -> float | None:
         return self.coordinator.data.get("tilgjengelig_kutt_kw") if self.coordinator.data else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        d = self.coordinator.data
+        if not d:
+            return None
+        felles = super().extra_state_attributes or {}
+        return {
+            **felles,
+            "kutt_strategi": d.get("kutt_strategi"),
+            "vvb_power_w": d.get("vvb_power_w"),
+            "ekstra_power_w_total": d.get("ekstra_power_w_total"),
+            "kutt_kilder": d.get("kutt_kilder"),
+        }
+
 
 class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
     """Kronene per måned som står på spill mellom trinnet vi ligger an til og neste."""

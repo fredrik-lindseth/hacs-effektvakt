@@ -91,6 +91,52 @@ Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et
 
 **Merk**: Denne sensoren sier ingenting om risiko. Den er en hjelpe-sensor for blueprints og dashboards som vil vise "vi kan kutte X kW nå".
 
+### Attributter
+
+I tillegg til fellesattributtene lenger nede:
+
+| Attributt              | Enhet | Beskrivelse                                                    |
+| ---------------------- | ----- | -------------------------------------------------------------- |
+| `kutt_strategi`        | str   | Aktiv strategi: `blind`, `vvb_status` eller `vvb_pluss_ekstra` |
+| `vvb_power_w`          | W     | VVB-effekten slik den leses nå. `null` uten VVB-sensor         |
+| `ekstra_power_w_total` | W     | Sum av ekstra-sensorene. `null` når ingen av dem har en verdi  |
+| `kutt_kilder`          | liste | Én oppføring per konfigurert kilde, se under                   |
+
+### `kutt_kilder`
+
+Tilstanden er en sum, og `kutt_kilder` er postene den er summen av. Hver konfigurert kilde har én oppføring:
+
+| Nøkkel       | Beskrivelse                                                                        |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `entity_id`  | Sensoren kilden leses fra                                                          |
+| `navn`       | HA sitt `friendly_name`. `null` hvis entiteten ikke finnes ennå                    |
+| `effekt_w`   | Effekten akkurat nå. `null` når sensoren er `unavailable`, `unknown` eller ulesbar |
+| `teller_med` | Om kilden faktisk bidrar til tilstanden akkurat nå                                 |
+| `rolle`      | `vvb` eller `ekstra`. Rollen bestemmer terskelen                                   |
+| `terskel_w`  | Terskelen som gjelder for rollen: 1000 W for `vvb`, 100 W for `ekstra`             |
+
+```yaml
+kutt_kilder:
+  - entity_id: sensor.vvb_power
+    navn: Varmtvannsbereder
+    effekt_w: 1800.0
+    teller_med: true
+    rolle: vvb
+    terskel_w: 1000.0
+  - entity_id: sensor.varmekabler_badet_electric_consumption_w
+    navn: Varmekabler badet
+    effekt_w: 12.0
+    teller_med: false
+    rolle: ekstra
+    terskel_w: 100.0
+```
+
+Alle konfigurerte kilder er med, også de som ikke teller nå. Forskjellen mellom "finnes ikke" og "teller ikke nå" er nettopp det som er verdt å se på et dashboard. En kilde får `teller_med: false` når strategien ikke bruker rollen, når sensoren er utilgjengelig, eller når effekten ligger på eller under terskelen.
+
+`effekt_w: null` er ikke det samme som `0`. Null watt betyr at lasten står stille, `null` betyr at vi ikke vet.
+
+Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til sensoren, i W mot kW. Unntaket er `blind`, der tilstanden er duty cycle-antagelsen på 0,3 kW og ingen kilder teller med.
+
 ---
 
 ## `sensor.effektvakt_kostnad_neste_trinn`
@@ -163,9 +209,9 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | `effective_threshold_kw`      | kW       | Justert terskel etter topp-3-bevissthet                           |
 | `kutt_anbefalt_kw`            | kW       | `max(0, -margin)`: hvor mye som bør kuttes nå                     |
 | `topp_2_snitt_denne_maned_kw` | kW       | Snitt av topp-2 dager (brukes i effective_threshold)              |
-| `ekstra_power_w_total`        | W        | Sum av ekstra-sensorer (kun for vvb_pluss_ekstra)                 |
-| `kutt_strategi`               | str      | Aktiv strategi: blind / vvb_status / vvb_pluss_ekstra             |
 | `last_update`                 | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering            |
+
+Strategi- og kilde-attributtene ligger bare på `sensor.effektvakt_tilgjengelig_kutt`, og kostnadsattributtene bare på `sensor.effektvakt_kostnad_neste_trinn`.
 
 ### Eksempel
 

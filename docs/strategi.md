@@ -65,6 +65,24 @@ Med 4,65 kW tilgjengelig kutt er det god margin mot de fleste trinngrenser. Blue
 
 ---
 
+## Hva som utgjør tallet
+
+`sensor.effektvakt_tilgjengelig_kutt` har attributtet `kutt_kilder` med én oppføring per konfigurert kilde, så et dashboard kan vise hva som faktisk er kuttbart akkurat nå framfor bare summen. Feltene er dokumentert i [sensorer.md](sensorer.md#kutt_kilder).
+
+Strategien avgjør hvem som teller:
+
+| Strategi           | VVB teller | Ekstra teller |
+| ------------------ | ---------- | ------------- |
+| `blind`            | Nei        | Nei           |
+| `vvb_status`       | Ja         | Nei           |
+| `vvb_pluss_ekstra` | Ja         | Ja            |
+
+Kilder som er konfigurert, men ikke teller i gjeldende strategi, er med i lista med `teller_med: false`. Bytter du fra `vvb_pluss_ekstra` til `vvb_status`, blir ekstra-sensorene altså stående, bare uten å bidra. Det samme gjelder en kilde som ligger under terskelen for rollen sin, eller en sensor som er `unavailable`: den siste får `effekt_w: null`, siden vi da ikke vet hva lasten trekker.
+
+Med `blind` teller ingen kilder, og tilstanden er duty cycle-antagelsen på 0,3 kW. For de to andre strategiene er tilstanden summen av `effekt_w` for kildene med `teller_med: true`.
+
+---
+
 ## Effekt på blueprints
 
 `sensor.effektvakt_tilgjengelig_kutt` er primært en informasjons-sensor og en hjelpe-sensor for dashboards. De medfølgende blueprints bruker `binary_sensor.effektvakt_kutt_ned_anbefalt` som trigger, ikke `tilgjengelig_kutt` direkte.
