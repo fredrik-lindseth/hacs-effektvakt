@@ -34,6 +34,45 @@ Det er alt som trengs. Resten finner kortet selv.
 Det finnes en visuell editor med entitetsvelger, skalavalg og stilvalg, så YAML
 er ikke nødvendig.
 
+## Hva står på skiven
+
+Skiven har to slags merker, og de må ikke blandes. Noen er lagt der av oss og
+betyr noe for avlesningen. Resten er originalens egne instrumentmerker, som er
+med fordi vi gjenskaper et ekte instrument.
+
+### Avlesningen
+
+| Merke | Hva det er |
+| ----- | ---------- |
+| Kort, tykk rød viser | Projisert time-snitt: der timen ender hvis forbruket fortsetter som nå. Hovedavlesningen. |
+| Tynn, lang svart viser | Effekten akkurat nå. |
+| Liten trekant utenfor buen | Slepemerket. Står på topp-3-snittet for måneden og går aldri ned igjen, så det er nivået du betaler for uansett hva du gjør resten av måneden. |
+| Kr-båndet ytterst | Kapasitetstrinnene med månedspris. Trinnet måneden ligger an til er tykt, neste trinn er rødt. |
+| «---»-flagg midt i skiven | Sensoren er utilgjengelig. Viserne står parkert på null og viser ingen avlesning. |
+
+Trekanten er den eneste som ikke sier seg selv, og den er verdt å lære: en rød
+viser som står lavt betyr ingenting hvis slepemerket allerede står i neste
+trinn.
+
+### Originalens instrumentmerker
+
+Disse kommer fra målerskivene panelet er tegnet etter, og forteller hva slags
+instrument det er. De er trykt fast og endrer seg aldri.
+
+| Merke | Hva det betyr |
+| ----- | ------------- |
+| ∩ med strek under | Dreispoleverk. Lineær skala. Skiven `geha` bruker denne. |
+| ∩ med strek inni | Dreiejernverk. Ikke-lineær skala, trykket sammen mot toppen. Skiven `gossen` bruker denne. |
+| ∼ | Vekselstrøm. |
+| ⊥ | Instrumentet skal henge loddrett. Tyngdekraften på viser og opphenget påvirker nøyaktigheten, så bruksstillingen er en del av spesifikasjonen. |
+| KL.1,5 | Nøyaktighetsklasse 1,5, altså halvannen prosents feilmargin av full skala. |
+| Stjerne med tall i | Isolasjonsprøvespenning i kilovolt. En 2-er betyr at instrumentet er prøvd på 2 kV. |
+| «100 mA» | Verket originalen satt på: Gossen-skiven er tegnet etter et instrument med 100 milliampere fullutslag. |
+
+Kilden er Fredrik og en kollega av ham, ikke nettet. Symbolene er standardisert
+i IEC 60051, men den står bak betalingsmur, så dette er skrevet ned her nettopp
+fordi det ikke lar seg slå opp fritt.
+
 ## To skiver
 
 `geha` er en GEHA-METER med dreispoleverk: lineær skala, jevne hovedtall,

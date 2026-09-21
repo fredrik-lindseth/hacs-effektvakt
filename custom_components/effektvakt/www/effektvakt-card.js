@@ -25,6 +25,19 @@ const TRINN_AKTIV = "ev-trinn-aktiv";
 const TRINN_NESTE = "ev-trinn-neste";
 
 const FLAGG_ID = "ev-flagg";
+const FORKLARING_ID = "ev-forklaring";
+
+// Hva merkene paa skiven betyr. Fredrik maatte spoerre hva trekanten var, og
+// da trenger en skjermleserbruker det samme svaret. Originalens egne merker,
+// maaleverkssymbol, klasse og proevespenning, staar i docs/dashboard-kort.md:
+// de er historisk pynt og hoerer ikke til avlesningen.
+const FORKLARING =
+  "Rød viser er projisert time-snitt, altså hvor timen ender hvis forbruket fortsetter som nå." +
+  " Tynn svart viser er effekten akkurat nå." +
+  " Trekanten utenfor buen er slepemerket, som står på topp-3-snittet for måneden og aldri" +
+  " går ned igjen." +
+  " Båndet ytterst er kapasitetstrinnene med månedspris, der trinnet måneden ligger an til er" +
+  " tykt og neste trinn er rødt.";
 
 const CSS = `
 :host {
@@ -373,6 +386,7 @@ class EffektvaktCard extends HTMLElement {
 
     this._tekstalternativ = document.createElement("p");
     this._tekstalternativ.className = "sr-only";
+    this._tekstalternativ.id = FORKLARING_ID;
 
     this._feilfelt = document.createElement("p");
     this._feilfelt.className = "feil";
@@ -437,6 +451,9 @@ class EffektvaktCard extends HTMLElement {
     this._svg = document.importNode(svg, true);
     this._svg.removeAttribute("width");
     this._svg.removeAttribute("height");
+    // Skiven har alt role="img" fra faceplate.py. Etiketten settes ved hver
+    // oppdatering; beskrivelsen peker paa forklaringen av merkene.
+    this._svg.setAttribute("aria-describedby", FORKLARING_ID);
     this._geo = lesGeometri(this._svg);
     this._segmenter = lesSegmenter(this._svg);
     this._visere = {
@@ -636,43 +653,64 @@ class EffektvaktCard extends HTMLElement {
   _skrivTekst(tilgjengelig, projisertKw, naKw, slepeKw, kostnad) {
     const sprak = this._hass.locale?.language || "nb-NO";
     const kw = (v) => (v === null ? "–" : `${tall(v, 2, sprak)} kW`);
+    // Skjermleseren har ikke skiven aa se paa, saa enheten skrives ut.
+    // "kW" leses som bokstaver, "kilowatt" leses som ordet.
+    const lest = (v) => (v === null ? "ukjent verdi" : `${tall(v, 2, sprak)} kilowatt`);
 
     this._felt.projisert.textContent = tilgjengelig ? kw(projisertKw) : "–";
     this._felt.na.textContent = tilgjengelig ? kw(naKw) : "–";
     this._felt.topp3.textContent = tilgjengelig ? kw(slepeKw) : "–";
 
-    const skive = this._dsoNavn ? `Effektvakt for ${this._dsoNavn}` : "Effektvakt";
-    this._svg.setAttribute(
-      "aria-label",
-      tilgjengelig
-        ? `${skive}. Projisert time-snitt ${kw(projisertKw)}, effekt nå ${kw(naKw)},` +
-          ` topp-3 denne måneden ${kw(slepeKw)}.`
-        : `${skive}. Ingen avlesning, sensoren er utilgjengelig.`
-    );
-
-    const linjer = [];
-    if (!tilgjengelig) {
-      linjer.push(`${this._config.entity} er utilgjengelig, så viserne står parkert på null.`);
-    } else if (kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt) {
+    // Trinnteksten trengs i to utgaver: den synlige bruker "kW" og kan
+    // innlede fritt, mens etiketten skriver ut enheten og ikke skal gjenta
+    // "maaneden ligger an til", som alt staar i setningen foer.
+    const harTrinn = tilgjengelig && kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt;
+    const trinnlinjer = (enhet, innledning) => {
+      if (!harTrinn) return [];
       const a = this._trinn.aktivt;
       const n = this._trinn.neste;
-      linjer.push(
-        `Måneden ligger an til kapasitetstrinnet ${tall(a.fra, 0, sprak)} til` +
-          ` ${tall(a.til, 0, sprak)} kW, ${a.kr} kroner i måneden.`
-      );
+      const ut = [
+        `${innledning} kapasitetstrinnet ${tall(a.fra, 0, sprak)} til` +
+          ` ${tall(a.til, 0, sprak)} ${enhet}, ${a.kr} kroner i måneden.`,
+      ];
       if (n) {
-        linjer.push(
-          `Neste trinn starter på ${tall(n.fra, 0, sprak)} kW og koster ${n.kr} kroner i måneden,` +
-            ` altså ${kostnad.state} kroner mer.`
+        ut.push(
+          `Neste trinn starter på ${tall(n.fra, 0, sprak)} ${enhet} og koster` +
+            ` ${n.kr} kroner i måneden, altså ${kostnad.state} kroner mer.`
         );
       }
-    }
-    // Skjult tekstalternativ for trinnbaandet, som ellers bare finnes som
-    // grafikk. De tre avlesningene ligger i aria-etiketten paa skiven, saa de
-    // gjentas ikke her.
-    this._tekstalternativ.textContent = linjer.join(" ");
-    this._kostnad.textContent = linjer.join(" ");
-    this._kostnad.hidden = linjer.length === 0;
+      return ut;
+    };
+
+    // Etiketten maa baere hele betydningen, ikke bare tallene: hva timen ender
+    // paa, hva som gaar naa, hva maaneden ligger an til og hva det koster.
+    const skive = this._dsoNavn ? `Effektmåler for ${this._dsoNavn}` : "Effektmåler";
+    const avlesning = tilgjengelig
+      ? [
+          `${skive}.`,
+          `Timen ender på ${lest(projisertKw)} hvis forbruket fortsetter som nå.`,
+          `${lest(naKw)} går akkurat nå.`,
+          `Måneden ligger an til ${lest(slepeKw)}, som er topp-3-snittet og det du betaler for.`,
+          ...trinnlinjer("kilowatt", "Det er"),
+        ]
+      : [
+          `${skive}.`,
+          `Ingen avlesning: ${this._config.entity} er utilgjengelig,`,
+          "så viserne står parkert på null.",
+        ];
+    this._svg.setAttribute("aria-label", avlesning.join(" "));
+
+    // Beskrivelsen sier hva merkene paa skiven betyr. Etiketten over sier hva
+    // de staar paa. Delt slik gjentas ingenting for skjermleseren.
+    this._tekstalternativ.textContent = tilgjengelig
+      ? FORKLARING
+      : `${FORKLARING} Viserne viser ingen avlesning nå.`;
+
+    const synlig = tilgjengelig
+      ? trinnlinjer("kW", "Måneden ligger an til")
+      : [`${this._config.entity} er utilgjengelig, så viserne står parkert på null.`];
+    this._kostnad.textContent = synlig.join(" ");
+    this._kostnad.hidden = synlig.length === 0;
   }
 }
 

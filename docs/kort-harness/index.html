@@ -31,9 +31,17 @@
   .rad { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   .rad > * { flex: 0 0 420px; }
   header { margin-bottom: 16px; }
-  h1 { font-size: 18px; font-weight: 500; margin: 0 0 4px; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .06em; }
   p { margin: 0; font-size: 13px; color: var(--secondary-text-color); }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .legende { display: flex; flex-wrap: wrap; gap: 32px; margin-top: 28px; font-size: 13px; }
+  .legende section { flex: 1 1 360px; max-width: 560px; }
+  .legende dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+  .legende dt { font-weight: 600; white-space: nowrap; }
+  .legende dd { margin: 0; color: var(--secondary-text-color); }
+  .legende .merknad { margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -47,6 +55,46 @@
   </p>
 </header>
 <div class="rad" id="rad"></div>
+
+<div class="legende">
+  <section>
+    <h2>Avlesningen</h2>
+    <dl>
+      <dt>Rød viser</dt>
+      <dd>Projisert time-snitt: der timen ender hvis forbruket fortsetter som nå.</dd>
+      <dt>Svart viser</dt>
+      <dd>Effekten akkurat nå.</dd>
+      <dt>Trekant utenfor buen</dt>
+      <dd>Slepemerket. Står på topp-3-snittet for måneden og går aldri ned igjen.</dd>
+      <dt>Kr-båndet ytterst</dt>
+      <dd>Kapasitetstrinn med månedspris. Aktivt trinn er tykt, neste er rødt.</dd>
+      <dt>«---»-flagget</dt>
+      <dd>Sensoren er utilgjengelig. Viserne er parkert, ikke frosne.</dd>
+    </dl>
+  </section>
+  <section>
+    <h2>Originalens instrumentmerker</h2>
+    <dl>
+      <dt>∩ med strek under</dt>
+      <dd>Dreispoleverk, lineær skala.</dd>
+      <dt>∩ med strek inni</dt>
+      <dd>Dreiejernverk, ikke-lineær skala.</dd>
+      <dt>∼</dt>
+      <dd>Vekselstrøm.</dd>
+      <dt>⊥</dt>
+      <dd>Skal henge loddrett; bruksstillingen påvirker nøyaktigheten.</dd>
+      <dt>KL.1,5</dt>
+      <dd>Nøyaktighetsklasse 1,5, altså halvannen prosent av full skala.</dd>
+      <dt>Stjerne med tall</dt>
+      <dd>Isolasjonsprøvespenning i kilovolt.</dd>
+      <dt>100 mA</dt>
+      <dd>Verket originalen satt på.</dd>
+    </dl>
+    <p class="merknad">
+      Trykt fast, endrer seg aldri. Full forklaring i <code>docs/dashboard-kort.md</code>.
+    </p>
+  </section>
+</div>
 
 <script type="module">
 // Stubb av ha-card. Nok til at kortet kan tegnes uten Home Assistant, og
