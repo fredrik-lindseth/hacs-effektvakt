@@ -47,7 +47,7 @@ R_TRINN_TEKST: Final = R_SKALA + 148.0
 R_VISER_SVART: Final = R_SKALA + 2.0
 R_VISER_ROD: Final = R_SKALA - R_DELMERKE + 2.0
 
-HUB_R: Final = 52.0
+HUB_R: Final = 40.0
 RAMME_INNSLAG: Final = 14.0
 
 # Kabinettet er ikke et rett kvadrat: overkanten buer svakt oppover og alle
@@ -62,6 +62,7 @@ KABINETT_BUE: Final = 34.0
 # dem med delvis gjennomsikt. Trykkvarianten har det som flat bunnflate.
 PRISME_TOPP: Final = 730.0
 PRISME_INNSLAG: Final = 32.0
+PRISME_BUNN: Final = 26.0
 PRISME_DEKK: Final = 0.34
 
 # Stroemtransformatorsymbolet og klassemerket staar i lommene mellom vifta,
@@ -70,6 +71,9 @@ PRISME_DEKK: Final = 0.34
 SYMBOL_X: Final = 136.0
 SYMBOL_Y: Final = 698.0
 KL_X: Final = 898.0
+
+SKRUE_Y: Final = 956.0
+SKRUE_R: Final = 13.0
 
 DELSTREKER_PER_HOVEDMERKE: Final = 5
 HOVEDMERKER: Final = 6
@@ -447,7 +451,7 @@ def _riflet_felt(variant: Variant) -> list[str]:
     topp = PRISME_TOPP
     venstre = PRISME_INNSLAG
     hoyre = VIEWBOX - PRISME_INNSLAG
-    bunn = VIEWBOX - PRISME_INNSLAG
+    bunn = VIEWBOX - PRISME_BUNN
     bredde = hoyre - venstre
     hoyde = bunn - topp
     avstand = 26.0
@@ -479,14 +483,15 @@ def _riflet_felt(variant: Variant) -> list[str]:
         f'<rect x="{_n(venstre)}" y="{_n(topp)}" width="{_n(bredde)}" height="{_n(hoyde)}" fill="none"'
         f' stroke="{_farge("krom-mork")}" stroke-width="2" opacity="0.65"/>'
     )
-    # Skruene staar over hverandre i feltets loddrette midtakse.
-    for skrue_y in (772.0, 818.0):
-        ut.append(
-            f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(skrue_y)})">'
-            f'<circle r="20" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="4"/>'
-            f'<rect x="-13" y="-3.5" width="26" height="7" fill="{_farge("krom-mork")}"/>'
-            "</g>"
-        )
+    # Skruen sitter under navkapselen i feltets loddrette midtakse, der viseren
+    # aldri kommer. Det er bare plass til en: navet ligger paa y=900 og
+    # kabinettkanten paa 974, saa den andre skruen fra originalen faar ikke plass.
+    ut.append(
+        f'<g class="skrue" transform="translate({_n(NAV_X)} {_n(SKRUE_Y)})">'
+        f'<circle r="{_n(SKRUE_R)}" fill="{_farge("krom-lys")}" stroke="{_farge("krom-mork")}" stroke-width="3"/>'
+        f'<rect x="{_n(-SKRUE_R + 3)}" y="-3" width="{_n(2 * SKRUE_R - 6)}" height="6" fill="{_farge("krom-mork")}"/>'
+        "</g>"
+    )
     ut.append("</g>")
     return ut
 
@@ -496,15 +501,15 @@ def _hub(variant: Variant) -> list[str]:
     if variant == "print":
         return [
             f'<g id="nav" transform="translate({_n(NAV_X)} {_n(NAV_Y)})">'
-            f'<circle r="{_n(HUB_R - 30)}" fill="none" stroke="{_farge("trykk")}" stroke-width="4"/>'
+            f'<circle r="{_n(HUB_R - 22)}" fill="none" stroke="{_farge("trykk")}" stroke-width="4"/>'
             "</g>"
         ]
     return [
         f'<g id="nav" transform="translate({_n(NAV_X)} {_n(NAV_Y)})">'
         f'<circle r="{_n(HUB_R)}" fill="{_farge("krom-mork")}"/>'
-        f'<circle r="{_n(HUB_R - 9)}" fill="{_farge("krom-lys")}"/>'
-        f'<circle r="{_n(HUB_R - 24)}" fill="{_farge("krom-mork")}"/>'
-        f'<circle r="{_n(HUB_R - 33)}" fill="{_farge("trykk")}"/>'
+        f'<circle r="{_n(HUB_R - 7)}" fill="{_farge("krom-lys")}"/>'
+        f'<circle r="{_n(HUB_R - 18)}" fill="{_farge("krom-mork")}"/>'
+        f'<circle r="{_n(HUB_R - 25)}" fill="{_farge("trykk")}"/>'
         "</g>"
     ]
 

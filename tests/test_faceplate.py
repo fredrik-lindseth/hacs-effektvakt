@@ -10,6 +10,7 @@ import pytest
 
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
 from custom_components.effektvakt.faceplate import (
+    HUB_R,
     NAV_X,
     NAV_Y,
     PALETT,
@@ -179,15 +180,21 @@ def test_markorene_ligger_utenfor_viserens_sveip():
     assert abs(_polar_av(float(kl.get("x", "0")), float(kl.get("y", "0")))[0]) > ytterst + 8
 
 
+def test_skruen_sitter_under_navet_der_viseren_aldri_kommer():
+    rot = _rot(generate_faceplate(kapasitetstrinn=BKK))
+    skruer = [e for e in rot.iter() if e.get("class") == "skrue"]
+    assert skruer, "mangler skrue i prismefeltet"
+    for skrue in skruer:
+        x, y = (float(t) for t in re.findall(r"-?\d+(?:\.\d+)?", skrue.get("transform", "")))
+        assert x == NAV_X, "skruen skal staa i loddaksen"
+        assert y > NAV_Y + HUB_R, "skruen skal staa under navkapselen, utenfor viserens bane"
+
+
 def test_prismefeltet_ligger_over_navet_i_card_og_under_trykket_i_print():
     kort = generate_faceplate(kapasitetstrinn=BKK, variant="card")
-    assert kort.index('id="riflet-felt"') > kort.index(
-        'id="viser-rod"'
-    ), "plasten skal ligge foran navet og viserroettene"
+    assert kort.index('id="riflet-felt"') > kort.index('id="viser-rod"'), "plasten skal ligge foran navet"
     trykk = generate_faceplate(kapasitetstrinn=BKK, variant="print")
-    assert trykk.index('id="riflet-felt"') < trykk.index(
-        'id="hovedmerker"'
-    ), "trykkvarianten har feltet som flat bunnflate"
+    assert trykk.index('id="riflet-felt"') < trykk.index('id="hovedmerker"'), "trykket ligger over feltet"
 
 
 def test_kabinettet_er_buet_ikke_et_rett_kvadrat():
