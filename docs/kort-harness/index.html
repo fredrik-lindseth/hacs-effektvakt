@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<title>Effektvakt-kortet, prøvebenk</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    padding: 24px;
+    /* Roboto fordi Home Assistant bruker Roboto. Benken skal ligne. */
+    font-family: Roboto, system-ui, sans-serif;
+    background: #fafafa;
+    color: #212121;
+    --ha-card-header-font-size: 24px;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --card-background-color: #fff;
+    --ha-card-border-radius: 12px;
+    --error-color: #db4437;
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      background: #111;
+      color: #e1e1e1;
+      --primary-text-color: #e1e1e1;
+      --secondary-text-color: #9b9b9b;
+      --card-background-color: #1c1c1c;
+    }
+  }
+  .rad { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .rad > * { flex: 0 0 420px; }
+  header { margin-bottom: 16px; }
+  h1 { font-size: 18px; font-weight: 500; margin: 0 0 4px; }
+  p { margin: 0; font-size: 13px; color: var(--secondary-text-color); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Effektvakt-kortet, prøvebenk</h1>
+  <p>
+    Kortet lastes fra <code>custom_components/effektvakt/www/effektvakt-card.js</code>,
+    skivene genereres av <code>faceplate.py</code>. Verdiene er oppdiktede og
+    ligger i <code>tilstander</code> nederst i denne filen.
+    Bytt lys og mørk modus i operativsystemet.
+  </p>
+</header>
+<div class="rad" id="rad"></div>
+
+<script type="module">
+// Stubb av ha-card. Nok til at kortet kan tegnes uten Home Assistant, og
+// med de samme variablene HA-temaet setter.
+class HaCard extends HTMLElement {
+  connectedCallback() {
+    if (this._bygd) return;
+    this._bygd = true;
+    this.attachShadow({ mode: "open" }).innerHTML = `<style>
+      :host {
+        display: block;
+        background: var(--card-background-color, #fff);
+        border-radius: var(--ha-card-border-radius, 12px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+      }
+    </style><slot></slot>`;
+  }
+}
+customElements.define("ha-card", HaCard);
+
+// --- Testdata -------------------------------------------------------------
+//
+// Skru på tallene her for å prøve andre avlesninger. Verdiene under er tatt
+// fra Fredriks eget anlegg 21.09.2026: BKK, trinn 2-5 kW til 250 kr/mnd, og
+// 165 kr/mnd i sprang opp til neste trinn.
+
+const tilstander = {
+  "sensor.effektvakt_projisert_time_snitt": {
+    state: "0.41",
+    last_updated: "2026-09-21T19:45:00+00:00",
+    attributes: { current_kw: 1.08, friendly_name: "Effektvakt Projisert time-snitt" },
+  },
+  "sensor.effektvakt_topp_3_snitt_denne_maned": {
+    state: "3.743",
+    last_updated: "2026-09-21T19:45:00+00:00",
+    attributes: { friendly_name: "Effektvakt Topp-3 snitt denne måned" },
+  },
+  "sensor.effektvakt_kostnad_neste_trinn": {
+    state: "165",
+    last_updated: "2026-09-21T19:45:00+00:00",
+    attributes: {
+      trinn_na_kr: 250,
+      trinn_na_ovre_grense_kw: 5.0,
+      trinn_neste_kr: 415,
+      topp_3_projisert_kw: 3.743,
+      friendly_name: "Effektvakt Kostnad neste trinn",
+    },
+  },
+};
+
+const oppsett = [
+  { entity: "sensor.effektvakt_projisert_time_snitt", tittel: "GEHA, standard" },
+  { entity: "sensor.effektvakt_projisert_time_snitt", stil: "gossen", tittel: "Gossen, dreiejern" },
+  { entity: "sensor.effektvakt_projisert_time_snitt", maks_kw: 30, tittel: "Skala 30 kW" },
+  {
+    entity: "sensor.finnes_ikke",
+    kostnad_entity: "sensor.effektvakt_kostnad_neste_trinn",
+    tittel: "Utilgjengelig",
+  },
+];
+
+// --- Stubb av hass --------------------------------------------------------
+
+const skiver = await (await fetch("./faceplates.json")).json();
+
+// Alle sensorene ligger på samme enhet, slik de gjør i Home Assistant. Det er
+// det kortet bruker for å finne kostnadssensoren og topp-3-sensoren selv.
+const entiteter = Object.fromEntries(
+  Object.keys(tilstander).map((id) => [
+    id,
+    { entity_id: id, device_id: "proevebenk", platform: "effektvakt" },
+  ])
+);
+
+const hass = {
+  locale: { language: "nb" },
+  states: tilstander,
+  entities: entiteter,
+  callWS: async (melding) => {
+    const nokkel = `${melding.stil ?? "geha"}:${(melding.maks_kw ?? 15).toFixed(1)}`;
+    if (!skiver[nokkel]) throw new Error(`prøvebenken har ingen skive for ${nokkel}`);
+    return skiver[nokkel];
+  },
+};
+
+// Den ene ekte kortfilen. Ingen kopi her, ellers begynner benken å lyve.
+await import("../../custom_components/effektvakt/www/effektvakt-card.js");
+
+const rad = document.getElementById("rad");
+for (const konfig of oppsett) {
+  const kort = document.createElement("effektvakt-card");
+  kort.setConfig(konfig);
+  rad.append(kort);
+  kort.hass = hass;
+}
+
+// Det skjermleseren faktisk får, og en sjekk på at fargerollene traff. Bommer
+// et rollenavn, faller fargen stille tilbake på reserven i kortet.
+await new Promise((r) => setTimeout(r, 300));
+const forste = rad.firstElementChild.shadowRoot;
+const stil = getComputedStyle(forste.querySelector("ha-card"));
+console.info("aria-label:", forste.querySelector("svg").getAttribute("aria-label"));
+console.info("skjult tekst:", forste.querySelector(".sr-only").textContent);
+for (const rolle of ["emalje", "trykk", "viserrod", "krom-lys", "krom-mork",
+                     "skygge", "prisme-lys", "prisme-mork", "prisme-glans"]) {
+  console.info(`--effektvakt-${rolle}`, stil.getPropertyValue(`--effektvakt-${rolle}`).trim());
+}
+const aktiv = forste.querySelector(".ev-trinn-aktiv");
+const neste = forste.querySelector(".ev-trinn-neste");
+console.info("aktivt trinn:", aktiv?.id, aktiv?.dataset.kr, "| neste:", neste?.id, neste?.dataset.kr);
+for (const id of ["viser-rod", "viser-svart", "slepemerke"]) {
+  console.info(id, forste.querySelector(`#${id}`).style.transform);
+}
+const flagg = rad.lastElementChild.shadowRoot.querySelector("#ev-flagg");
+console.info("----flagget når sensoren er borte:", flagg.style.display === "" ? "synlig" : "skjult");
+</script>
+</body>
+</html>

@@ -29,7 +29,15 @@ from .const import (
     WS_TYPE_FACEPLATE,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
-from .faceplate import MAKS_KW_STANDARD, generate_faceplate, normaliser_maks_kw
+from .faceplate import (
+    MAKS_KW_STANDARD,
+    PALETT,
+    STILER,
+    STILNAVN,
+    generate_faceplate,
+    normaliser_maks_kw,
+    tilgjengelige_stiler,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -43,6 +51,9 @@ _LOGGER = logging.getLogger(__name__)
 DATA_FRONTEND_REGISTRERT: str = f"{DOMAIN}_frontend_registrert"
 
 FRONTEND_DIR: Path = Path(__file__).parent / FRONTEND_DIR_NAME
+
+# Foerste oppfoering i stilregisteret er standardskiven.
+STIL_STANDARD: str = STILNAVN[0]
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -97,11 +108,21 @@ def _dso_navn(entry: ConfigEntry) -> str | None:
     return dso_info["navn"] if dso_info else None
 
 
+def _palett(stil: str) -> dict[str, str]:
+    """Fargerollene skiven er tegnet med, slik kortet kan speile dem i CSS.
+
+    Kortet har de samme rollenavnene som reserve, men henter dem herfra saa
+    en fargeendring i faceplate.py ikke kan bli staaende igjen i kortet.
+    """
+    return {**PALETT, **STILER[stil].palett}
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_TYPE_FACEPLATE,
         vol.Optional("entity_id"): str,
         vol.Optional("maks_kw"): vol.All(vol.Coerce(float), vol.Range(min=1, max=200)),
+        vol.Optional("stil"): vol.In(STILNAVN),
     }
 )
 @websocket_api.async_response
@@ -110,7 +131,7 @@ async def ws_faceplate(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Gi kortet skiven som SVG, med skalaen og nettselskapet den er tegnet for."""
+    """Gi kortet skiven som SVG, med skala, nettselskap, stilregister og palett."""
     entry = _finn_entry(hass, msg.get("entity_id"))
     if entry is None:
         connection.send_error(
@@ -121,11 +142,24 @@ async def ws_faceplate(
         return
 
     maks_kw = normaliser_maks_kw(float(msg.get("maks_kw", MAKS_KW_STANDARD)))
+    stil = str(msg.get("stil", STIL_STANDARD))
     dso_navn = _dso_navn(entry)
     svg = generate_faceplate(
         kapasitetstrinn=_kapasitetstrinn(entry),
         maks_kw=maks_kw,
         variant="card",
         dso_navn=dso_navn,
+        stil=stil,
     )
-    connection.send_result(msg["id"], {"svg": svg, "maks_kw": maks_kw, "dso_navn": dso_navn})
+    connection.send_result(
+        msg["id"],
+        {
+            "svg": svg,
+            "maks_kw": maks_kw,
+            "dso_navn": dso_navn,
+            "stil": stil,
+            # Kortets stilvelger skal vise registeret, ikke en kopi av det.
+            "stiler": tilgjengelige_stiler(),
+            "palett": _palett(stil),
+        },
+    )

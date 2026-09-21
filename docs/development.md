@@ -18,6 +18,7 @@ custom_components/effektvakt/
 
 docs/
     blueprints/         # Blueprint YAML-filer
+    kort-harness/       # Prøvebenk for Lovelace-kortet, uten Home Assistant
     beregninger.md
     begrensninger.md
     blueprints.md
@@ -110,6 +111,15 @@ Scriptet laster `dso.py` og `faceplate.py` rett fra fil med importlib, så det k
 SVG-en er 100 mm i faktisk størrelse. viewBox er `0 0 1000 1000` der én enhet er 0,1 mm, altså 1000 enheter = 100 mm, så filen kan tas rett inn i CAD med kjent skala.
 
 Teksten ligger som ekte `<text>`-elementer med en fontstakk, ikke som baner. Den må konverteres til baner før den går til gravering eller trykk, ellers blir bokstavformene det maskinen tilfeldigvis har installert. Inkscape (`inkscape --export-text-to-path`) finnes ikke på denne maskinen, så konverteringen gjøres i CAD-programmet eller hos trykkeriet.
+
+---
+
+## Prøve Lovelace-kortet
+
+`python3 docs/kort-harness/server.py` kjører kortet i nettleseren uten Home
+Assistant, med skiver generert fra `faceplate.py` og kortfilen lastet rett fra
+`custom_components/effektvakt/www/`. Bruk den framfor å legge testkort i en
+produksjonsinstallasjon. Se `docs/dashboard-kort.md`.
 
 ---
 

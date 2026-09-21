@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,10 +16,23 @@ from custom_components.effektvakt.const import (
     FRONTEND_URL_BASE,
     WS_TYPE_FACEPLATE,
 )
+from custom_components.effektvakt.faceplate import (
+    PALETT,
+    PALETT_GOSSEN,
+    STILNAVN,
+    tilgjengelige_stiler,
+)
 from custom_components.effektvakt.frontend import ws_faceplate
 from tests.conftest import make_entry
 
-MANIFEST = json.loads((Path(__file__).parent.parent / "custom_components/effektvakt/manifest.json").read_text())
+PAKKE = Path(__file__).parent.parent / "custom_components/effektvakt"
+MANIFEST = json.loads((PAKKE / "manifest.json").read_text())
+
+
+def kortets_fargeroller() -> set[str]:
+    """Rollenavnene kortets CSS slaar opp som custom properties."""
+    css = (PAKKE / FRONTEND_DIR_NAME / FRONTEND_CARD_FILENAME).read_text()
+    return set(re.findall(r"--effektvakt-([a-z0-9-]+)", css))
 
 
 def make_hass(entries: list | None = None) -> MagicMock:
@@ -125,9 +139,8 @@ def test_manifest_har_avhengighetene_frontendregistreringen_krever():
 
 def test_static_katalogen_kolliderer_ikke_med_modulnavnet():
     """En katalog frontend/ ville skygget for frontend.py og stoppet importen."""
-    pakke = Path(__file__).parent.parent / "custom_components/effektvakt"
-    assert (pakke / FRONTEND_DIR_NAME).is_dir()
-    assert not (pakke / "frontend").exists()
+    assert (PAKKE / FRONTEND_DIR_NAME).is_dir()
+    assert not (PAKKE / "frontend").exists()
 
 
 # --- websocket-handleren --------------------------------------------------
@@ -265,3 +278,49 @@ async def test_ws_faceplate_gir_feil_naar_flere_entries_og_ukjent_entitet():
 
 def test_ws_kommandotypen_er_den_kortet_kaller():
     assert WS_TYPE_FACEPLATE == "effektvakt/faceplate"
+
+
+@pytest.mark.asyncio
+async def test_ws_faceplate_gir_stilregister_og_palett():
+    """Kortet skal slippe aa kopiere hverken stilnavn eller farger."""
+    entry = make_entry(dso="bkk")
+    entry.domain = "effektvakt"
+    entry.runtime_data = None
+    hass = make_ws_hass(entry)
+    connection = MagicMock()
+
+    with registry_patch(None):
+        await ws_faceplate(hass, connection, {"id": 10})
+
+    _msg_id, resultat = connection.send_result.call_args.args
+    assert resultat["stil"] == STILNAVN[0]
+    assert resultat["stiler"] == tilgjengelige_stiler()
+    # Rollenavnene kortets CSS slaar opp. Bommer de, faller fargene stille
+    # tilbake paa reserven i kortet, saa de sjekkes her.
+    assert kortets_fargeroller() <= set(resultat["palett"])
+    assert resultat["palett"]["emalje"] == PALETT["emalje"]
+
+
+@pytest.mark.asyncio
+async def test_ws_faceplate_tegner_valgt_stil():
+    entry = make_entry(dso="bkk")
+    entry.domain = "effektvakt"
+    entry.runtime_data = None
+    hass = make_ws_hass(entry)
+    connection = MagicMock()
+
+    with registry_patch(None):
+        await ws_faceplate(hass, connection, {"id": 11, "stil": "gossen"})
+
+    _msg_id, resultat = connection.send_result.call_args.args
+    assert resultat["stil"] == "gossen"
+    assert 'data-stil="gossen"' in resultat["svg"]
+    # Gossen overstyrer emaljen i sin egen palett.
+    assert resultat["palett"]["emalje"] == PALETT_GOSSEN["emalje"]
+
+
+def test_kortet_slaar_opp_fargeroller_som_finnes():
+    """Bommer kortet paa et rollenavn, faller fargen stille tilbake paa reserven."""
+    roller = kortets_fargeroller()
+    assert roller
+    assert roller <= set(PALETT), f"kortet bruker roller som ikke finnes: {roller - set(PALETT)}"
