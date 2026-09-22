@@ -112,3 +112,72 @@ async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
     assert coord._current_hour_kwh == 0.0
     assert coord._siste_maaler_kwh == 103.0
     assert coord._daily_max_kw[date(2026, 5, 25)] == pytest.approx(3.0)
+
+
+@pytest.mark.asyncio
+async def test_to_tunge_dager_bak_seg_gir_kutt_og_ikke_god_margin():
+    """Hele poenget i hacs-effektvakt-2p7wpch, gjennom hele pipeline.
+
+    6,0 og 5,8 kW logget, 10 kW nå midt i timen, altså 5,0 kW projisert. Topp-3
+    lander da på (6,0 + 5,8 + 5,0) / 3 = 5,6 og måneden går fra 250 til 415 kr.
+    Terskelen dagen tåler er 3,2, så marginen er -1,8 og vakten skal si kutt.
+
+    Modellen som sto her til september 2026 ga max(5,0, 5,9) = 5,9 og dermed
+    margin +0,90: «like under terskelen», ikke over den.
+    """
+    states = {
+        "sensor.power": make_state("10000", unit="W"),
+        "sensor.energy": make_state("100.0", unit="kWh"),
+    }
+    coord = _make_coordinator(states)
+    coord._daily_max_kw = {date(2026, 6, 1): 6.0, date(2026, 6, 2): 5.8}
+
+    with patch(
+        "custom_components.effektvakt.coordinator.dt_util_now",
+        return_value=datetime(2026, 6, 3, 14, 30, 0),
+    ):
+        data = await coord._async_update_data()
+
+    assert data["projected_avg_kw"] == pytest.approx(5.0)
+    assert data["maal_terskel_kw"] == 5.0
+    assert data["maal_trinn_kr"] == 250
+    assert data["dagstak_kw"] == pytest.approx(3.2)
+    assert data["time_tak_kw"] == pytest.approx(3.2)
+    assert data["margin_kw"] == pytest.approx(-1.8)
+    assert data["kutt_anbefalt_kw"] == pytest.approx(1.8)
+    assert data["kan_legge_paa_kw"] == 0.0
+    assert data["risiko_niva"] == RISIKO_OVER_TERSKEL
+    # Og kronene er ekte: topp-3 går fra 5 kW-trinnet til 10 kW-trinnet
+    assert data["kostnad_denne_timen_kr"] == 165
+
+
+@pytest.mark.asyncio
+async def test_topp_3_sensoren_er_monoton_gjennom_maaneden():
+    """En rolig dag nummer tre skal ikke dra topp-3-tallet ned igjen.
+
+    Med deling på antall dager ga 6,0 og 4,0 et topp-3 på 5,0, som falt til
+    3,67 i det en tredje dag på 1,0 kom til. Nå deles det alltid på tre.
+    """
+    states = {
+        "sensor.power": make_state("500", unit="W"),
+        "sensor.energy": make_state("100.0", unit="kWh"),
+    }
+    coord = _make_coordinator(states)
+
+    verdier = []
+    for dager in (
+        {date(2026, 6, 1): 6.0},
+        {date(2026, 6, 1): 6.0, date(2026, 6, 2): 4.0},
+        {date(2026, 6, 1): 6.0, date(2026, 6, 2): 4.0, date(2026, 6, 3): 1.0},
+    ):
+        coord._daily_max_kw = dict(dager)
+        coord._store_loaded = True
+        with patch(
+            "custom_components.effektvakt.coordinator.dt_util_now",
+            return_value=datetime(2026, 6, 4, 14, 30, 0),
+        ):
+            data = await coord._async_update_data()
+        verdier.append(data["topp_3_snitt_denne_maned_kw"])
+
+    assert verdier == [2.0, pytest.approx(3.333, abs=0.001), pytest.approx(3.667, abs=0.001)]
+    assert verdier == sorted(verdier)

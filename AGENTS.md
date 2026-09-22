@@ -39,12 +39,24 @@ være.
    config entries og aldri kan slettes. `tests/test_dso_data.py` har et frosset
    nøkkelsett som blokkerer sletting og tillater nye. Skal et nettselskap inn,
    legges det der med slug og mva-sone, ikke i `dso.py`.
-3. **Topp-3-regelen er domenet.** Nettselskapet fakturerer snittet av de tre
-   høyeste time-snittene fra tre ulike dager i måneden. En enkelt time over
-   terskelen koster ikke trinnet i seg selv: den må dra snittet av de tre over.
-   Er dagens topp allerede blant de tre høyeste, er en ny time på samme nivå
-   gratis. Koden som holder dette er `top_n_average` og
-   `compute_effective_threshold` i `coordinator.py`.
+3. **Topp-3-regelen er domenet, og den bor i `modell.py`.** Nettselskapet
+   fakturerer snittet av de tre høyeste time-snittene fra tre ulike dager i
+   måneden. En enkelt time over terskelen koster ikke trinnet i seg selv: den
+   må dra snittet av de tre over. Er dagens topp allerede blant de tre høyeste,
+   er en ny time på samme nivå gratis.
+
+   `custom_components/effektvakt/modell.py` er hele terskelaritmetikken, ren
+   Python uten HA-import, og risiko, margin, kostnad og «kan legge på» regner
+   alle fra det samme taket. Kjeden er: `minste_mulige_topp_3_kw` (sum av
+   inntil tre dagsmaks delt på tre) gir måltrinnet `T`, `dagstak_kw` er
+   `min(T, 3T - de to høyeste ANDRE dagene)`, og `time_tak_kw` er
+   `max(dagens maks, dagstak)`. **Jo høyere de andre dagene er, jo lavere er
+   grensen for hva dagen i dag tåler.** Koden gjorde det motsatt fram til
+   september 2026, og feilen overlevde fordi testene kodet inn den samme
+   antakelsen. Legger du til en terskel, legg den her og la coordinatoren
+   kalle, ellers får integrasjonen to svar på det samme spørsmålet igjen.
+   Tester i `tests/test_terskelmodell.py`, utledningen i
+   `docs/beregninger.md`.
 4. **Hysterese-invarianten**: oppgang i risiko er umiddelbar, nedgang krever
    holdetid, og flere trinn ned tas ett om gangen med ny timer per trinn.
    `apply_hysteresis` i `coordinator.py`, tester i `tests/test_hysteresis.py`.
@@ -78,11 +90,14 @@ repo-strukturen i sin helhet.
   `/effektvakt-static`, melder URL-en inn i Lovelace sitt ressursregister,
   websocket-kommandoen som leverer skiven), `config_flow.py` (config flow og
   options flow, sensorvalidering).
-- **Beregning**: `coordinator.py` er hele hjernen. Avlesning av effekt- og
-  energisensor, trapesintegrasjon av timen, avstemming mot måleren,
-  projeksjon, terskeloppslag, hysterese, kostnad, kuttkilder, månedsrullering
-  og persistering til `Store`. 1300 linjer, men delt i frie funksjoner som er
-  testet hver for seg. Legg ny logikk som en fri funksjon, ikke som en metode.
+- **Beregning**: `modell.py` er domenet, `coordinator.py` er drift. `modell.py`
+  holder topp-3-aritmetikken, terskelmodellen og kostnaden, uten en eneste
+  HA-import, så den kan regnes og testes uten stubber. `coordinator.py` gjør
+  resten: avlesning av effekt- og energisensor, trapesintegrasjon av timen,
+  avstemming mot måleren, projeksjon, hysterese, kuttkilder, månedsrullering og
+  persistering til `Store`. Begge er delt i frie funksjoner som er testet hver
+  for seg. Legg ny logikk som en fri funksjon, ikke som en metode, og legg den
+  i `modell.py` hvis den er ren regning.
 - **Entiteter**: `sensor.py` (seks sensorer), `binary_sensor.py`
   (`binary_sensor.effektvakt_kutt_ned_anbefalt`), `switch.py` (hovedbryteren),
   `diagnostics.py`.
@@ -97,7 +112,8 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 | Fil                                          | Innhold                                                                                   |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `custom_components/effektvakt/__init__.py`   | Entry-setup og -unload, watchdog-timer, de to tjenestene, `CONFIG_SCHEMA`                  |
-| `custom_components/effektvakt/coordinator.py`| All beregning: integrasjon, måleravstemming, projeksjon, topp-3, hysterese, kostnad, persist |
+| `custom_components/effektvakt/coordinator.py`| Måling og drift: integrasjon, måleravstemming, projeksjon, hysterese, persist. Kaller `modell.py` |
+| `custom_components/effektvakt/modell.py`     | Terskelmodellen og kostnaden. Ren Python uten HA-import, se regel 3                        |
 | `custom_components/effektvakt/const.py`      | Risiko-nivåer og rangering, tick-intervaller, watchdog-terskler, legacy-mapping, klamper   |
 | `custom_components/effektvakt/config_flow.py`| Config flow og options flow, validering av effekt- og energisensor                         |
 | `custom_components/effektvakt/dso.py`        | Kapasitetstrinn per nettselskap. AUTOGENERERT, se regel 1                                  |
@@ -260,8 +276,9 @@ framfor å duplisere.
 - **Legge til et nettselskap**: legg nøkkel, navn, prisområde, fri-nettleie-slug
   og mva-sone i `scripts/dso_kilder.json`. Deretter
   `python3 scripts/generer_dso_fra_fri_nettleie.py` og commit `dso.py`.
-- **Endre en beregning**: legg den som en fri funksjon i `coordinator.py` med
-  egen test i `tests/`, framfor å utvide `_async_update_data`.
+- **Endre en beregning**: legg den som en fri funksjon i `modell.py` med egen
+  test i `tests/`, framfor å utvide `_async_update_data`. Trenger den å lese
+  sensorer eller tilstand, hører den hjemme i `coordinator.py`.
 - **Endre skiven**: `faceplate.py` er eneste kilde. Prøv i
   `docs/kort-harness/server.py`, og sjekk trykkvarianten med
   `python3 scripts/export_faceplate.py --dso bkk --variant card --png`.

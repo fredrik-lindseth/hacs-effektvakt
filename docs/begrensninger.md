@@ -25,11 +25,15 @@ Løsning: Bruk `vvb_status`-strategi med en smart plugg på VVB.
 
 ---
 
-## Topp-3-snitt trenger 2+ dager
+## De første dagene av måneden er vakten for streng
 
-`effective_threshold_kw` faller tilbake til `next_tier_threshold_kw` de to første dagene av måneden (færre enn 2 dager logget). Marginen vises dermed uten topp-3-justering den første dagen, noe som gir et optimistisk bilde.
+Måltrinnet, altså det Effektvakt forsvarer, er det billigste trinnet måneden fortsatt kan ende på. Tidlig i måneden er to eller tre av topp-3-plassene tomme, og da er det billigste mulige trinnet det laveste i tabellen. På BKK betyr det at vakten de første dagene måler mot 2 kW-trinnet til 155 kr, og melder `over_terskel` for timer et vanlig hus ikke kan unngå.
 
-Fra dag 2 tar Effektvakt hensyn til topp-2-snittet. Fra dag 4 (når alle tre topp-dagene kan være satt) er beregningen fullstendig. Dette er riktig oppførsel, men kan overraske hvis du starter overvåkingen sent i måneden.
+Det er ikke feil regnet. Holder du hver eneste dag under 2 kW, betaler du faktisk 155 og ikke 250. Men det er sjelden et valg noen tar, og fram til dagene som er låst inn løfter skranken opp i det trinnet husstanden faktisk lander på, er varselet strengere enn det er nyttig.
+
+To ting demper det. `kostnad_denne_timen_kr` er 0 i nettopp disse timene, for måneden er der uansett, og varsel-blueprintet leser den. Og timetaket er `max(dagens maks, dagstaket)`, så varselet slår bare ut på timer som setter ny dagsrekord, ikke hele dagen.
+
+Mest treffsikkert ville vært å la forrige måneds oppgjorte topp-3 være gulv for måltrinnet de første dagene. Det er ikke gjort, og `_previous_month_top_3_snitt_kw` ligger alt lagret hvis noen vil.
 
 ---
 

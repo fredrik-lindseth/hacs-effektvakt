@@ -88,12 +88,16 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
             "elapsed_minutes_in_hour": d.get("elapsed_minutes_in_hour"),
             "actual_kwh_this_hour": d.get("actual_kwh_this_hour"),
             "current_kw": d.get("current_kw"),
-            "next_tier_threshold_kw": d.get("next_tier_threshold_kw"),
-            "next_tier_pris_per_maned": d.get("next_tier_pris_per_maned"),
-            "prev_tier_threshold_kw": d.get("prev_tier_threshold_kw"),
-            "effective_threshold_kw": d.get("effective_threshold_kw"),
+            # Referansen marginen måles mot, i den rekkefølgen den regnes ut:
+            # måltrinnet, taket for dagen, og taket for timen vi står i.
+            "maal_terskel_kw": d.get("maal_terskel_kw"),
+            "maal_trinn_kr": d.get("maal_trinn_kr"),
+            "dagstak_kw": d.get("dagstak_kw"),
+            "time_tak_kw": d.get("time_tak_kw"),
+            "dagens_maks_kw": d.get("dagens_maks_kw"),
+            "topp_2_andre_dager_kw": d.get("topp_2_andre_dager_kw"),
             "kutt_anbefalt_kw": d.get("kutt_anbefalt_kw"),
-            "topp_2_snitt_denne_maned_kw": d.get("topp_2_snitt_denne_maned_kw"),
+            "kan_legge_paa_kw": d.get("kan_legge_paa_kw"),
             "last_update": d.get("last_update"),
         }
 
@@ -111,6 +115,15 @@ class EffektvaktProjisertSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktMarginSensor(_EffektvaktBaseSensor):
+    """Hvor mye timen vi står i har igjen før den flytter måneden opp et trinn.
+
+    Marginen måles mot `time_tak_kw`, og attributtene viser hele regnestykket:
+    `maal_terskel_kw` er trinnet måneden kan ende på, `dagstak_kw` hva dagen i
+    dag tåler gitt de to høyeste andre dagene, og `time_tak_kw` det samme med
+    dagens eget dagsmaks lagt inn. Referansen flytter seg gjennom måneden,
+    derfor står den i klartekst.
+    """
+
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -123,6 +136,14 @@ class EffektvaktMarginSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktTopp3Sensor(_EffektvaktBaseSensor):
+    """Topp-3-snittet måneden har låst inn: sum av inntil tre dagsmaks delt på tre.
+
+    Alltid delt på tre, også med færre enn tre dager. Da stiger tallet gjennom
+    måneden og faller aldri, og det er samtidig en nedre skranke for hva
+    måneden kan ende på. Delte vi på antall dager i stedet, ville en rolig dag
+    nummer tre dratt tallet ned og gitt inntrykk av at noe var reddet.
+    """
+
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -178,10 +199,19 @@ class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
-    """Kronene per måned som står på spill mellom trinnet vi ligger an til og neste."""
+    """Kronene den inneværende timen er i ferd med å låse inn.
+
+    Tilstanden er `kostnad_denne_timen_kr`, ikke hoppet til neste trinn. Hoppet
+    står fast hele måneden, og en sensor som viser det samme tallet i 30 døgn
+    er en attributtpose, ikke en måling. Timens kostnad er null nesten alltid
+    og spiker i det timen faktisk flytter måneden opp et trinn, og det er den
+    en graf og en automasjon kan gjøre noe med. Hoppet ligger i attributtet
+    `kostnad_neste_trinn_kr`.
+    """
 
     # Ingen device_class: MONETARY krever ISO-valutakode som enhet og en total-state_class,
-    # og satser holdes i kr/mnd, slik strømkalkulator gjør det.
+    # og satser holdes i kr/mnd, slik strømkalkulator gjør det. Timens kostnad er
+    # også kr/mnd: det er månedsregningen timen flytter, ikke en timepris.
     _attr_native_unit_of_measurement = "kr/mnd"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -189,7 +219,7 @@ class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
 
     @property
     def native_value(self) -> int | None:
-        return self.coordinator.data.get("kostnad_neste_trinn_kr") if self.coordinator.data else None
+        return self.coordinator.data.get("kostnad_denne_timen_kr") if self.coordinator.data else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -199,6 +229,7 @@ class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
         felles = super().extra_state_attributes or {}
         return {
             **felles,
+            "kostnad_neste_trinn_kr": d.get("kostnad_neste_trinn_kr"),
             "trinn_na_kr": d.get("trinn_na_kr"),
             "trinn_na_ovre_grense_kw": d.get("trinn_na_ovre_grense_kw"),
             "trinn_neste_kr": d.get("trinn_neste_kr"),

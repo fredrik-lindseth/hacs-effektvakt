@@ -1,6 +1,6 @@
 # Beregninger
 
-Implementasjon: [`coordinator.py`](../custom_components/effektvakt/coordinator.py) og [`const.py`](../custom_components/effektvakt/const.py).
+Implementasjon: [`modell.py`](../custom_components/effektvakt/modell.py) (terskler og kostnad, ren Python uten Home Assistant), [`coordinator.py`](../custom_components/effektvakt/coordinator.py) (måling, integrasjon og hysterese) og [`const.py`](../custom_components/effektvakt/const.py).
 
 ## Projisert time-snitt
 
@@ -119,7 +119,9 @@ Norske nettselskap bruker snittet av de tre høyeste time-forbrukene fra tre uli
 1. For hver fullført klokketime, ta `actual_kwh_this_hour` som timer-forbruk.
 2. Sammenlign mot beste registrerte time samme dag. Oppdater hvis høyere.
 3. `daily_max_kw` inneholder én verdi per dag: høyeste registrerte time den dagen.
-4. `topp_3_snitt` = snitt av de 3 høyeste verdiene i `daily_max_kw`.
+4. `topp_3_snitt` = sum av de inntil 3 høyeste verdiene i `daily_max_kw`, alltid delt på 3.
+
+Delingen på 3 også med færre enn tre dager er det som gjør tallet monotont: en rolig dag nummer tre skal ikke dra snittet ned og gi inntrykk av at noe ble reddet. Dagene som ikke finnes ennå teller som null, og da er tallet samtidig en nedre skranke for hva måneden kan ende på.
 
 Dagsverdien settes med max mot det dagen hadde før timen ble lagt inn, ikke mot det den
 har nå. Forskjellen betyr noe når en måleravlesning retter den timen som nettopp ble låst
@@ -130,20 +132,67 @@ Dette er dag-snitt av maks-timer, ikke rå time-verdier. Modellen er identisk me
 
 ---
 
-## `effective_threshold_kw`
+## Terskelmodellen
 
-For å ta hensyn til at topp-3-dagene delvis er satt, justeres terskelen:
+Hele modellen ligger i [`modell.py`](../custom_components/effektvakt/modell.py), som er ren Python uten Home Assistant-import. Risiko, margin, kostnad og «kan legge på» regner fra det samme taket, så de kan ikke si hver sin ting om den samme timen.
+
+Fram til september 2026 fantes tre ulike terskler i tre funksjoner, og de var uenige. `compute_effective_threshold` ga `max(neste terskel, snitt av topp-2 dager)`, altså motsatt vei av regelen: den hevet terskelen når de andre dagene var høye. To dager på 6,0 og 5,8 ga «terskel 5,90» når den ekte grensen var 3,20.
+
+### Måltrinnet: T
+
+Det billigste kapasitetstrinnet måneden fortsatt kan ende på. Det er trinnet `minste_mulige_topp_3_kw` havner i, og terskelen til det trinnet er `T`.
 
 ```
-Hvis < 2 dager logget:
-    effective_threshold = next_tier_threshold_kw
-
-Ellers:
-    topp_2 = snitt av 2 høyeste daily_max_kw
-    effective_threshold = max(next_tier_threshold_kw, topp_2)
+minste_mulige_topp_3_kw = sum av inntil tre høyeste daily_max_kw / 3
+T                       = øvre terskel for trinnet det tallet havner i
 ```
 
-Begrunnelse: Hvis du allerede har to dager med snitt på 9,5 kW, og neste trinn er på 10 kW, er den reelle terskelen 10,5 kW (slik at topp-3-snittet holdes under 10 kW). `effective_threshold` gjenspeiler dette.
+Skranken teller bare dagsmaks som alt er låst inn, og deler alltid på tre. Den kan derfor bare stige gjennom måneden, og den sier hvor lavt måneden kan ende uansett hva som skjer videre.
+
+Måltrinnet følger ikke projeksjonen. Det er med vilje: fulgte det den, ville referansen flyttet seg oppover i samme øyeblikk som en time spratt over terskelen, og varselet forsvunnet akkurat når brukeren burde kuttet. Det var også det som gjorde at marginen målte mot noe annet enn brukeren trodde (`sensor.effektvakt_margin_til_neste_trinn` viste 3,50 med projisert 0,38, fordi den lave projeksjonen valgte 2 kW-trinnet som «neste»).
+
+### Dagstaket: x\*
+
+Hvor høy dagen i dag kan bli uten å dra topp-3-snittet over T. Snittet av de tre høyeste er `(a + b + x) / 3`, der `a` og `b` er dagsmaks for de to høyeste **andre** dagene:
+
+```
+(a + b + x) / 3 <= T     =>     x <= 3T - (a + b)
+
+dagstak_kw = min(T, 3T - (a + b))
+```
+
+Jo høyere de andre dagene er, jo mindre tåler dagen i dag. Det er hele poenget, og det er motsatt av hva koden gjorde før.
+
+Kappet ved T er en policy, ikke aritmetikk. Ukappet kunne én dag tatt hele budsjettet de tre plassene deler, og da måtte resten av måneden holdt seg nær null. Kappet gir hver av de tre dagene lik andel.
+
+Mot BKKs 5 kW-trinn (250 kr), der neste trinn er 10 kW (415 kr):
+
+| Andre dager  | `3T - (a + b)` | `dagstak_kw` | Gammel modell |
+| ------------ | -------------- | ------------ | ------------- |
+| 6,0 og 5,8   | 3,2            | **3,20**     | 5,90          |
+| 5,5 og 5,5   | 4,0            | **4,00**     | 5,50          |
+| 2,0 og 2,0   | 11,0           | **5,00**     | 5,00          |
+
+De to første meldte god margin mens brukeren var langt over. Den tredje traff riktig svar av feil grunn.
+
+### Timetaket: det marginen måles mot
+
+Dagen teller bare med sin høyeste time, så en time under dagens eget dagsmaks flytter ingenting:
+
+```
+time_tak_kw = max(dagens_maks_kw, dagstak_kw)
+margin_kw   = time_tak_kw - projisert_time_snitt
+```
+
+Da blir domeneregelen sann i koden og ikke bare i README: er dagens topp alt blant de tre høyeste, koster en ny time på samme nivå ingenting.
+
+Eksempel: dagene 1,0 / 1,0 / 12,0, der 12,0 er i dag. Skranken er 14 / 3 = 4,67, altså 5 kW-trinnet, og dagstaket er kappet til 5,0. Men dagen har alt satt 12,0, så timetaket er 12,0. En time på 11 kW har 1 kW margin; en time på 13 kW flytter dagsmaksen og dermed måneden.
+
+### Ingen terskel å måle mot
+
+`maal_terskel_kw`, `dagstak_kw`, `time_tak_kw`, `margin_kw` og `kan_legge_paa_kw` er alle `null` i to tilfeller: ukjent nettselskap (tomt trinn-sett) og måned som alt ligger på øverste trinn. Da finnes det ikke noe dyrere trinn å unngå. Risikoen er `god_margin`, og `kutt_anbefalt_kw` er 0.
+
+Det står `null` og ikke uendelig med vilje: `inf` er ugyldig JSON og knekker både recorder og websocket.
 
 ---
 
@@ -173,13 +222,13 @@ Prisene er flate månedspriser. Ingen pro rata, så tallet er like stort den 1. 
 
 ### `minste_mulige_topp_3_kw`
 
-Nedre skranke for hva måneden kan ende på:
+Nedre skranke for hva måneden kan ende på, og samtidig tilstanden til `sensor.effektvakt_topp_3_snitt_denne_maned` og grunnlaget for måltrinnet:
 
 ```
 minste_mulige_topp_3_kw = sum av inntil 3 høyeste daily_max_kw / 3
 ```
 
-Alltid delt på 3, uansett hvor mange dager som er logget, og bare dagsmaks som alt er låst inn telles. Den inneværende timen holdes utenfor nettopp fordi den fortsatt kan kuttes. Å telle den med ville gjort tallet pessimistisk og kunne sagt at trinnet under er uoppnåelig når det faktisk er innen rekkevidde.
+Bare dagsmaks som alt er låst inn telles. Den inneværende timen holdes utenfor nettopp fordi den fortsatt kan kuttes. Å telle den med ville gjort tallet pessimistisk og kunne sagt at trinnet under er uoppnåelig når det faktisk er innen rekkevidde.
 
 ```
 trinn_under_oppnaelig = minste_mulige_topp_3_kw <= terskel for trinnet under
@@ -189,14 +238,20 @@ trinn_under_oppnaelig = minste_mulige_topp_3_kw <= terskel for trinnet under
 
 ### `kostnad_denne_timen_kr`
 
-Kronene den inneværende timen er i ferd med å låse inn:
+Kronene den inneværende timen er i ferd med å låse inn, og tilstanden til `sensor.effektvakt_kostnad_neste_trinn`:
 
 ```
-kostnad_denne_timen_kr = max(0, trinn_na_kr - pris for trinnet topp_3_snitt
-                                              uten denne timen gir)
+kostnad_denne_timen_kr = pris for trinnet topp_3_projisert_kw gir
+                         - pris for trinnet minste_mulige_topp_3_kw gir
 ```
 
-Klemmen mot null trengs fordi `topp_3_snitt` tidlig i måneden deler på antall dager, ikke på 3 (se `top_n_average`). To dager på 12 kW gir topp-3 lik 12, mens en projeksjon som drar inn en rolig tredje dag gir 8,17. Da ligger det projiserte trinnet under det nåværende, og differansen blir negativ uten klemmen.
+Begge tallene deler på 3, så det projiserte ligger aldri under skranken og differansen er aldri negativ. Klemmen mot null står igjen som en sikring mot egendefinerte trinn-tabeller der prisen ikke stiger med terskelen.
+
+### Kostnaden og marginen sier ikke det samme, men de motsier hverandre ikke
+
+Marginen slår ut på eller før kostnaden, aldri etter. Er `margin_kw` null eller positiv, er `kostnad_denne_timen_kr` alltid 0. Den invarianten er testet med hypothesis i `tests/test_kostnad.py`.
+
+Den andre veien er tillatt: marginen kan være negativ mens timen ennå ikke koster noe. Det skjer når dagstaket er kappet ved T. To dager på 4,0 og en projeksjon på 5,0 holder måneden i 5 kW-trinnet (13 / 3 = 4,33), men dagen er over sin andel av de tre plassene, og fortsetter resten av måneden i samme spor ryker trinnet. Timen koster ikke noe ennå, den bruker opp slarken. Det er den konservative retningen, og det er den et varsel skal ha.
 
 ### Uendelig øverste terskel
 
@@ -219,7 +274,7 @@ Rå risiko bestemmes av margin og konfigurert `safety_buffer_kw` (standard 1,0 k
 | `0 < margin <= buffer`          | `like_under_terskel`  |
 | `margin <= 0`                   | `over_terskel`        |
 
-Margin = `effective_threshold_kw - projected_avg`.
+Margin = `time_tak_kw - projected_avg`, se [terskelmodellen](#terskelmodellen). Er `margin_kw` `null`, altså ukjent nettselskap eller øverste trinn, er risikoen `god_margin`: det finnes ikke noe dyrere trinn å advare mot.
 
 ---
 

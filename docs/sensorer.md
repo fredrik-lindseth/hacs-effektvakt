@@ -39,27 +39,33 @@ Skal du legge til en entitet: unique_id og entity_id skal ha samme nøkkel som `
 
 ## `sensor.effektvakt_margin_til_neste_trinn`
 
-**Hva**: Antall kW mellom projisert time-snitt og `effective_threshold_kw`. Positiv verdi betyr at du er under terskelen. Negativ verdi betyr at terskelen allerede er overskredet denne timen.
+**Hva**: Antall kW mellom projisert time-snitt og `time_tak_kw`, altså det høyeste timen kan bli uten å flytte måneden. Positiv verdi er slark, negativ verdi betyr at timen er i ferd med å flytte noe.
 
 **Enhet**: kW
 
 **Oppdateres**: Samme frekvens som projisert time-snitt.
 
-**Pålitelighet**: Avhenger av projisert time-snitt. Marginen er estimert og mer usikker tidlig i timen. Topp-3-justeringen gjøres via `effective_threshold_kw`, som er høyere enn `next_tier_threshold_kw` hvis topp-2-snittet fra tidligere dager allerede overstiger terskel-kW.
+**Hva den måles mot** står i attributtene, for referansen flytter seg gjennom måneden. `maal_terskel_kw` er terskelen til det billigste trinnet måneden fortsatt kan ende på, `dagstak_kw` er hva dagen i dag tåler gitt de to høyeste andre dagene, og `time_tak_kw` er det samme med dagens eget dagsmaks lagt inn. Hele regnestykket står i [beregninger.md](beregninger.md#terskelmodellen).
+
+Navnet stemmer fortsatt: marginen er avstanden til det trinnet måneden faktisk kan ende på, og krysser du den, er det neste trinn du havner på. Fram til september 2026 var det ikke sant. Da målte sensoren mot `max(neste terskel, snitt av topp-2 dager)`, et tall uten betydning, og en lav projeksjon kunne gjøre «neste trinn» til et trinn brukeren for lengst hadde passert.
+
+**Pålitelighet**: Avhenger av projisert time-snitt, og er mer usikker tidlig i timen. Er verdien `unknown`, finnes det ikke noe dyrere trinn å måle mot: enten er nettselskapet ukjent, eller så ligger måneden alt på øverste trinn.
 
 ---
 
 ## `sensor.effektvakt_topp_3_snitt_denne_maned`
 
-**Hva**: Snitt av de tre høyeste time-forbrukene (kWh per time, ikke kW per øyeblikk) fra ulike dager hittil denne måneden. Dette er grunnlaget for kapasitetstrinn-fakturering (NVE-modellen).
+**Hva**: Summen av de inntil tre høyeste time-forbrukene (kWh per time, ikke kW per øyeblikk) fra ulike dager hittil denne måneden, delt på tre. Dette er grunnlaget for kapasitetstrinn-fakturering (NVE-modellen).
 
 **Enhet**: kW
 
-**Oppdateres**: Hver gang en time fullføres, dvs. ved time-skifte.
+**Oppdateres**: Hver gang en time fullføres, altså ved time-skifte.
 
-**Pålitelighet**: Upålitelig de første 1-2 dagene av måneden. Med bare én dag logget returneres snittet av den ene dagen. Med to eller flere dager er verdien meningsfull. Tilbakestilles automatisk ved månedsskifte.
+**Alltid delt på tre**, også med færre enn tre dager logget. Dager som ikke finnes ennå teller som null. Det gjør tallet monotont: det stiger gjennom måneden og faller aldri fordi en rolig dag kom til. Delte sensoren på antall dager, ville to dager på 6,0 og 4,0 vist 5,0, og falt til 3,67 i det en tredje dag på 1,0 kom inn, som om noe var reddet.
 
-**Merk**: Sensoren viser 0,0 kW helt i starten av en ny måned (ingen dager logget ennå). Det er korrekt oppførsel.
+Tallet er samtidig en nedre skranke for hva måneden kan ende på, og det er samme verdi som attributtet `minste_mulige_topp_3_kw` på kostnadssensoren. Det er med vilje: det skal ikke finnes to konkurrerende topp-3 i huset.
+
+**Merk**: Sensoren viser 0,0 kW helt i starten av en ny måned (ingen dager logget ennå). Det er korrekt oppførsel, og tilbakestillingen skjer automatisk ved månedsskifte.
 
 ---
 
@@ -152,15 +158,17 @@ Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til 
 
 ## `sensor.effektvakt_kostnad_neste_trinn`
 
-**Hva**: Hva det koster per måned å havne på neste kapasitetstrinn. Tilstanden er månedsprisen for neste trinn minus månedsprisen for trinnet måneden ligger an til, altså kronene som står på spill hvis topp-3-snittet krysser terskelen over. Ligger du på BKKs 10 kW-trinn til 415 kr, og neste er 15 kW til 600 kr, viser sensoren 185.
+**Hva**: Kronene den inneværende timen er i ferd med å låse inn. Null nesten alltid, og spiker i det timen faktisk flytter måneden opp et trinn. Ligger måneden an til BKKs 10 kW-trinn til 415 kr, men dagene alene gir 5 kW-trinnet til 250 kr, viser sensoren 165.
 
-**Enhet**: kr/mnd. Ingen device_class: `MONETARY` krever ISO-valutakode som enhet og en total-state_class, og satser hører hjemme i kr/mnd. Samme regel som i strømkalkulator. State class er `measurement`, så tallet kan grafes over tid.
+Tilstanden var fram til september 2026 hoppet til neste trinn, som står stille hele måneden. En sensor som viser 185 i 30 døgn er en attributtpose og ikke en måling; hoppet ligger nå i attributtet `kostnad_neste_trinn_kr`. Timens kostnad er derimot noe en graf og en automasjon kan gjøre noe med, og blueprintene bruker den alt (`kun_varsel.yaml`).
+
+**Enhet**: kr/mnd. Timens kostnad er også kr/mnd: det er månedsregningen timen flytter, ikke en timepris. Ingen device_class: `MONETARY` krever ISO-valutakode som enhet og en total-state_class, og satser hører hjemme i kr/mnd. Samme regel som i strømkalkulator. State class er `measurement`, så tallet kan grafes over tid.
 
 **Trinnet du ligger an til** er trinnet til `topp_3_projisert_kw`, ikke til topp-3-snittet slik det står nå. Det er topp-3-snittet der dagens dagsmaks er byttet ut med det høyeste av dagens maks så langt og projisert time-snitt nå. Prisen er flat månedspris uten pro rata, så sensoren er like skarp den 1. som den 28.
 
 **Oppdateres**: Samme frekvens som projisert time-snitt.
 
-**Pålitelighet**: Tidlig i måneden deler topp-3-snittet på antall dager, ikke alltid på tre. To dager på 12 kW gir topp-3 lik 12, og en rolig tredje dag drar snittet ned til 8,17. Sensoren arver det, så den kan vise et lavere trinn etter hvert som måneden går. Det pessimistiske utslaget er riktig retning for et varsel, men ikke les tallet som en fasit de første dagene.
+**Pålitelighet**: Både `topp_3_projisert_kw` og `minste_mulige_topp_3_kw` deler alltid på tre, så de er sammenlignbare og kan bare stige gjennom måneden. Tidlig i måneden er trinnet tilsvarende lavt: med én dag logget er to av tre plasser tomme, og måneden ligger dermed an til et billigere trinn enn den vil ende på. Se [begrensninger.md](begrensninger.md).
 
 **Ukjent nettselskap**: Uten kapasitetstrinn er tilstanden `unknown` og alle kostnadsattributtene `None`.
 
@@ -170,12 +178,13 @@ I tillegg til fellesattributtene lenger nede:
 
 | Attributt                   | Enhet  | Beskrivelse                                                                             |
 | --------------------------- | ------ | --------------------------------------------------------------------------------------- |
+| `kostnad_neste_trinn_kr`    | kr/mnd | Hoppet fra trinnet måneden ligger an til, opp til neste. 0 på øverste trinn             |
 | `trinn_na_kr`               | kr/mnd | Månedsprisen for trinnet måneden ligger an til                                          |
 | `trinn_na_ovre_grense_kw`   | kW     | Øvre terskel for det trinnet. `null` på øverste trinn, som ikke har noen øvre grense    |
 | `trinn_neste_kr`            | kr/mnd | Månedsprisen for trinnet over. `null` når du alt er på øverste trinn                    |
 | `besparelse_trinn_under_kr` | kr/mnd | Hva du sparer på å komme ned et trinn. 0 på laveste trinn                               |
 | `trinn_under_oppnaelig`     | bool   | Om trinnet under fortsatt er innen rekkevidde denne måneden                             |
-| `kostnad_denne_timen_kr`    | kr/mnd | Kronene den inneværende timen er i ferd med å låse inn. 0 når timen ikke flytter noe    |
+| `kostnad_denne_timen_kr`    | kr/mnd | Samme tall som tilstanden, beholdt som attributt for automasjoner som leser det         |
 | `topp_3_projisert_kw`       | kW     | Topp-3-snittet med dagens projeksjon regnet inn. Dette er trinnet måneden ligger an til |
 | `minste_mulige_topp_3_kw`   | kW     | Nedre skranke: sum av inntil tre høyeste låste dagsmaks delt på 3                       |
 | `kapasitetstrinn`           | liste  | Hele trinn-tabellen som `[kW, kr]`-par                                                  |
@@ -230,13 +239,17 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | `elapsed_minutes_in_hour`     | min      | Antall hele minutter passert i inneværende klokketime             |
 | `actual_kwh_this_hour`        | kWh      | Energi målt hittil denne timen (fra energy-sensor eller estimert) |
 | `current_kw`                  | kW       | Øyeblikkelig effekt fra power-sensor                              |
-| `next_tier_threshold_kw`      | kW       | Konfigurert terskel for neste kapasitetstrinn                     |
-| `next_tier_pris_per_maned`    | kr       | Månedspris for neste trinn                                        |
-| `prev_tier_threshold_kw`      | kW       | Terskel for trinnet under (None hvis laveste trinn)               |
-| `effective_threshold_kw`      | kW       | Justert terskel etter topp-3-bevissthet                           |
+| `maal_terskel_kw`             | kW       | Terskelen til det billigste trinnet måneden fortsatt kan ende på  |
+| `maal_trinn_kr`               | kr/mnd   | Månedsprisen for det trinnet                                      |
+| `dagstak_kw`                  | kW       | Høyeste dagsmaks i dag som holder måneden i det trinnet           |
+| `time_tak_kw`                 | kW       | `max(dagens_maks_kw, dagstak_kw)`: det marginen måles mot         |
+| `dagens_maks_kw`              | kW       | Høyeste ferdige time i dag                                        |
+| `topp_2_andre_dager_kw`       | kW       | Sum av de to høyeste dagsmaksene fra andre dager enn i dag        |
 | `kutt_anbefalt_kw`            | kW       | `max(0, -margin)`: hvor mye som bør kuttes nå                     |
-| `topp_2_snitt_denne_maned_kw` | kW       | Snitt av topp-2 dager (brukes i effective_threshold)              |
+| `kan_legge_paa_kw`            | kW       | `max(0, margin)`: hvor mye time-snittet tåler å stige             |
 | `last_update`                 | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering            |
+
+Radene fra `maal_terskel_kw` til `topp_2_andre_dager_kw` er terskelmodellen, i den rekkefølgen den regnes. `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw` og `kan_legge_paa_kw` er `null` når det ikke finnes noe dyrere trinn å unngå, altså ved ukjent nettselskap eller på øverste trinn. Se [beregninger.md](beregninger.md#terskelmodellen).
 
 Strategi- og kilde-attributtene ligger bare på `sensor.effektvakt_tilgjengelig_kutt`, og kostnadsattributtene bare på `sensor.effektvakt_kostnad_neste_trinn`.
 

@@ -27,12 +27,14 @@ def coord_mock():
         "margin_kw": 4.5,
         "topp_3_snitt_denne_maned_kw": 4.2,
         "risiko_niva": "naermer_seg_terskel",
-        "next_tier_threshold_kw": 10.0,
-        "next_tier_pris_per_maned": 415,
-        "prev_tier_threshold_kw": 5.0,
-        "effective_threshold_kw": 10.0,
+        "maal_terskel_kw": 10.0,
+        "maal_trinn_kr": 415,
+        "dagstak_kw": 10.0,
+        "time_tak_kw": 10.0,
+        "dagens_maks_kw": 4.2,
+        "topp_2_andre_dager_kw": 8.4,
         "kutt_anbefalt_kw": 0.0,
-        "topp_2_snitt_denne_maned_kw": 4.0,
+        "kan_legge_paa_kw": 4.5,
         "elapsed_minutes_in_hour": 30,
         "actual_kwh_this_hour": 2.5,
         "current_kw": 5.5,
@@ -64,18 +66,36 @@ def test_projisert_sensor_native_value(coord_mock):
     assert s.native_unit_of_measurement == "kW"
 
 
-def test_margin_sensor_har_anbefalt_kw_attributt(coord_mock):
+def test_margin_sensor_viser_hva_den_maales_mot(coord_mock):
+    """Referansen flytter seg gjennom måneden, så den står i attributtene.
+
+    Uten dem er marginen et tall uten nevner: 4,5 kW til gode mot hva?
+    """
     s = EffektvaktMarginSensor(coord_mock)
     assert s.native_value == 4.5
     attrs = s.extra_state_attributes
     assert attrs["kutt_anbefalt_kw"] == 0.0
-    assert attrs["next_tier_threshold_kw"] == 10.0
-    assert attrs["prev_tier_threshold_kw"] == 5.0
+    assert attrs["kan_legge_paa_kw"] == 4.5
+    assert attrs["maal_terskel_kw"] == 10.0
+    assert attrs["maal_trinn_kr"] == 415
+    assert attrs["dagstak_kw"] == 10.0
+    assert attrs["time_tak_kw"] == 10.0
+    assert attrs["dagens_maks_kw"] == 4.2
+    assert attrs["topp_2_andre_dager_kw"] == 8.4
 
 
 def test_topp_3_sensor(coord_mock):
+    """Tilstanden er skranken: sum av inntil tre dagsmaks delt på tre.
+
+    Samme tall som attributtet minste_mulige_topp_3_kw på kostnadssensoren, og
+    det er med vilje: det skal ikke finnes to konkurrerende topp-3 i huset.
+    """
     s = EffektvaktTopp3Sensor(coord_mock)
     assert s.native_value == 4.2
+    assert (
+        EffektvaktKostnadNesteTrinnSensor(coord_mock).extra_state_attributes["minste_mulige_topp_3_kw"]
+        == s.native_value
+    )
 
 
 def test_risiko_sensor_native_value(coord_mock):
@@ -132,10 +152,23 @@ def test_tilgjengelig_kutt_sensor(coord_mock):
     assert s.native_unit_of_measurement == "kW"
 
 
-def test_kostnad_sensor_native_value(coord_mock):
+def test_kostnad_sensor_viser_timens_kostnad(coord_mock):
+    """Tilstanden er kronene timen låser inn, ikke hoppet som står fast hele måneden.
+
+    Hoppet ligger i attributtene. En sensor som viser 185 i 30 døgn er en
+    attributtpose, ikke en måling.
+    """
     s = EffektvaktKostnadNesteTrinnSensor(coord_mock)
-    assert s.native_value == 185
+    assert s.native_value == 0
     assert s.native_unit_of_measurement == "kr/mnd"
+
+    coord_mock.data["kostnad_denne_timen_kr"] = 165
+    assert s.native_value == 165
+
+
+def test_kostnad_sensor_har_hoppet_som_attributt(coord_mock):
+    attrs = EffektvaktKostnadNesteTrinnSensor(coord_mock).extra_state_attributes
+    assert attrs["kostnad_neste_trinn_kr"] == 185
 
 
 def test_kostnad_sensor_har_ingen_device_class(coord_mock):

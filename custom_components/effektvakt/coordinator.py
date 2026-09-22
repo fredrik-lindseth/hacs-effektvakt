@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -37,9 +37,6 @@ from .const import (
     MAX_POWER_CLAMP_W,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
-    RISIKO_LIKE_UNDER,
-    RISIKO_NAERMER_SEG,
-    RISIKO_OVER_TERSKEL,
     RISIKO_RANK,
     STORAGE_VERSION,
     STRATEGI_BLIND,
@@ -52,6 +49,13 @@ from .const import (
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
+from .modell import (
+    KOSTNAD_FELT_NAVN,
+    beregn_terskel,
+    classify_raw_risk,
+    compute_kostnad,
+    top_n_average,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -87,7 +91,17 @@ MAX_INTEGRATION_GAP_H = 5 / 60
 
 def dt_util_now() -> datetime:
     """Wrapper for monkeypatch-vennlig now()."""
-    return dt_util_module.now()
+    na: datetime = dt_util_module.now()
+    return na
+
+
+def rund(verdi: float | None, *, desimaler: int = 3) -> float | None:
+    """Avrund et kW-tall for data-dicten, og la None passere som None.
+
+    None betyr «vet ikke» eller «finnes ikke» og skal ut som null i JSON, ikke
+    som et tall noen kan regne videre på.
+    """
+    return None if verdi is None else round(verdi, desimaler)
 
 
 def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
@@ -178,192 +192,6 @@ def read_state_timestamp(hass: HomeAssistant, entity_id: str | None, *, now: dat
     if (lokal.tzinfo is None) != (now.tzinfo is None):
         return None
     return lokal
-
-
-def classify_raw_risk(*, margin_kw: float, safety_buffer_kw: float) -> str:
-    """Klassifiser rå risiko basert på margin og safety_buffer.
-
-    Returnerer en av RISIKO_LEVELS. Tabell:
-      god_margin:          margin > 2 x buffer
-      naermer_seg_terskel: buffer < margin <= 2 x buffer
-      like_under_terskel:  0 < margin <= buffer
-      over_terskel:        margin <= 0
-    """
-    if margin_kw <= 0:
-        return RISIKO_OVER_TERSKEL
-    if margin_kw <= safety_buffer_kw:
-        return RISIKO_LIKE_UNDER
-    if margin_kw <= 2 * safety_buffer_kw:
-        return RISIKO_NAERMER_SEG
-    return RISIKO_GOD_MARGIN
-
-
-def top_n_average(daily_max_kw: dict[date, float], *, n: int) -> float | None:
-    """Snitt av de n høyeste verdiene i daily_max_kw.
-
-    Returnerer None hvis dict er tom. Hvis det er færre enn n entries,
-    returneres snittet av alle.
-    """
-    if not daily_max_kw:
-        return None
-    sorted_vals = sorted(daily_max_kw.values(), reverse=True)
-    take = sorted_vals[:n]
-    return sum(take) / len(take)
-
-
-def compute_effective_threshold(
-    *,
-    next_tier_threshold_kw: float,
-    daily_max_kw: dict[date, float],
-) -> float:
-    """Beregn effective_threshold for topp-3-bevissthet.
-
-    Hvis < 2 dager logget: fall tilbake til next_tier_threshold (konservativt
-    valg tidlig i måneden).
-
-    Ellers: max(next_tier_threshold, snitt_av_topp_2_dager).
-    """
-    if len(daily_max_kw) < 2:
-        return next_tier_threshold_kw
-    topp_2 = top_n_average(daily_max_kw, n=2)
-    assert topp_2 is not None
-    return max(next_tier_threshold_kw, topp_2)
-
-
-@dataclass(frozen=True)
-class TierInfo:
-    """Resultat fra tier-oppslag."""
-
-    prev_threshold_kw: float | None
-    next_threshold_kw: float | None
-    next_pris_per_mnd: int | None
-
-
-def lookup_tiers(
-    *,
-    projected_kw: float,
-    trinn: list[tuple[float, int]],
-) -> TierInfo:
-    """Finn prev og next tier basert på projisert kW.
-
-    Trinn-listen er sortert stigende på kW-terskel. "next" er det laveste
-    trinnet hvor terskel >= projected_kw. "prev" er trinnet rett under.
-    """
-    if not trinn:
-        return TierInfo(None, None, None)
-
-    next_idx: int | None = None
-    for i, (threshold, _) in enumerate(trinn):
-        if projected_kw <= threshold:
-            next_idx = i
-            break
-
-    if next_idx is None:
-        prev_kw, _prev_pris = trinn[-1]
-        return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=None, next_pris_per_mnd=None)
-
-    next_kw, next_pris = trinn[next_idx]
-    prev_kw = trinn[next_idx - 1][0] if next_idx > 0 else None
-    return TierInfo(prev_threshold_kw=prev_kw, next_threshold_kw=next_kw, next_pris_per_mnd=next_pris)
-
-
-@dataclass(frozen=True)
-class KostnadInfo:
-    """Kostnadsbildet for kapasitetsleddet denne måneden.
-
-    Feltnavnene er også nøklene coordinatoren eksponerer i data-dicten.
-    """
-
-    kostnad_neste_trinn_kr: int
-    trinn_na_kr: int
-    trinn_na_ovre_grense_kw: float | None
-    trinn_neste_kr: int | None
-    besparelse_trinn_under_kr: int
-    trinn_under_oppnaelig: bool
-    kostnad_denne_timen_kr: int
-    topp_3_projisert_kw: float
-    minste_mulige_topp_3_kw: float
-    hoyeste_trinn: bool
-
-
-KOSTNAD_FELT_NAVN: tuple[str, ...] = tuple(f.name for f in fields(KostnadInfo))
-
-
-def _trinn_indeks(kw: float, trinn: list[tuple[float, int]]) -> int:
-    """Indeks til trinnet en kW-verdi havner i, altså laveste trinn med terskel >= kw.
-
-    Over høyeste terskel returneres øverste trinn.
-    """
-    for i, (terskel, _) in enumerate(trinn):
-        if kw <= terskel:
-            return i
-    return len(trinn) - 1
-
-
-def compute_kostnad(
-    *,
-    trinn: list[tuple[float, int]],
-    daily_max_kw: dict[date, float],
-    today: date,
-    projected_kw: float,
-) -> KostnadInfo | None:
-    """Hva kapasitetsleddet koster, og hva som står på spill akkurat nå.
-
-    `topp_3_projisert_kw` er topp-3-snittet der dagens dagsmaks erstattes med
-    max(dagens maks så langt, projisert time-snitt nå). Det er trinnet måneden
-    ligger an til, og `kostnad_neste_trinn_kr` er hoppet derfra til neste trinn.
-
-    `minste_mulige_topp_3_kw` teller bare dagsmaks som alt er låst inn (ferdige
-    timer), delt på 3 uansett antall dager. Den inneværende timen holdes utenfor
-    nettopp fordi den fortsatt kan kuttes, så tallet er en nedre skranke for hva
-    måneden kan ende på. Er den under terskelen til trinnet under, er trinnet
-    fortsatt innen rekkevidde.
-
-    `kostnad_denne_timen_kr` er kronene den inneværende timen er i ferd med å
-    låse inn: prisen for trinnet vi ligger an til minus prisen for trinnet
-    topp-3 gir uten denne timen.
-
-    Tomt trinn-sett (ukjent nettselskap) gir None.
-    """
-    if not trinn:
-        return None
-
-    projiserte_dager = dict(daily_max_kw)
-    projiserte_dager[today] = max(daily_max_kw.get(today, 0.0), projected_kw)
-    topp_3_projisert = top_n_average(projiserte_dager, n=3) or 0.0
-    topp_3_na = top_n_average(daily_max_kw, n=3) or 0.0
-    minste_mulige = sum(sorted(daily_max_kw.values(), reverse=True)[:3]) / 3
-
-    idx = _trinn_indeks(topp_3_projisert, trinn)
-    ovre_grense_kw, trinn_na_kr = trinn[idx]
-    er_hoyeste = idx == len(trinn) - 1
-
-    trinn_neste_kr = None if er_hoyeste else trinn[idx + 1][1]
-    kostnad_neste_trinn_kr = 0 if trinn_neste_kr is None else trinn_neste_kr - trinn_na_kr
-
-    if idx > 0:
-        under_terskel_kw, under_kr = trinn[idx - 1]
-        besparelse_trinn_under_kr = trinn_na_kr - under_kr
-        trinn_under_oppnaelig = minste_mulige <= under_terskel_kw
-    else:
-        besparelse_trinn_under_kr = 0
-        trinn_under_oppnaelig = False
-
-    trinn_uten_denne_timen_kr = trinn[_trinn_indeks(topp_3_na, trinn)][1]
-
-    return KostnadInfo(
-        kostnad_neste_trinn_kr=kostnad_neste_trinn_kr,
-        trinn_na_kr=trinn_na_kr,
-        # float("inf") er ugyldig JSON og knekker recorder og websocket
-        trinn_na_ovre_grense_kw=None if math.isinf(ovre_grense_kw) else ovre_grense_kw,
-        trinn_neste_kr=trinn_neste_kr,
-        besparelse_trinn_under_kr=besparelse_trinn_under_kr,
-        trinn_under_oppnaelig=trinn_under_oppnaelig,
-        kostnad_denne_timen_kr=max(0, trinn_na_kr - trinn_uten_denne_timen_kr),
-        topp_3_projisert_kw=round(topp_3_projisert, 3),
-        minste_mulige_topp_3_kw=round(minste_mulige, 3),
-        hoyeste_trinn=er_hoyeste,
-    )
 
 
 @dataclass
@@ -720,14 +548,19 @@ def les_ventende_time(rå: object) -> VentendeTime | None:
 class EffektvaktCoordinator(DataUpdateCoordinator):
     """Coordinator for Effektvakt."""
 
-    def __init__(self, hass: HomeAssistant, entry: object) -> None:
+    # DataUpdateCoordinator eier feltet, men uten Home Assistant installert ser
+    # ikke mypy basen, og et tildelt felt uten kjent type gjør oppslaget under
+    # sirkulært. Annoteringen sier hva HA faktisk holder der.
+    update_interval: timedelta | None
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=TICK_INTERVAL_BY_RISIKO[RISIKO_GOD_MARGIN]),
         )
-        self.entry: ConfigEntry = entry
+        self.entry = entry
         self.power_sensor: str | None = entry.data.get(CONF_POWER_SENSOR)
         self.energy_sensor: str | None = entry.data.get(CONF_ENERGY_SENSOR)
         self.safety_buffer_kw: float = float(entry.data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW))
@@ -917,18 +750,13 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             elapsed_h=elapsed_h,
         )
 
-        tiers = lookup_tiers(projected_kw=projected_avg, trinn=self.kapasitetstrinn)
-
-        if tiers.next_threshold_kw is None:
-            effective_threshold = float("inf")
-        else:
-            effective_threshold = compute_effective_threshold(
-                next_tier_threshold_kw=tiers.next_threshold_kw,
-                daily_max_kw=self._daily_max_kw,
-            )
-
-        margin = effective_threshold - projected_avg
-        rå = classify_raw_risk(margin_kw=margin, safety_buffer_kw=self.safety_buffer_kw)
+        terskel = beregn_terskel(
+            trinn=self.kapasitetstrinn,
+            daily_max_kw=self._daily_max_kw,
+            today=now.date(),
+            projected_kw=projected_avg,
+        )
+        rå = classify_raw_risk(margin_kw=terskel.margin_kw, safety_buffer_kw=self.safety_buffer_kw)
         apply_hysteresis(self._hysterese_state, rå_nivå=rå, now=now, holdetid=self.risiko_holdetid)
 
         new_interval = timedelta(seconds=TICK_INTERVAL_BY_RISIKO[self._hysterese_state.nivå])
@@ -936,9 +764,6 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self.update_interval = new_interval
 
         self._last_successful_update = now
-
-        topp_3 = top_n_average(self._daily_max_kw, n=3) or 0.0
-        topp_2 = top_n_average(self._daily_max_kw, n=2)
 
         kostnad = compute_kostnad(
             trinn=self.kapasitetstrinn,
@@ -959,14 +784,16 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "actual_kwh_this_hour": round(self._current_hour_kwh, 3),
             "kwh_maalt_fra_minutt": self._maalt_fra_minutt(),
             "elapsed_minutes_in_hour": int(elapsed_h * 60),
-            "margin_kw": round(margin, 3),
-            "effective_threshold_kw": effective_threshold,
-            "next_tier_threshold_kw": tiers.next_threshold_kw,
-            "prev_tier_threshold_kw": tiers.prev_threshold_kw,
-            "next_tier_pris_per_maned": tiers.next_pris_per_mnd,
-            "topp_3_snitt_denne_maned_kw": round(topp_3, 3),
-            "topp_2_snitt_denne_maned_kw": round(topp_2, 3) if topp_2 else None,
-            "kutt_anbefalt_kw": max(0.0, -margin),
+            "margin_kw": rund(terskel.margin_kw),
+            "time_tak_kw": rund(terskel.time_tak_kw),
+            "dagstak_kw": rund(terskel.dagstak_kw),
+            "maal_terskel_kw": terskel.maal_terskel_kw,
+            "maal_trinn_kr": terskel.maal_trinn_kr,
+            "dagens_maks_kw": rund(terskel.dagens_maks_kw),
+            "topp_2_andre_dager_kw": rund(terskel.topp_2_andre_dager_kw),
+            "topp_3_snitt_denne_maned_kw": rund(terskel.minste_mulige_topp_3_kw),
+            "kutt_anbefalt_kw": rund(terskel.kutt_anbefalt_kw),
+            "kan_legge_paa_kw": rund(terskel.kan_legge_paa_kw),
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
             "last_update": now.isoformat(),

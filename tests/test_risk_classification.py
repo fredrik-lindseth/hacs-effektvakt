@@ -10,7 +10,7 @@ from custom_components.effektvakt.const import (
     RISIKO_NAERMER_SEG,
     RISIKO_OVER_TERSKEL,
 )
-from custom_components.effektvakt.coordinator import classify_raw_risk
+from custom_components.effektvakt.modell import classify_raw_risk
 
 
 @pytest.mark.parametrize(
@@ -31,6 +31,15 @@ from custom_components.effektvakt.coordinator import classify_raw_risk
 )
 def test_classify_raw_risk(margin: float, buffer: float, expected: str):
     assert classify_raw_risk(margin_kw=margin, safety_buffer_kw=buffer) == expected
+
+
+def test_uten_terskel_aa_maale_mot_er_det_ingenting_aa_advare_om():
+    """Ukjent nettselskap eller øverste trinn gir margin None, ikke uendelig.
+
+    Uendelig er ugyldig JSON og knekker recorder og websocket, og «vet ikke»
+    skal ikke leses som «over terskelen».
+    """
+    assert classify_raw_risk(margin_kw=None, safety_buffer_kw=1.0) == RISIKO_GOD_MARGIN
 
 
 def test_verdiene_beskriver_naerheten_til_terskelen():

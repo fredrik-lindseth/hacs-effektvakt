@@ -8,12 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.effektvakt.coordinator import (
-    compute_effective_threshold,
-    lookup_tiers,
-    top_n_average,
-)
 from custom_components.effektvakt.dso import KAPASITETSTRINN_PER_DSO
+from custom_components.effektvakt.modell import beregn_terskel, top_n_average
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 BKK_FIXTURES = sorted(FIXTURES_DIR.glob("bkk_*_hourly.json"))
@@ -57,16 +53,16 @@ def _simulate_with_kutt(hours: list[dict], trinn: list[tuple[float, int]], kutt_
         d = dt.date()
         kwh = float(h["kwh"])
 
-        tiers = lookup_tiers(projected_kw=kwh, trinn=trinn)
-        if tiers.next_threshold_kw is None:
+        terskel = beregn_terskel(
+            trinn=trinn,
+            daily_max_kw=daily_max_so_far,
+            today=d,
+            projected_kw=kwh,
+        )
+        if terskel.margin_kw is None:
             adjusted = kwh
         else:
-            effective_threshold = compute_effective_threshold(
-                next_tier_threshold_kw=tiers.next_threshold_kw,
-                daily_max_kw=daily_max_so_far,
-            )
-            margin = effective_threshold - kwh
-            ville_kuttet = margin <= safety_buffer_kw
+            ville_kuttet = terskel.margin_kw <= safety_buffer_kw
             adjusted = kwh - kutt_kwh if ville_kuttet else kwh
 
         if adjusted > daily_result.get(d, 0.0):
@@ -246,14 +242,15 @@ def test_replay_ingen_false_positives_lavt_forbruk():
                     daily_max_so_far[d] = kwh
                 continue
 
-            tiers = lookup_tiers(projected_kw=kwh, trinn=trinn)
-            if tiers.next_threshold_kw is None:
-                continue
-            effective_threshold = compute_effective_threshold(
-                next_tier_threshold_kw=tiers.next_threshold_kw,
+            terskel = beregn_terskel(
+                trinn=trinn,
                 daily_max_kw=daily_max_so_far,
+                today=d,
+                projected_kw=kwh,
             )
-            margin = effective_threshold - kwh
+            margin = terskel.margin_kw
+            if margin is None:
+                continue
             melding = f"{path.stem} {dt}: lav forbruks-time {kwh:.2f} kWh gir margin {margin:.2f}, ventet > 1.0"
             assert margin > 1.0, melding
 
