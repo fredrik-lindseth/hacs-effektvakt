@@ -13,12 +13,17 @@ Bruk:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EFFEKTVAKT_DSO = REPO_ROOT / "custom_components" / "effektvakt" / "dso.py"
-STROMKALKULATOR_DSO = REPO_ROOT.parent / "hacs-strømkalkulator" / "custom_components" / "stromkalkulator" / "dso.py"
+
+# Lokalt ligger strømkalkulator som søskenmappe. I CI kan den ikke det, for
+# actions/checkout nekter å skrive utenfor workspace, så stien overstyres der.
+_STROMKALKULATOR_ROOT = Path(os.environ.get("STROMKALKULATOR_ROOT", REPO_ROOT.parent / "hacs-strømkalkulator"))
+STROMKALKULATOR_DSO = _STROMKALKULATOR_ROOT / "custom_components" / "stromkalkulator" / "dso.py"
 
 
 def _load_stromkalkulator_dso() -> dict:

@@ -16,8 +16,8 @@ jobs:
       - name: Checkout strømkalkulator for DSO-sync
         uses: actions/checkout@v6
         with:
-          repository: fredrik-lindseth/hacs-strømkalkulator
-          path: ../hacs-strømkalkulator
+          repository: fredrik-lindseth/Stromkalkulator
+          path: _stromkalkulator
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -34,6 +34,8 @@ jobs:
         run: mypy custom_components/effektvakt/ --ignore-missing-imports || true
 
       - name: Verify DSO sync
+        env:
+          STROMKALKULATOR_ROOT: ${{ github.workspace }}/_stromkalkulator
         run: python scripts/sync_dso_from_stromkalkulator.py --check
 
       - name: Tests with coverage
