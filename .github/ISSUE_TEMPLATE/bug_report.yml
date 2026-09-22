@@ -1,0 +1,121 @@
+name: Feilrapport
+description: Effektvakt gjør noe annet enn det dokumentasjonen sier.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Effektvakt regner på din egen måler, ditt eget nettselskap og dine egne sensorer, så et tall som ser feil ut er nesten alltid avhengig av oppsettet ditt. Feltene under er de vi trenger for å regne etter.
+
+        [Begrensninger](https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/begrensninger.md) og [FAQ](https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/faq.md) dekker en del av det som ser ut som feil, blant annet at topp-3-snittet trenger målinger fra minst to ulike dager før det betyr noe.
+  - type: textarea
+    id: hva
+    attributes:
+      label: Hva skjedde
+      description: Hva du gjorde, hva du ventet, og hva som skjedde i stedet.
+    validations:
+      required: true
+  - type: input
+    id: ha_versjon
+    attributes:
+      label: Home Assistant-versjon
+      description: Innstillinger, så Om.
+    validations:
+      required: true
+  - type: input
+    id: effektvakt_versjon
+    attributes:
+      label: Effektvakt-versjon
+      description: HACS, eller Innstillinger, Enheter og tjenester, Effektvakt.
+    validations:
+      required: true
+  - type: input
+    id: nettselskap
+    attributes:
+      label: Nettselskap
+      description: Det du valgte i oppsettet, slik det står i nedtrekkslisten. Kapasitetstrinnene er forskjellige fra selskap til selskap.
+      placeholder: "BKK Nett"
+    validations:
+      required: true
+  - type: input
+    id: power_sensor
+    attributes:
+      label: Power-sensoren
+      description: Hvor kommer den fra, og hvilken enhet har den? AMS-leser og modell hvis du vet det.
+      placeholder: "Tibber Pulse via HAN-port, sensor.pulse_power, W"
+    validations:
+      required: true
+  - type: dropdown
+    id: power_frekvens
+    attributes:
+      label: Hvor ofte oppdaterer power-sensoren seg?
+      options:
+        - "Hvert 2.-10. sekund"
+        - "Omtrent hvert minutt"
+        - "Sjeldnere enn hvert minutt"
+        - "Vet ikke"
+    validations:
+      required: true
+  - type: input
+    id: energy_sensor
+    attributes:
+      label: Energy-sensoren
+      description: Den kumulative kWh-telleren, hvis du har satt den opp. Skriv "ingen" hvis feltet står tomt i oppsettet.
+      placeholder: "sensor.pulse_accumulated_consumption, kWh"
+    validations:
+      required: true
+  - type: dropdown
+    id: energy_frekvens
+    attributes:
+      label: Hvor ofte oppdaterer energy-sensoren seg faktisk?
+      description: Sjekk historikken til sensoren framfor å gjette. Dette er den vanligste årsaken til at time-snittet hopper eller ligger for lavt, fordi avstemmingen mot måleren bare skjer når telleren får en ny verdi.
+      options:
+        - "Flere ganger i minuttet"
+        - "Omtrent hvert minutt"
+        - "Hvert 5.-15. minutt"
+        - "Én gang i timen eller sjeldnere"
+        - "Har ingen energy-sensor"
+        - "Vet ikke"
+    validations:
+      required: true
+  - type: dropdown
+    id: strategi
+    attributes:
+      label: Kutt-strategi
+      options:
+        - "Blind"
+        - "VVB med statussensor"
+        - "VVB + ekstra last"
+    validations:
+      required: true
+  - type: textarea
+    id: tall
+    attributes:
+      label: Hva sensorene viste
+      description: |
+        Verdiene da det så feil ut, og hva du mener de burde vært. Ta med de som er relevante: `sensor.effektvakt_projisert_time_snitt`, `sensor.effektvakt_topp_3_snitt_denne_maned`, `sensor.effektvakt_risiko_niva`, `sensor.effektvakt_margin_til_neste_trinn`. Attributtene på sensorene sier mer enn tilstanden alene.
+      render: text
+  - type: input
+    id: driftstid
+    attributes:
+      label: Hvor lenge har oppsettet kjørt?
+      description: Topp-3-snittet trenger timer fra minst tre ulike dager før det står på riktig nivå, og en fersk installasjon ser derfor for optimistisk ut.
+      placeholder: "Lagt til i går kveld"
+  - type: textarea
+    id: diagnostikk
+    attributes:
+      label: Diagnostikk-fil
+      description: |
+        Innstillinger, Enheter og tjenester, Effektvakt, enheten, så «Last ned diagnostikk». Filen har koordinatordata, hysterese-tilstand og kapasitetstrinnene dine, men ingen entitets-id-er, så den kan legges ved som den er. Dra filen inn i feltet her.
+  - type: textarea
+    id: logg
+    attributes:
+      label: Logglinjer fra custom_components.effektvakt
+      description: |
+        Slå på feilsøkingslogg (Innstillinger, Enheter og tjenester, Effektvakt, «Aktiver feilsøkingslogging»), la det gå gjennom minst et timeskifte, og lim inn linjene som nevner `effektvakt`.
+      render: text
+  - type: textarea
+    id: ellers
+    attributes:
+      label: Noe annet
+      description: Om du bruker blueprintene eller Lovelace-kortet, om noe annet styrer de samme lastene, og om problemet startet etter en oppdatering.

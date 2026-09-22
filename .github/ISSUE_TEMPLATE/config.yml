@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ofte stilte spørsmål
+    url: https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/faq.md
+    about: Om det er trygt å styre varmtvannstanken, hva du faktisk sparer, og hvilke laster som er verdt å kutte.
+  - name: Kjente begrensninger
+    url: https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/begrensninger.md
+    about: Det som ser ut som feil, men er kjent og med vilje. Les denne før du melder en feil.
+  - name: Krav til sensorene
+    url: https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/input-sensorer.md
+    about: Hvilke power- og energy-sensorer som duger, og hvorfor en peak-sensor gir feil projeksjon.
