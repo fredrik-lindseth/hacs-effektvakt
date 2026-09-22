@@ -130,14 +130,14 @@ whitespace-/JSON-/YAML-sjekkene. `pytest` henger på `pre-push`, ikke på
 `pre-commit`. Mypy er informativ her og i CI (`|| true`), så en typefeil
 stopper ingenting; det betyr ikke at den er greit å legge igjen.
 
-«Verify DSO sync» er grønn og skal holdes grønn. Den er `files`-gatet på
-`dso.py` og synk-scriptet, så den kjører bare når du rører dem.
+DSO-hooken «DSO-tabell mot fri-nettleie» er grønn og skal holdes grønn. Den er
+`files`-gatet på `dso.py`, generatoren og `dso_kilder.json`, så den kjører bare
+når du rører dem. CI kjører den samme sjekken ubetinget, mot en utsjekk av
+fri-nettleie på commiten i `dso_kilder.json`.
 
-`ruff-format`-hooken er pinnet til `v0.8.6` i `.pre-commit-config.yaml`, mens
-ruff lokalt er nyere. De to er ikke enige om hvor lange linjer de brekker, selv
-om `line-length` er 120 i `pyproject.toml`. **Hold Python-linjer under 110 tegn
-til pinningen er bumpet**, så slipper du at hooken formaterer om linjer du ikke
-har rørt. E501 er slått av i ruff-lint, så ingenting advarer deg om det.
+`ruff-format`-hooken er pinnet til `v0.16.8`, samme versjon som ligger lokalt,
+så `ruff format --check` og pre-commit brekker linjer likt. `line-length` er 120
+i `pyproject.toml`, og E501 er slått av i ruff-lint.
 
 CI (`.github/workflows/ci.yml`) sjekker ut fri-nettleie på pinnet commit, kjører
 ruff, mypy, DSO-sjekken, pytest med coverage, og verifiserer at manifestet er

@@ -1,4 +1,4 @@
-"""Replay-test mot strømkalkulator-fixturer (NVE-modell: én topp-time per dag)."""
+"""Replay-test mot fixturene i tests/fixtures/ (NVE-modell: én topp-time per dag)."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def _trinn_idx_for_kw(kw: float, trinn: list[tuple[float, int]]) -> int:
 
 @pytest.mark.skipif(
     not FIXTURES_DIR.exists() or not BKK_FIXTURES,
-    reason="strømkalkulator-fixturer ikke tilgjengelig",
+    reason="replay-fixturer mangler i tests/fixtures/",
 )
 def test_replay_skadebegrensning_over_5_måneder():
     """Kontrafaktisk besparelse: styring skal aldri forverre og gi positiv effekt minst én måned.
@@ -158,7 +158,7 @@ _KUTT_SCENARIER = [
 
 @pytest.mark.skipif(
     not FIXTURES_DIR.exists() or not BKK_FIXTURES,
-    reason="strømkalkulator-fixturer ikke tilgjengelig",
+    reason="replay-fixturer mangler i tests/fixtures/",
 )
 @pytest.mark.parametrize("kutt_kwh,label,min_forbedring,min_måneder,min_trinn_bevaring", _KUTT_SCENARIER)
 def test_replay_kutt_scenarier(
@@ -221,7 +221,7 @@ def test_replay_kutt_scenarier(
 
 @pytest.mark.skipif(
     not FIXTURES_DIR.exists() or not BKK_FIXTURES,
-    reason="strømkalkulator-fixturer ikke tilgjengelig",
+    reason="replay-fixturer mangler i tests/fixtures/",
 )
 def test_replay_ingen_false_positives_lavt_forbruk():
     """Effektvakt skal ikke forsøke kutt i timer langt under tier-grensa."""
