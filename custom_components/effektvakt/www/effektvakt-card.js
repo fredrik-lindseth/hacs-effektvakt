@@ -20,6 +20,29 @@ const OVERSLAG_GRADER = 4;
 
 const UGYLDIGE_TILSTANDER = new Set(["unavailable", "unknown", ""]);
 
+// Avlesningen har tre utfall, ikke to. "borte" er en sensor som ikke svarer,
+// "venter" er en sensor som ennaa ikke har noe aa si. Rett etter omstart er
+// 0,00 kW ikke et hus som ikke bruker stroem, det er fravaeret av en maaling,
+// og da skal kortet ikke tegne en avlesning.
+const AVLESNING_OK = "ok";
+const AVLESNING_VENTER = "venter";
+const AVLESNING_BORTE = "borte";
+
+const TILSTAND_BORTE = new Set(["unavailable"]);
+const TILSTAND_VENTER = new Set(["unknown", ""]);
+
+// Ved omstart av Home Assistant kobler frontenden seg paa foer integrasjonene
+// er satt opp, og da finnes ikke websocket-kommandoen ennaa: svaret er
+// «Unknown command». Det retter seg selv i loepet av sekunder, saa kortet
+// proever igjen med voksende pause framfor aa gi opp paa foerste forsoek.
+const FORSOK_PAUSER_MS = [500, 1000, 2000, 4000, 8000, 15000, 30000];
+// Femte forsoek kommer rundt femten sekunder ut. Har det ikke loest seg da, er
+// det verdt aa si fra; foer det er roed tekst bare stoey.
+const FEILMELDING_ETTER_FORSOK = 5;
+// Editoren proever ved hver hass-oppdatering, som kommer titt. Uten et tak
+// ville et virkelig brudd gitt et jevnt kall mot websocket resten av oekten.
+const EDITOR_MAKS_FORSOK = 5;
+
 // Segmentet vi ligger an til blir tykkere, neste trinn farges viserroedt.
 const TRINN_AKTIV = "ev-trinn-aktiv";
 const TRINN_NESTE = "ev-trinn-neste";
@@ -87,6 +110,13 @@ ha-card {
   width: 100%;
   height: auto;
   border-radius: 8px;
+}
+
+/* Plassholder mens skiven hentes, saa kortet ikke hopper i hoeyden naar den
+   kommer. Skiven er kvadratisk. */
+.skive:empty {
+  aspect-ratio: 1 / 1;
+  background: var(--effektvakt-emalje);
 }
 
 /* Viserne roteres om navet. Transformen settes som style og vinner over
@@ -158,10 +188,16 @@ ha-card {
   color: var(--secondary-text-color);
 }
 
-.feil {
+/* Statuslinjen: nedtonet mens kortet venter, roed foerst naar ventingen har
+   vart lenge nok til at noe trolig er galt. */
+.melding {
   margin: 8px 4px;
-  color: var(--error-color, #db4437);
+  color: var(--secondary-text-color);
   font-size: 14px;
+}
+
+.melding.feil {
+  color: var(--error-color, #db4437);
 }
 
 .sr-only {
@@ -202,6 +238,23 @@ function talletAv(verdi) {
 
 function erUgyldig(tilstand) {
   return !tilstand || UGYLDIGE_TILSTANDER.has(tilstand.state);
+}
+
+/**
+ * Hva sensoren faktisk forteller: en avlesning, ingen avlesning ennaa, eller
+ * ingen sensor.
+ *
+ * Skillet mellom de to siste betyr noe. "unavailable" er en sensor som er
+ * borte. "unknown", og en tilstand uten `current_kw`, er en integrasjon som
+ * ikke har noen maaling aa gi: rett etter oppstart, eller etter at watchdogen
+ * har toemt coordinatoren. Da er null ikke et maaleresultat.
+ */
+function lesAvlesning(tilstand) {
+  if (!tilstand || TILSTAND_BORTE.has(tilstand.state)) return AVLESNING_BORTE;
+  if (TILSTAND_VENTER.has(tilstand.state)) return AVLESNING_VENTER;
+  if (talletAv(tilstand.state) === null) return AVLESNING_BORTE;
+  if (talletAv(tilstand.attributes?.current_kw) === null) return AVLESNING_VENTER;
+  return AVLESNING_OK;
 }
 
 /**
@@ -300,6 +353,8 @@ class EffektvaktCard extends HTMLElement {
     this._skiveNokkel = null;
     this._henter = null;
     this._feil = null;
+    this._forsok = 0;
+    this._timer = null;
     this._sisteNokkel = null;
     this._slepe = { maned: null, kw: 0 };
     this._bygd = false;
@@ -339,6 +394,19 @@ class EffektvaktCard extends HTMLElement {
 
   getCardSize() {
     return 8;
+  }
+
+  connectedCallback() {
+    // Kortet kan flyttes i dashbordet eller komme tilbake etter at fanen har
+    // vaert borte. Da tas hentingen opp igjen der den slapp.
+    if (this._config && this._hass) this._sikreSkive();
+  }
+
+  disconnectedCallback() {
+    this._avbrytForsok();
+    // Uten skive er ingen henting i gang lenger, og neste connectedCallback
+    // skal faa lov til aa begynne paa nytt.
+    if (!this._skiveNokkel) this._henter = null;
   }
 
   // --- DOM ----------------------------------------------------------------
@@ -388,9 +456,9 @@ class EffektvaktCard extends HTMLElement {
     this._tekstalternativ.className = "sr-only";
     this._tekstalternativ.id = FORKLARING_ID;
 
-    this._feilfelt = document.createElement("p");
-    this._feilfelt.className = "feil";
-    this._feilfelt.hidden = true;
+    this._melding = document.createElement("p");
+    this._melding.className = "melding";
+    this._melding.hidden = true;
 
     this._kort.append(
       this._tittel,
@@ -398,7 +466,7 @@ class EffektvaktCard extends HTMLElement {
       this._avlesning,
       this._kostnad,
       this._tekstalternativ,
-      this._feilfelt
+      this._melding
     );
     this.shadowRoot.replaceChildren(stil, this._kort);
   }
@@ -413,8 +481,35 @@ class EffektvaktCard extends HTMLElement {
   _sikreSkive() {
     const onsket = this._skiveOnsket();
     if (onsket === this._skiveNokkel || onsket === this._henter) return;
+    this._avbrytForsok();
+    this._forsok = 0;
+    this._feil = null;
     this._henter = onsket;
     this._hentSkive(onsket);
+  }
+
+  /**
+   * Nytt forsoek med voksende pause.
+   *
+   * `_henter` staar paa noekkelen hele tiden mellom forsoekene, saa hverken
+   * en tilstandsendring i HA eller en ny `set hass` starter en henting til
+   * ved siden av den som venter.
+   */
+  _planleggNyttForsok(nokkel) {
+    this._avbrytForsok();
+    if (!this.isConnected) return;
+    const pause = FORSOK_PAUSER_MS[Math.min(this._forsok - 1, FORSOK_PAUSER_MS.length - 1)];
+    this._timer = window.setTimeout(() => {
+      this._timer = null;
+      if (this._hass && this._henter === nokkel) this._hentSkive(nokkel);
+    }, pause);
+  }
+
+  _avbrytForsok() {
+    if (this._timer !== null) {
+      window.clearTimeout(this._timer);
+      this._timer = null;
+    }
   }
 
   async _hentSkive(nokkel) {
@@ -431,12 +526,14 @@ class EffektvaktCard extends HTMLElement {
       this._settSkive(svar);
       this._skiveNokkel = nokkel;
       this._feil = null;
+      this._forsok = 0;
+      this._henter = null;
     } catch (feil) {
       if (this._henter !== nokkel) return;
-      this._feil = feil?.message ?? String(feil);
+      this._forsok += 1;
       this._svg = null;
-    } finally {
-      if (this._henter === nokkel) this._henter = null;
+      this._feil = this._forsok >= FEILMELDING_ETTER_FORSOK ? (feil?.message ?? String(feil)) : null;
+      this._planleggNyttForsok(nokkel);
     }
     this._sisteNokkel = null;
     this._oppdater();
@@ -548,11 +645,7 @@ class EffektvaktCard extends HTMLElement {
     this._tittel.textContent = this._config.tittel ?? "";
     this._tittel.hidden = !this._config.tittel;
 
-    this._feilfelt.hidden = !this._feil;
-    if (this._feil) {
-      this._feilfelt.textContent = `Fikk ikke hentet skiven: ${this._feil}`;
-      return;
-    }
+    this._visMelding();
     if (!this._svg) return;
 
     const projisert = this._hass.states[this._config.entity];
@@ -564,19 +657,33 @@ class EffektvaktCard extends HTMLElement {
     if (nokkel === this._sisteNokkel) return;
     this._sisteNokkel = nokkel;
 
-    const tilgjengelig = !erUgyldig(projisert);
-    const projisertKw = tilgjengelig ? talletAv(projisert.state) : null;
-    const naKw = tilgjengelig ? talletAv(projisert.attributes?.current_kw) : null;
-    const topp3Kw = tilgjengelig ? this._topp3Kw(kostnad) : null;
+    const avlesning = lesAvlesning(projisert);
+    const harTall = avlesning === AVLESNING_OK;
+    const projisertKw = harTall ? talletAv(projisert.state) : null;
+    const naKw = harTall ? talletAv(projisert.attributes?.current_kw) : null;
+    const topp3Kw = harTall ? this._topp3Kw(kostnad) : null;
     const slepeKw = this._slepe_hold(topp3Kw);
 
     this._settViser("rod", projisertKw);
     this._settViser("svart", naKw);
-    this._settViser("slepe", tilgjengelig ? slepeKw : null);
-    this._flagg.style.display = tilgjengelig ? "none" : "";
+    this._settViser("slepe", harTall ? slepeKw : null);
+    this._flagg.style.display = harTall ? "none" : "";
 
     this._merkTrinn(kostnad, topp3Kw);
-    this._skrivTekst(tilgjengelig, projisertKw, naKw, slepeKw, kostnad);
+    this._skrivTekst(avlesning, projisertKw, naKw, slepeKw, kostnad);
+  }
+
+  /** Statuslinjen under skiven. Tom naar skiven er der og alt er som det skal. */
+  _visMelding() {
+    let tekst = "";
+    if (this._feil) {
+      tekst = `Fikk ikke hentet skiven: ${this._feil} Kortet prøver igjen.`;
+    } else if (!this._svg && this._henter !== null) {
+      tekst = "Henter skiven …";
+    }
+    this._melding.textContent = tekst;
+    this._melding.hidden = !tekst;
+    this._melding.classList.toggle("feil", Boolean(this._feil));
   }
 
   _settViser(navn, kw) {
@@ -650,21 +757,23 @@ class EffektvaktCard extends HTMLElement {
     this._trinn = { aktivt, neste };
   }
 
-  _skrivTekst(tilgjengelig, projisertKw, naKw, slepeKw, kostnad) {
+  _skrivTekst(avlesning, projisertKw, naKw, slepeKw, kostnad) {
+    const harTall = avlesning === AVLESNING_OK;
+    const venter = avlesning === AVLESNING_VENTER;
     const sprak = this._hass.locale?.language || "nb-NO";
     const kw = (v) => (v === null ? "–" : `${tall(v, 2, sprak)} kW`);
     // Skjermleseren har ikke skiven aa se paa, saa enheten skrives ut.
     // "kW" leses som bokstaver, "kilowatt" leses som ordet.
     const lest = (v) => (v === null ? "ukjent verdi" : `${tall(v, 2, sprak)} kilowatt`);
 
-    this._felt.projisert.textContent = tilgjengelig ? kw(projisertKw) : "–";
-    this._felt.na.textContent = tilgjengelig ? kw(naKw) : "–";
-    this._felt.topp3.textContent = tilgjengelig ? kw(slepeKw) : "–";
+    this._felt.projisert.textContent = harTall ? kw(projisertKw) : "–";
+    this._felt.na.textContent = harTall ? kw(naKw) : "–";
+    this._felt.topp3.textContent = harTall ? kw(slepeKw) : "–";
 
     // Trinnteksten trengs i to utgaver: den synlige bruker "kW" og kan
     // innlede fritt, mens etiketten skriver ut enheten og ikke skal gjenta
     // "maaneden ligger an til", som alt staar i setningen foer.
-    const harTrinn = tilgjengelig && kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt;
+    const harTrinn = harTall && kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt;
     const trinnlinjer = (enhet, innledning) => {
       if (!harTrinn) return [];
       const a = this._trinn.aktivt;
@@ -685,7 +794,12 @@ class EffektvaktCard extends HTMLElement {
     // Etiketten maa baere hele betydningen, ikke bare tallene: hva timen ender
     // paa, hva som gaar naa, hva maaneden ligger an til og hva det koster.
     const skive = this._dsoNavn ? `Effektmåler for ${this._dsoNavn}` : "Effektmåler";
-    const avlesning = tilgjengelig
+    // Uten avlesning maa etiketten si hvorfor. «Venter» og «utilgjengelig» er
+    // to ulike beskjeder til den som lurer paa hvorfor skiven er tom.
+    const uten = venter
+      ? "Ingen avlesning: Effektvakt har ingen måling å vise ennå,"
+      : `Ingen avlesning: ${this._config.entity} er utilgjengelig,`;
+    const etikett = harTall
       ? [
           `${skive}.`,
           `Timen ender på ${lest(projisertKw)} hvis forbruket fortsetter som nå.`,
@@ -693,22 +807,22 @@ class EffektvaktCard extends HTMLElement {
           `Måneden ligger an til ${lest(slepeKw)}, som er topp-3-snittet og det du betaler for.`,
           ...trinnlinjer("kilowatt", "Det er"),
         ]
-      : [
-          `${skive}.`,
-          `Ingen avlesning: ${this._config.entity} er utilgjengelig,`,
-          "så viserne står parkert på null.",
-        ];
-    this._svg.setAttribute("aria-label", avlesning.join(" "));
+      : [`${skive}.`, uten, "så viserne står parkert på null."];
+    this._svg.setAttribute("aria-label", etikett.join(" "));
 
     // Beskrivelsen sier hva merkene paa skiven betyr. Etiketten over sier hva
     // de staar paa. Delt slik gjentas ingenting for skjermleseren.
-    this._tekstalternativ.textContent = tilgjengelig
+    this._tekstalternativ.textContent = harTall
       ? FORKLARING
       : `${FORKLARING} Viserne viser ingen avlesning nå.`;
 
-    const synlig = tilgjengelig
+    const synlig = harTall
       ? trinnlinjer("kW", "Måneden ligger an til")
-      : [`${this._config.entity} er utilgjengelig, så viserne står parkert på null.`];
+      : [
+          venter
+            ? "Effektvakt har ingen måling å vise ennå, så viserne står parkert på null."
+            : `${this._config.entity} er utilgjengelig, så viserne står parkert på null.`,
+        ];
     this._kostnad.textContent = synlig.join(" ");
     this._kostnad.hidden = synlig.length === 0;
   }
@@ -721,6 +835,7 @@ class EffektvaktCardEditor extends HTMLElement {
     this._config = {};
     this._stiler = null;
     this._henter = false;
+    this._forsok = 0;
   }
 
   setConfig(config) {
@@ -737,13 +852,16 @@ class EffektvaktCardEditor extends HTMLElement {
   /** Stilvalgene kommer fra registeret i faceplate.py, ikke fra en liste her. */
   async _hentStiler() {
     if (this._stiler || this._henter || !this._hass || !this._config.entity) return;
+    if (this._forsok >= EDITOR_MAKS_FORSOK) return;
     this._henter = true;
     try {
       const svar = await this._hass.callWS({ type: WS_FACEPLATE, entity_id: this._config.entity });
       this._stiler = svar.stiler ?? {};
       this._tegn();
     } catch {
-      this._stiler = {};
+      // Samme kappløp som i kortet. Uten dette ble stilvelgeren borte resten
+      // av økten fordi det første forsøket traff en HA som ikke var klar.
+      this._forsok += 1;
     } finally {
       this._henter = false;
     }

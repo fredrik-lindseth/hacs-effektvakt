@@ -52,6 +52,8 @@
     skivene genereres av <code>faceplate.py</code>. Verdiene er oppdiktede og
     ligger i <code>tilstander</code> nederst i denne filen.
     Bytt lys og mørk modus i operativsystemet.
+    <code>?sen=3000</code> lar websocket svare «Unknown command» de tre første
+    sekundene, slik Home Assistant gjør rett etter omstart.
   </p>
 </header>
 <div class="rad" id="rad"></div>
@@ -69,7 +71,8 @@
       <dt>Kr-båndet ytterst</dt>
       <dd>Kapasitetstrinn med månedspris. Aktivt trinn er tykt, neste er rødt.</dd>
       <dt>«---»-flagget</dt>
-      <dd>Sensoren er utilgjengelig. Viserne er parkert, ikke frosne.</dd>
+      <dd>Ingen avlesning. Viserne er parkert, ikke frosne. Linjen under skiven
+        sier om sensoren er borte eller om første måling ennå ikke er inne.</dd>
     </dl>
   </section>
   <section>
@@ -88,7 +91,7 @@
       <dt>Stjerne med tall</dt>
       <dd>Isolasjonsprøvespenning i kilovolt.</dd>
       <dt>100 mA</dt>
-      <dd>Verket originalen satt på.</dd>
+      <dd>Verket originalen satt på. Står bare på trykkfilen, ikke på kortet.</dd>
     </dl>
     <p class="merknad">
       Trykt fast, endrer seg aldri. Full forklaring i <code>docs/dashboard-kort.md</code>.
@@ -132,6 +135,13 @@ const tilstander = {
     last_updated: "2026-09-21T19:45:00+00:00",
     attributes: { friendly_name: "Effektvakt Topp-3 snitt denne måned" },
   },
+  // Coordinatoren har ikke lest effektsensoren ennå: ingen current_kw, og da
+  // er 0,00 kW ikke en måling av et hus som ikke bruker strøm.
+  "sensor.effektvakt_projisert_uten_maaling": {
+    state: "0.0",
+    last_updated: "2026-09-21T19:45:00+00:00",
+    attributes: { friendly_name: "Effektvakt Projisert time-snitt" },
+  },
   "sensor.effektvakt_kostnad_neste_trinn": {
     state: "165",
     last_updated: "2026-09-21T19:45:00+00:00",
@@ -154,6 +164,11 @@ const oppsett = [
     kostnad_entity: "sensor.effektvakt_kostnad_neste_trinn",
     tittel: "Utilgjengelig",
   },
+  {
+    entity: "sensor.effektvakt_projisert_uten_maaling",
+    kostnad_entity: "sensor.effektvakt_kostnad_neste_trinn",
+    tittel: "Venter på første måling",
+  },
 ];
 
 // --- Stubb av hass --------------------------------------------------------
@@ -169,11 +184,21 @@ const entiteter = Object.fromEntries(
   ])
 );
 
+// Home Assistant registrerer websocket-kommandoen først når integrasjonen er
+// satt opp, og ved omstart skjer det etter at frontenden har koblet seg på.
+// ?sen=3000 hermer det i tre sekunder, så kortets gjenforsøk kan prøves uten å
+// restarte Home Assistant. Feilen er den HA faktisk sender: et objekt, ingen Error.
+const senMs = Number(new URLSearchParams(location.search).get("sen") ?? 0);
+const start = performance.now();
+
 const hass = {
   locale: { language: "nb" },
   states: tilstander,
   entities: entiteter,
   callWS: async (melding) => {
+    if (performance.now() - start < senMs) {
+      throw { code: "unknown_command", message: "Unknown command." };
+    }
     const nokkel = `${melding.stil ?? "geha"}:${(melding.maks_kw ?? 15).toFixed(1)}`;
     if (!skiver[nokkel]) throw new Error(`prøvebenken har ingen skive for ${nokkel}`);
     return skiver[nokkel];
@@ -208,8 +233,16 @@ console.info("aktivt trinn:", aktiv?.id, aktiv?.dataset.kr, "| neste:", neste?.i
 for (const id of ["viser-rod", "viser-svart", "slepemerke"]) {
   console.info(id, forste.querySelector(`#${id}`).style.transform);
 }
-const flagg = rad.lastElementChild.shadowRoot.querySelector("#ev-flagg");
-console.info("----flagget når sensoren er borte:", flagg.style.display === "" ? "synlig" : "skjult");
+for (const [nr, hva] of [[3, "borte"], [4, "venter på første måling"]]) {
+  const kort = rad.children[nr].shadowRoot;
+  const flagg = kort.querySelector("#ev-flagg");
+  console.info(
+    `----flagget når sensoren er ${hva}:`,
+    flagg.style.display === "" ? "synlig" : "skjult",
+    "|",
+    kort.querySelector(".kostnad").textContent
+  );
+}
 </script>
 </body>
 </html>

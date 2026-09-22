@@ -18,19 +18,23 @@ from custom_components.effektvakt.faceplate import (
     PALETT,
     R_HOVEDMERKE,
     R_SKALA,
+    R_VISER_SVART,
     SKALATOPPER,
     SKALATOPPER_SMAA,
     STILER,
+    VERSAL_SENTER,
     VINKEL_START,
     VINKEL_SVEIP,
     Skala,
     _delstreker,
     _n,
     _stigehovedtall,
+    _tekstbredde,
     _valider_stil,
     generate_faceplate,
     lag_skala,
     normaliser_maks_kw,
+    rod_viser_halvbredde,
     skalatopp,
     tilgjengelige_stiler,
     vinkel_for_kw,
@@ -339,6 +343,61 @@ def test_selvmotsigende_stil_avvises():
     forvridd = STILER["gossen"]._replace(maaleverk="dreispole")
     with pytest.raises(ValueError, match="lineaert"):
         _valider_stil("forvridd", forvridd)
+
+
+# Kortet lar viseren slaa noen grader forbi full skala, slik et ekte instrument
+# gjoer i endestoppet. Sveipetesten maa regne med det samme overslaget.
+OVERSLAG_GRADER = 4.0
+
+
+def _tekstboks(linje, innhold: str) -> list[tuple[float, float]]:
+    """Hjoernene av en trykt tekstlinje, regnet av ankeret og versalhoeyden."""
+    bredde = _tekstbredde(innhold, linje.storrelse, linje.sperring or 0.0)
+    if linje.anker == "end":
+        venstre, hoyre = linje.x - bredde, linje.x
+    elif linje.anker == "start":
+        venstre, hoyre = linje.x, linje.x + bredde
+    else:
+        venstre, hoyre = linje.x - bredde / 2, linje.x + bredde / 2
+    halv_hoyde = linje.storrelse * VERSAL_SENTER
+    return [(x, y) for x in (venstre, hoyre) for y in (linje.y - halv_hoyde, linje.y + halv_hoyde)]
+
+
+def test_trykt_tekst_ligger_utenfor_viserens_sveip():
+    """Verksnavnet ble lest som "EHA-METER" fordi kilen la seg over G-en.
+
+    Alt som er trykt paa skiven skal vaere lesbart i alle viserstillinger. Bare
+    enheten ligger med vilje i sveipet, slik originalene har den.
+    """
+    for navn, stil in STILER.items():
+        for linje in stil.tekst:
+            if linje.i_sveipet or linje.bare_variant == "print":
+                continue
+            innhold = linje.mal.format(dso="BKK", min="0", maks="15")
+            for x, y in _tekstboks(linje, innhold):
+                _, radius = _polar_av(x, y)
+                if radius > R_VISER_SVART:
+                    continue  # utenfor viserspissen, der ingen viser naar
+                luft = rod_viser_halvbredde(radius) + radius * math.radians(OVERSLAG_GRADER) + 8
+                avstand = _avstand_til_sveipekanten(x, y)
+                assert avstand > luft, (
+                    f"{navn}: {innhold!r} er {avstand:.0f} fra kilen ved r={radius:.0f}, trenger {luft:.0f}"
+                )
+
+
+def test_verksnavnet_staar_paa_begge_variantene():
+    for variant in ("card", "print"):
+        tekster = _tekster(_rot(generate_faceplate(kapasitetstrinn=BKK, variant=variant)))
+        assert "GEHA-METER" in tekster, f"{variant}: skiven mangler verksnavnet"
+
+
+def test_hundre_ma_staar_bare_paa_trykkfilen():
+    """Instrumentmerket forvirrer paa kortet og hoerer hjemme paa plata."""
+    kort = _tekster(_rot(generate_faceplate(kapasitetstrinn=BKK, stil="gossen", variant="card")))
+    trykk = _tekster(_rot(generate_faceplate(kapasitetstrinn=BKK, stil="gossen", variant="print")))
+    assert "100 mA" not in kort
+    assert "100 mA" in trykk
+    assert "kW" in kort, "enheten skal staa paa begge variantene"
 
 
 def test_klassemerket_skrives_med_komma():

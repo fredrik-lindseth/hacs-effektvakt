@@ -48,7 +48,7 @@ med fordi vi gjenskaper et ekte instrument.
 | Tynn, lang svart viser | Effekten akkurat nå. |
 | Liten trekant utenfor buen | Slepemerket. Står på topp-3-snittet for måneden og går aldri ned igjen, så det er nivået du betaler for uansett hva du gjør resten av måneden. |
 | Kr-båndet ytterst | Kapasitetstrinnene med månedspris. Trinnet måneden ligger an til er tykt, neste trinn er rødt. |
-| «---»-flagg midt i skiven | Sensoren er utilgjengelig. Viserne står parkert på null og viser ingen avlesning. |
+| «---»-flagg midt i skiven | Ingen avlesning. Viserne står parkert på null. Linjen under skiven sier om sensoren er borte eller om Effektvakt ennå ikke har en måling. |
 
 Trekanten er den eneste som ikke sier seg selv, og den er verdt å lære: en rød
 viser som står lavt betyr ingenting hvis slepemerket allerede står i neste
@@ -67,11 +67,23 @@ instrument det er. De er trykt fast og endrer seg aldri.
 | ⊥ | Instrumentet skal henge loddrett. Tyngdekraften på viser og opphenget påvirker nøyaktigheten, så bruksstillingen er en del av spesifikasjonen. |
 | KL.1,5 | Nøyaktighetsklasse 1,5, altså halvannen prosents feilmargin av full skala. |
 | Stjerne med tall i | Isolasjonsprøvespenning i kilovolt. En 2-er betyr at instrumentet er prøvd på 2 kV. |
-| «100 mA» | Verket originalen satt på: Gossen-skiven er tegnet etter et instrument med 100 milliampere fullutslag. |
+| «100 mA» | Verket originalen satt på: Gossen-skiven er tegnet etter et instrument med 100 milliampere fullutslag. Står bare på trykkfilen. |
 
 Kilden er Fredrik og en kollega av ham, ikke nettet. Symbolene er standardisert
 i IEC 60051, men den står bak betalingsmur, så dette er skrevet ned her nettopp
 fordi det ikke lar seg slå opp fritt.
+
+«100 mA» er tatt av kortet og står bare igjen på trykkfilen. Den sier noe om
+måleverket originalen satt på, ingenting om avlesningen, og alle som ikke hadde
+lest dette avsnittet spurte hva den betydde. På plata i sikringsskapet hører den
+hjemme, der den er en del av instrumentet.
+
+Trykt tekst ligger i lommene mellom viseren sine ytterstillinger og bunnfeltet,
+ikke i banen viserne sveiper over. Verksnavnet sto en stund midt under «KW» og
+ble lest som «EHA-METER» når den røde kilen la seg over G-en; nå står det nede
+til høyre sammen med klassemerket. Enheten er den eneste som ligger i sveipet,
+slik originalene har den. `test_trykt_tekst_ligger_utenfor_viserens_sveip`
+regner på det ved hver kjøring, så en ny tekstlinje i feil lomme feller bygget.
 
 ## To skiver
 
@@ -113,11 +125,32 @@ den økten.
 Merk at merket er per nettleser. Åpner du dashbordet på telefonen for første gang
 midt i måneden, starter max-hold der på den verdien sensoren har da.
 
-## Når sensoren er borte
+## Når det ikke er noen avlesning
 
-Blir `entity` `unavailable` eller `unknown`, parkeres alle tre viserne på null og
-et lite «---»-flagg legger seg midt i skiven. En frossen viser som ser ut som en
-avlesning er verre enn en tom skive.
+Alle tre viserne parkeres på null og et lite «---»-flagg legger seg midt i
+skiven. En frossen viser som ser ut som en avlesning er verre enn en tom skive.
+
+Kortet skiller mellom to grunner, for de betyr ikke det samme:
+
+- `unavailable` er en sensor som er borte. Linjen under skiven navngir entiteten.
+- `unknown`, eller en tilstand uten attributtet `current_kw`, er en integrasjon
+  som ikke har noen måling å gi ennå. Det skjer rett etter omstart, og etter at
+  watchdogen har tømt coordinatoren. Da står det at Effektvakt ikke har en måling
+  å vise.
+
+Det siste er poenget med flagget: «0,00 kW» er en måling av et hus som ikke
+bruker strøm, og det er noe helt annet enn at vi ikke vet.
+
+## Skiven hentes med gjenforsøk
+
+Websocket-kommandoen `effektvakt/faceplate` registreres når integrasjonen settes
+opp, og ved omstart av Home Assistant skjer det etter at frontenden har koblet
+seg på. Kortet som spør for tidlig får «Unknown command» tilbake. Derfor prøver
+det igjen med voksende pause (et halvt sekund, så 1, 2, 4, 8, 15 og til slutt 30
+sekunder mellom forsøkene) og står med en nedtonet «Henter skiven …» imens.
+Først fra femte forsøk, rundt femten sekunder ut, blir meldingen rød og sier hva
+Home Assistant svarte. Forsøkene stopper når kortet tas ut av dashbordet og tas
+opp igjen når det settes inn.
 
 ## Tilgjengelighet
 
@@ -151,8 +184,11 @@ Skivene kommer heller ikke fra en frossen JSON-fil: `server.py` genererer dem
 fra `faceplate.py` ved hver forespørsel, så en endring i skiven vises ved neste
 oppfriskning.
 
-Fire kort tegnes: begge stilene, en 30 kW-skala og et kort med en entitet som
-ikke finnes, så «---»-flagget kan sjekkes. Konsollen skriver ut aria-etiketten,
+Fem kort tegnes: begge stilene, en 30 kW-skala, et kort med en entitet som ikke
+finnes og et der sensoren ikke har noen måling ennå, så begge grunnene til
+«---»-flagget kan sjekkes. `?sen=3000` lar websocket svare «Unknown command» de
+tre første sekundene, slik Home Assistant gjør rett etter omstart, og da kan
+gjenforsøkene prøves uten å restarte noe. Konsollen skriver ut aria-etiketten,
 det skjulte tekstalternativet, alle ni fargerollene, hvilke trinn som ble merket
 og viservinklene.
 
@@ -200,9 +236,11 @@ du trolig Lovelace med YAML-ressurser; se avsnittet over. Ellers holder det
 vanligvis med en hard refresh, siden URL-en har `?v=<versjon fra manifest.json>`
 som cache-buster.
 
-**«Fikk ikke hentet skiven».** Websocket-kommandoen fant ingen Effektvakt-oppsett
-for entiteten. Sjekk at `entity` faktisk hører til integrasjonen, eller at det
-bare finnes ett Effektvakt-oppsett.
+**«Fikk ikke hentet skiven».** Meldingen kommer først etter rundt femten
+sekunder med gjenforsøk, så den betyr noe. Står det «Unknown command», er integrasjonen
+ikke lastet: sjekk loggen for en oppstartsfeil. Ellers fant websocket-kommandoen
+ingen Effektvakt-oppsett for entiteten, og da skal `entity` sjekkes mot
+integrasjonen, eller det er flere Effektvakt-oppsett enn ett.
 
 **Ingen trinn er merket.** Kostnadssensoren mangler eller er utilgjengelig. Sett
 `kostnad_entity` uttrykkelig hvis autodeteksjonen ikke treffer, for eksempel hvis

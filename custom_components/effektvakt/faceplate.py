@@ -54,6 +54,14 @@ R_TRINN_TEKST: Final = R_SKALA + 148.0
 R_VISER_SVART: Final = R_SKALA + 2.0
 R_VISER_ROD: Final = R_SKALA - R_DELMERKE + 2.0
 
+# Den roede kilen, maalt fra navet: bredest ved skulderen, spiss tupp, og en
+# stump rot bak navet. Tallene er delt med testen som vokter at trykt tekst
+# holder seg utenfor det viseren sveiper over.
+ROD_SKULDER_R: Final = 96.0
+ROD_HALVBREDDE: Final = 30.0
+ROD_ROT_R: Final = -34.0
+ROD_ROT_HALVBREDDE: Final = 15.0
+
 HUB_R: Final = 40.0
 RAMME_INNSLAG: Final = 14.0
 
@@ -281,7 +289,12 @@ class Skala(NamedTuple):
 
 
 class Tekstlinje(NamedTuple):
-    """En linje i tekstblokken. {dso}, {min} og {maks} fylles inn ved tegning."""
+    """En linje i tekstblokken. {dso}, {min} og {maks} fylles inn ved tegning.
+
+    ``bare_variant`` holder en linje til den ene varianten den hoerer hjemme i.
+    ``i_sveipet`` sier at linjen med vilje ligger der viserne sveiper; alt annet
+    skal ligge i lommene utenfor, og en test vokter det.
+    """
 
     x: float
     y: float
@@ -291,6 +304,8 @@ class Tekstlinje(NamedTuple):
     vekt: str | None = None
     sperring: float | None = None
     anker: str = "middle"
+    bare_variant: Variant | None = None
+    i_sveipet: bool = False
 
 
 class Symbol(NamedTuple):
@@ -341,11 +356,14 @@ STILER: Final[dict[str, Stil]] = {
         # noe gulaktig rett ved KL.1.5 som kan vaere en proevespenningsstjerne,
         # men det er ikke lesbart nok til aa slaa fast, saa den er utelatt.
         symboler=(Symbol("maaleverk", 124.0, 690.0),),
+        # Verksnavnet sto midt under KW, der den roede kilen sveiper, og da leste
+        # skiven "EHA-METER" ved lave avlesninger. Det staar naa i lomma nede til
+        # hoeyre sammen med klassemerket, som alltid har ligget utenfor sveipet.
         tekst=(
             Tekstlinje(500, 92, "{dso}", 24, vekt="500", sperring=6),
-            Tekstlinje(500, 570, "KW", 86, familie=SLAB, vekt="700", sperring=10),
-            Tekstlinje(500, 644, "GEHA-METER", 34, vekt="600", sperring=8),
-            Tekstlinje(898, 698, "KL.1,5", 30, sperring=2, anker="end"),
+            Tekstlinje(500, 570, "KW", 86, familie=SLAB, vekt="700", sperring=10, i_sveipet=True),
+            Tekstlinje(898, 640, "KL.1,5", 30, sperring=2, anker="end"),
+            Tekstlinje(898, 700, "GEHA-METER", 26, vekt="600", sperring=3, anker="end"),
         ),
         palett={},
         slitasje=True,
@@ -374,9 +392,12 @@ STILER: Final[dict[str, Stil]] = {
             Symbol("loddrett", 216.0, 690.0),
             Symbol("stjerne", 886.0, 690.0, verdi="2"),
         ),
+        # "100 mA" er maaleverket originalen satt paa, og sier ingenting om
+        # avlesningen. Paa trykkfilen hoerer det hjemme, paa kortet spoer folk
+        # bare hva det betyr, saa der staar det ikke.
         tekst=(
-            Tekstlinje(500, 556, "kW", 84, familie=SLAB, vekt="700", sperring=4),
-            Tekstlinje(500, 622, "100 mA", 34, vekt="500", sperring=4),
+            Tekstlinje(500, 556, "kW", 84, familie=SLAB, vekt="700", sperring=4, i_sveipet=True),
+            Tekstlinje(500, 622, "100 mA", 34, vekt="500", sperring=4, bare_variant="print", i_sveipet=True),
             Tekstlinje(790, 690, "1,5", 28, sperring=2),
             Tekstlinje(880, 738, "{dso}", 28, vekt="600", sperring=4, anker="end"),
         ),
@@ -799,7 +820,7 @@ def _symboler(stil: Stil) -> list[str]:
     ]
 
 
-def _trykk_tekst(stil: Stil, skala: Skala, dso_navn: str | None) -> list[str]:
+def _trykk_tekst(stil: Stil, skala: Skala, dso_navn: str | None, variant: Variant) -> list[str]:
     """Tekstblokken fra stilregisteret.
 
     Klassemerket (KL.1,5 paa GEHA, 1,5 i ikonrekken paa Gossen) er
@@ -813,12 +834,15 @@ def _trykk_tekst(stil: Stil, skala: Skala, dso_navn: str | None) -> list[str]:
     er 1. Vaare skiver ser like ut, men tallene bak er ekte kW fra Home
     Assistant, saa vi arver ikke den feilkilden.
 
-    Symbolet og klassemerket staar i lommene mellom vifta, viserens
-    ytterstillinger og bunnfeltet, saa de er lesbare i alle viserstillinger.
+    Symbolet, klassemerket og verksnavnet staar i lommene mellom vifta, viserens
+    ytterstillinger og bunnfeltet, saa de er lesbare i alle viserstillinger. Bare
+    enheten ligger med vilje i sveipet, som paa originalene.
     """
     felter = {"dso": (dso_navn or "").upper(), "min": _tall_tekst(skala.min_kw), "maks": _tall_tekst(skala.maks_kw)}
     ut: list[str] = []
     for linje in stil.tekst:
+        if linje.bare_variant is not None and linje.bare_variant != variant:
+            continue
         innhold = linje.mal.format(**felter)
         if not innhold.strip():
             continue
@@ -997,15 +1021,36 @@ def _visere(skala: Skala, stil: Stil) -> list[str]:
         f' fill="{_farge("trykk", stil)}"/>'
     )
 
-    # Kile: bredest rett over navet, spiss tupp som naar inn i delstrek-baandet.
+    # Kile: bredest ved skulderen rett over navet, spiss tupp som naar inn i
+    # delstrek-baandet. Maalene er konstantene over, slik at sveipetesten
+    # regner paa den kilen som faktisk tegnes.
     rod_spiss = NAV_Y - R_VISER_ROD
+    skulder_y = NAV_Y - ROD_SKULDER_R
+    rot_y = NAV_Y - ROD_ROT_R
     rod = (
         f'<path id="viser-rod" {rot} d="M {_n(NAV_X)} {_n(rod_spiss)}'
-        f" L {_n(NAV_X + 30)} {_n(NAV_Y - 96)} L {_n(NAV_X + 15)} {_n(NAV_Y + 34)}"
-        f' L {_n(NAV_X - 15)} {_n(NAV_Y + 34)} L {_n(NAV_X - 30)} {_n(NAV_Y - 96)} Z"'
+        f" L {_n(NAV_X + ROD_HALVBREDDE)} {_n(skulder_y)}"
+        f" L {_n(NAV_X + ROD_ROT_HALVBREDDE)} {_n(rot_y)}"
+        f" L {_n(NAV_X - ROD_ROT_HALVBREDDE)} {_n(rot_y)}"
+        f' L {_n(NAV_X - ROD_HALVBREDDE)} {_n(skulder_y)} Z"'
         f' fill="{_farge("viserrod", stil)}"/>'
     )
     return [slepe, rod, svart]
+
+
+def rod_viser_halvbredde(radius: float) -> float:
+    """Halve bredden av den roede kilen ved en radius fra navet.
+
+    Trykt tekst skal ligge utenfor det kilen sveiper over. Testen som vokter
+    det regner med denne framfor et anslag, saa en endring av kilen slaar ut
+    der og ikke foerst naar noen ser paa skiven.
+    """
+    if radius >= R_VISER_ROD or radius <= ROD_ROT_R:
+        return 0.0
+    if radius >= ROD_SKULDER_R:
+        return ROD_HALVBREDDE * (R_VISER_ROD - radius) / (R_VISER_ROD - ROD_SKULDER_R)
+    andel = (radius - ROD_ROT_R) / (ROD_SKULDER_R - ROD_ROT_R)
+    return ROD_ROT_HALVBREDDE + (ROD_HALVBREDDE - ROD_ROT_HALVBREDDE) * andel
 
 
 def _deksel(stil: Stil) -> list[str]:
@@ -1098,7 +1143,7 @@ def generate_faceplate(
         deler.extend(_bunnfelt(valgt, variant))
     deler.extend(_skala_tegning(skala, valgt))
     deler.extend(_trinnband(kapasitetstrinn, skala, valgt))
-    deler.extend(_trykk_tekst(valgt, skala, dso_navn))
+    deler.extend(_trykk_tekst(valgt, skala, dso_navn, variant))
     if kort:
         deler.extend(_visere(skala, valgt))
     deler.extend(_hub(variant, valgt))
