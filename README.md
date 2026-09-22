@@ -58,7 +58,7 @@ Og ukesgrafen viser de faktiske timesnittene, altså tallene nettselskapet faktu
   <img src="docs/bilder/timesnitt-uke.png" alt="Søylegraf med timesnitt for de siste sju dagene" width="640">
 </p>
 
-Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full forklaring av merkene på skiven. Vil du ha viseren på veggen i stedet for på skjermen, ligger det en ESPHome-oppskrift på et dreispoleinstrument i [docs/fysisk-panel.md](docs/fysisk-panel.md).
+Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full forklaring av merkene på skiven.
 
 ## Dokumentasjon
 
@@ -71,7 +71,7 @@ Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full 
 | [docs/strategi.md](docs/strategi.md)               | Kutt-strategier sammenlignet       |
 | [docs/blueprints.md](docs/blueprints.md)           | Import, input og eksempler         |
 | [docs/dashboard-kort.md](docs/dashboard-kort.md)   | Lovelace-kortet                    |
-| [docs/fysisk-panel.md](docs/fysisk-panel.md)       | ESP32-panel med ekte viser         |
+| [docs/fysisk-panel.md](docs/fysisk-panel.md)       | ESP32-panel, skisse (ikke bygget)  |
 | [docs/begrensninger.md](docs/begrensninger.md)     | Kjente begrensninger               |
 | [docs/dso.md](docs/dso.md)                         | DSO-data og oppdatering            |
 | [docs/development.md](docs/development.md)         | Utvikler-guide                     |
