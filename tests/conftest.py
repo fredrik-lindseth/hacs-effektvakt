@@ -17,7 +17,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 
 # Mock Home Assistant-moduler før vi importerer vår kode
 sys.modules["homeassistant"] = MagicMock()
-sys.modules["homeassistant.const"] = MagicMock()
+
+_const_mod = MagicMock()
+_const_mod.STATE_OFF = "off"
+_const_mod.STATE_ON = "on"
+sys.modules["homeassistant.const"] = _const_mod
 sys.modules["homeassistant.core"] = MagicMock()
 sys.modules["homeassistant.config_entries"] = MagicMock()
 sys.modules["homeassistant.data_entry_flow"] = MagicMock()
@@ -76,6 +80,27 @@ class _BinarySensorEntityStub:
     """Minimal stub for BinarySensorEntity."""
 
 
+class _SwitchEntityStub:
+    """Minimal stub for SwitchEntity."""
+
+    @property
+    def is_on(self) -> bool | None:
+        return getattr(self, "_attr_is_on", None)
+
+    def async_write_ha_state(self) -> None:
+        """HA skriver til state machine her. Testene leser is_on direkte."""
+
+
+class _RestoreEntityStub:
+    """Minimal stub for RestoreEntity. Tester overstyrer async_get_last_state."""
+
+    async def async_added_to_hass(self) -> None:
+        """Ingen plattform aa melde seg inn i under test."""
+
+    async def async_get_last_state(self):
+        return None
+
+
 _update_coordinator_mod = MagicMock()
 _update_coordinator_mod.DataUpdateCoordinator = _DataUpdateCoordinatorStub
 _update_coordinator_mod.CoordinatorEntity = _CoordinatorEntityStub
@@ -88,12 +113,25 @@ _sensor_mod = MagicMock()
 _sensor_mod.SensorEntity = _SensorEntityStub
 _sensor_mod.SensorDeviceClass = MagicMock()
 _sensor_mod.SensorStateClass = MagicMock()
+# Ekte verdi, ikke MagicMock: entitetene bygger entity_id av den, og en
+# MagicMock ville gjort testen av id-ene innholdslos.
+_sensor_mod.ENTITY_ID_FORMAT = "sensor.{}"
 sys.modules["homeassistant.components.sensor"] = _sensor_mod
 
 _binary_sensor_mod = MagicMock()
 _binary_sensor_mod.BinarySensorEntity = _BinarySensorEntityStub
 _binary_sensor_mod.BinarySensorDeviceClass = MagicMock()
+_binary_sensor_mod.ENTITY_ID_FORMAT = "binary_sensor.{}"
 sys.modules["homeassistant.components.binary_sensor"] = _binary_sensor_mod
+
+_switch_mod = MagicMock()
+_switch_mod.SwitchEntity = _SwitchEntityStub
+_switch_mod.ENTITY_ID_FORMAT = "switch.{}"
+sys.modules["homeassistant.components.switch"] = _switch_mod
+
+_restore_state_mod = MagicMock()
+_restore_state_mod.RestoreEntity = _RestoreEntityStub
+sys.modules["homeassistant.helpers.restore_state"] = _restore_state_mod
 
 
 class StaticPathConfigStub:
@@ -133,6 +171,7 @@ sys.modules["homeassistant.components.websocket_api"] = _websocket_api_mod
 _components_mod = MagicMock()
 _components_mod.sensor = _sensor_mod
 _components_mod.binary_sensor = _binary_sensor_mod
+_components_mod.switch = _switch_mod
 _components_mod.http = _http_mod
 _components_mod.frontend = _frontend_mod
 _components_mod.websocket_api = _websocket_api_mod
@@ -172,7 +211,7 @@ def make_entry(
     power_sensor: str = "sensor.power",
     energy_sensor: str | None = "sensor.energy",
     safety_buffer_kw: float = 1.0,
-    min_risiko_for_kutt: str = "medium",
+    min_risiko_for_kutt: str = "like_under_terskel",
     risiko_holdetid_minutter: int = 5,
     kapasitetstrinn_custom: list | None = None,
 ):

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.effektvakt.const import RISIKO_NONE
+from custom_components.effektvakt.const import RISIKO_GOD_MARGIN, RISIKO_LIKE_UNDER, RISIKO_OVER_TERSKEL
 from custom_components.effektvakt.coordinator import EffektvaktCoordinator
 from tests.conftest import make_entry, make_hass_with_states, make_state
 
@@ -40,16 +40,31 @@ def test_coordinator_init_leser_konfig(base_states):
     assert coord._daily_max_kw == {}
 
 
+def test_gammel_risikoverdi_i_config_entryen_oversettes(base_states):
+    """En entry fra før omdøpingen har "medium" lagret. Faller den utenfor
+    RISIKO_RANK, slår binary-sensoren aldri på igjen."""
+    coord = _make_coordinator(base_states, entry_overrides={"min_risiko_for_kutt": "medium"})
+    assert coord.min_risiko_for_kutt == RISIKO_LIKE_UNDER
+
+
 @pytest.mark.asyncio
-async def test_coordinator_low_power_gir_none_risk(base_states):
-    """500 W, BKK-trinn, lav buffer: projisert langt under første trinn, risiko = none."""
+async def test_gammel_risikoverdi_i_lagret_hysterese_oversettes(base_states):
+    coord = _make_coordinator(base_states)
+    coord._store.async_load = AsyncMock(return_value={"data": {"hysterese_state": {"nivå": "high"}}})
+    await coord._load_stored_data()
+    assert coord._hysterese_state.nivå == RISIKO_OVER_TERSKEL
+
+
+@pytest.mark.asyncio
+async def test_coordinator_low_power_gir_god_margin(base_states):
+    """500 W, BKK-trinn, lav buffer: projisert langt under første trinn."""
     coord = _make_coordinator(base_states, entry_overrides={"safety_buffer_kw": 0.5})
     with patch(
         "custom_components.effektvakt.coordinator.dt_util_now",
         return_value=datetime(2026, 5, 25, 14, 30, 0),
     ):
         data = await coord._async_update_data()
-    assert data["risiko_niva"] == RISIKO_NONE
+    assert data["risiko_niva"] == RISIKO_GOD_MARGIN
     assert data["projected_avg_kw"] < 5
 
 

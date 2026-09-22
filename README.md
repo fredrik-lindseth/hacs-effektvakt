@@ -24,7 +24,7 @@ Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund og projiserer 
 ## Hva du får
 
 - Projisert time-snitt, margin til neste trinn og topp-3-snitt for måneden, som sensorer
-- Risiko-nivå (none, low, medium, high) og en binary sensor som automations kan trigge på
+- Risiko for neste trinn (god margin, nærmer seg, like under, over terskelen) og en binary sensor som automations kan trigge på
 - Anslag på hvor mye du faktisk har å kutte, etter valgt strategi
 - Fire blueprints for varmtvannsbereder, panelovner og varsler
 - Et Lovelace-kort som tegner skiven fra dine egne kapasitetstrinn

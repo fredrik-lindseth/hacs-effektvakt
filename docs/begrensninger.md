@@ -6,9 +6,9 @@ Kjente begrensninger. Noen er designvalg, andre er ting som kan forbedres.
 
 ## 60-sekunders tick i lav-risiko-modus
 
-Ved `none`- og `low`-risiko oppdateres sensorer hvert 60 sekund. Et effekthopp kl. 18:58 (to minutter før time-slutt) vil først bli fanget opp ved neste tick, som kan komme like etter time-slutt. Da er det for sent å handle.
+Ved `god_margin` og `naermer_seg_terskel` oppdateres sensorer hvert 60 sekund. Et effekthopp kl. 18:58 (to minutter før time-slutt) vil først bli fanget opp ved neste tick, som kan komme like etter time-slutt. Da er det for sent å handle.
 
-Mitigering: Tick-frekvensen øker til 30s ved `medium` og 15s ved `high`. Problemet oppstår når forbruket hopper direkte fra rolig til over grensen uten å passere `medium` først. I praksis er dette sjeldent, men det skjer.
+Mitigering: Tick-frekvensen øker til 30s ved `like_under_terskel` og 15s ved `over_terskel`. Problemet oppstår når forbruket hopper direkte fra rolig til over grensen uten å passere `like_under_terskel` først. I praksis er dette sjeldent, men det skjer.
 
 ---
 
@@ -45,7 +45,7 @@ Bruker du `Egendefinert` DSO i config, er du ansvarlig for å holde trinnene opp
 
 Coordinatoren persisterer `hysterese_state.nivå` til disk, men ikke `pending_nivå` og `pending_since`. Etter HA-restart er det aktive risiko-nivået korrekt, men eventuelle ventende trinnendringer mistes. Timeren for nedgang i risiko starter på nytt.
 
-Konsekvens: Etter restart kan risiko holde seg på `medium` litt lenger enn forventet, selv om forbruket har gått ned. Det er det konservative valget.
+Konsekvens: Etter restart kan risiko holde seg på `like_under_terskel` litt lenger enn forventet, selv om forbruket har gått ned. Det er det konservative valget.
 
 ---
 

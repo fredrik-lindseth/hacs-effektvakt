@@ -1,9 +1,10 @@
 blueprint:
   name: Effektvakt - Prioritert lastkutt
   description: >
-    Slå av switches i prioritert rekkefølge basert på risiko-nivå.
-    medium risiko -> første switch av. high risiko -> alle switches av.
-    Slår på igjen i revers rekkefølge når risiko synker.
+    Slå av switches i prioritert rekkefølge etter hvor nær neste
+    kapasitetstrinn timen ligger. Like under terskelen: første switch av.
+    Over terskelen: alle switches av. Slår på igjen i revers rekkefølge
+    når marginen kommer tilbake.
   domain: automation
   source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/prioritert_lastkutt.yaml
   input:
@@ -14,15 +15,27 @@ blueprint:
         entity:
           domain: sensor
     switch_high_priority:
-      name: Første switch som slås av (medium risiko)
+      name: Første switch som slås av (like under terskelen)
       selector:
         entity:
           domain: switch
     switch_medium_priority:
-      name: Andre switch som slås av (high risiko)
+      name: Andre switch som slås av (over terskelen)
       selector:
         entity:
           domain: switch
+    automatikk_switch:
+      name: Effektvakt automatikk-bryter (valgfri)
+      description: >
+        Bryteren fra Effektvakt-integrasjonen, typisk
+        switch.effektvakt_automatikk. Er den av, kutter ikke denne
+        automasjonen. Lar du feltet stå tomt, kutter den alltid, slik den
+        gjorde før bryteren fantes.
+      default: ""
+      selector:
+        entity:
+          domain: switch
+          integration: effektvakt
     max_off_minutes:
       name: Maks minutter slått av før tving-on
       default: 30
@@ -36,6 +49,7 @@ variables:
   switch_high: !input switch_high_priority
   switch_medium: !input switch_medium_priority
   max_off_minutes: !input max_off_minutes
+  automatikk_switch: !input automatikk_switch
 
 trigger:
   - platform: state
@@ -46,9 +60,14 @@ mode: restart
 action:
   - choose:
       - conditions:
+          # Begge kutt-grenene er gatet. Faller vi gjennom fordi bryteren er
+          # av, tar default-grenen under over og slår alt på igjen.
           - condition: state
             entity_id: !input risiko_sensor
-            state: "high"
+            state: "over_terskel"
+          - condition: template
+            value_template: >
+              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
           - service: switch.turn_off
             target:
@@ -65,7 +84,10 @@ action:
       - conditions:
           - condition: state
             entity_id: !input risiko_sensor
-            state: "medium"
+            state: "like_under_terskel"
+          - condition: template
+            value_template: >
+              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
           - service: switch.turn_off
             target:

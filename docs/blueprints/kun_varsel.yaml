@@ -1,7 +1,7 @@
 blueprint:
   name: Effektvakt - Kun varsel
   description: >
-    Send notifikasjon når risiko går til medium eller high. Ingen styring.
+    Send notifikasjon når timen nærmer seg neste kapasitetstrinn. Ingen styring.
     For brukere som vil ta beslutningen selv basert på en push.
   domain: automation
   source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/kun_varsel.yaml
@@ -18,28 +18,53 @@ blueprint:
       default: notify
       selector:
         text:
+    automatikk_switch:
+      name: Effektvakt automatikk-bryter (valgfri)
+      description: >
+        Bryteren fra Effektvakt-integrasjonen, typisk
+        switch.effektvakt_automatikk. Er den av, kutter ikke denne
+        automasjonen. Lar du feltet stå tomt, kutter den alltid, slik den
+        gjorde før bryteren fantes.
+      default: ""
+      selector:
+        entity:
+          domain: switch
+          integration: effektvakt
     dashboard_url:
       name: URL til Lovelace-dashboardet ditt
       default: ""
       selector:
         text:
 
+variables:
+  automatikk_switch: !input automatikk_switch
+
 trigger:
   - platform: state
     entity_id: !input risiko_sensor
-    to: medium
-    id: medium
+    to: like_under_terskel
+    id: like_under
   - platform: state
     entity_id: !input risiko_sensor
-    to: high
-    id: high
+    to: over_terskel
+    id: over
 
 mode: queued
+
+# Har du skrudd av automatikken, har du alt tatt beslutningen. Da er varselet
+# bare mas. Denne automasjonen har ingen restore-gren, så det er trygt å
+# stoppe hele kjøringen her.
+condition:
+  - condition: template
+    value_template: >
+      {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
 
 action:
   - service: "notify.{{ notify_service }}"
     data:
-      title: "Effektvakt: {{ trigger.id | upper }} risiko"
+      title: >
+        Effektvakt:
+        {% if trigger.id == 'over' %}over terskelen{% else %}like under terskelen{% endif %}
       message: >
         Projisert time-snitt: {{ states('sensor.effektvakt_projisert_time_snitt') }} kW.
         Margin: {{ states('sensor.effektvakt_margin_til_neste_trinn') }} kW.

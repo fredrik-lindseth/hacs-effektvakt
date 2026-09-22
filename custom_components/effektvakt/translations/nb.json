@@ -23,7 +23,7 @@
         "description": "Disse kan endres senere via integrasjonens innstillinger.",
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
-          "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
+          "min_risiko_for_kutt": "Kutt fra og med dette nivået",
           "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
           "kutt_strategi": "Kutt-strategi",
           "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_pluss_ekstra)",
@@ -56,12 +56,54 @@
         "title": "Effektvakt-innstillinger",
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
-          "min_risiko_for_kutt": "Laveste risiko som trigger kutt",
+          "min_risiko_for_kutt": "Kutt fra og med dette nivået",
           "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
           "kutt_strategi": "Kutt-strategi",
           "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_pluss_ekstra)",
           "ekstra_power_sensors": "Ekstra effektsensorer (varmekabler, billader, osv)"
         }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "kutt_ned_anbefalt": {
+        "name": "Kutt ned anbefalt",
+        "state": {
+          "off": "Ingen handling",
+          "on": "Kutt anbefalt"
+        }
+      }
+    },
+    "sensor": {
+      "kostnad_neste_trinn": {
+        "name": "Kostnad neste trinn"
+      },
+      "margin_til_neste_trinn": {
+        "name": "Margin til neste trinn"
+      },
+      "projisert_time_snitt": {
+        "name": "Projisert time-snitt"
+      },
+      "risiko_niva": {
+        "name": "Risiko for neste trinn",
+        "state": {
+          "god_margin": "God margin",
+          "naermer_seg_terskel": "Nærmer seg terskelen",
+          "like_under_terskel": "Like under terskelen",
+          "over_terskel": "Over terskelen"
+        }
+      },
+      "tilgjengelig_kutt": {
+        "name": "Tilgjengelig kutt"
+      },
+      "topp_3_snitt_denne_maned": {
+        "name": "Topp-3 snitt denne måneden"
+      }
+    },
+    "switch": {
+      "automatikk": {
+        "name": "Automatikk"
       }
     }
   },
@@ -71,6 +113,13 @@
         "blind": "Blind (antar 0,3 kW VVB-kutt)",
         "vvb_status": "VVB med statussensor (faktisk effekt)",
         "vvb_pluss_ekstra": "VVB + ekstra last (full fleksibilitet)"
+      }
+    },
+    "min_risiko_for_kutt": {
+      "options": {
+        "naermer_seg_terskel": "Nærmer seg terskelen",
+        "like_under_terskel": "Like under terskelen",
+        "over_terskel": "Over terskelen"
       }
     }
   },

@@ -31,8 +31,8 @@ Krav til oppdateringsfrekvens, enheter og hvilke AMS-lesere og smarte plugger so
 
 | Innstilling           | Standard | Beskrivelse                                                |
 | --------------------- | -------- | ---------------------------------------------------------- |
-| Sikkerhetsbuffer (kW) | 1,0      | Margin under terskelen som trigger `medium`-risiko         |
-| Min risiko for kutt   | medium   | Under dette nivået er `binary_sensor` av                   |
+| Sikkerhetsbuffer (kW) | 1,0      | Margin under terskelen som gir `like_under_terskel`        |
+| Min risiko for kutt   | Like under terskelen | Under dette nivået er `binary_sensor` av       |
 | Risiko-holdetid (min) | 5        | Hvor lenge nedgang i risiko må holde seg før det bekreftes |
 | Kutt-strategi         | blind    | Se [strategi.md](strategi.md)                              |
 

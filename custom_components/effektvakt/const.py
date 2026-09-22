@@ -38,28 +38,58 @@ BLIND_ASSUMED_KUTT_KW: Final[float] = 0.3  # 2 kW VVB x 15% duty cycle
 VVB_ACTIVE_THRESHOLD_W: Final[float] = 1000.0  # under denne: element antas å ikke varme
 EKSTRA_SENSOR_ACTIVE_THRESHOLD_W: Final[float] = 100.0  # under denne: bidrar ikke
 
+# Risiko-nivåer (sortert: lavest til høyest)
+#
+# Verdiene sier hvor nær neste kapasitetstrinn projeksjonen ligger, ikke et
+# abstrakt risikonivå. En automasjon som sammenligner mot "over_terskel" er
+# lesbar uten oppslagstabell, og verdien står seg i loggen og i
+# utviklerverktøyene der oversettelsen ikke rendres.
+#
+# Rekkefølgen i RISIKO_LEVELS er ordningen min_risiko_for_kutt sammenlignes
+# etter. Flytter du en verdi, flytter du terskelen for alle som har valgt den.
+RISIKO_GOD_MARGIN: Final[str] = "god_margin"
+RISIKO_NAERMER_SEG: Final[str] = "naermer_seg_terskel"
+RISIKO_LIKE_UNDER: Final[str] = "like_under_terskel"
+RISIKO_OVER_TERSKEL: Final[str] = "over_terskel"
+
+RISIKO_LEVELS: Final[list[str]] = [
+    RISIKO_GOD_MARGIN,
+    RISIKO_NAERMER_SEG,
+    RISIKO_LIKE_UNDER,
+    RISIKO_OVER_TERSKEL,
+]
+RISIKO_RANK: Final[dict[str, int]] = {nivå: idx for idx, nivå in enumerate(RISIKO_LEVELS)}
+
+# Bakoverkompatibilitet for risiko-verdier. De gamle verdiene ligger lagret i
+# config entryen som min_risiko_for_kutt og i hysterese-tilstanden på disk. Uten
+# denne ville et lagret "medium" falt utenfor RISIKO_RANK, og binary-sensoren
+# aldri slått på igjen.
+LEGACY_RISIKO_MAPPING: Final[dict[str, str]] = {
+    "none": RISIKO_GOD_MARGIN,
+    "low": RISIKO_NAERMER_SEG,
+    "medium": RISIKO_LIKE_UNDER,
+    "high": RISIKO_OVER_TERSKEL,
+}
+
 # Default values
 DEFAULT_DSO: Final[str] = "bkk"
 DEFAULT_SAFETY_BUFFER_KW: Final[float] = 1.0
-DEFAULT_MIN_RISIKO_FOR_KUTT: Final[str] = "medium"
+DEFAULT_MIN_RISIKO_FOR_KUTT: Final[str] = RISIKO_LIKE_UNDER
 DEFAULT_RISIKO_HOLDETID_MINUTTER: Final[int] = 5
-
-# Risiko-nivåer (sortert: lavest til høyest)
-RISIKO_NONE: Final[str] = "none"
-RISIKO_LOW: Final[str] = "low"
-RISIKO_MEDIUM: Final[str] = "medium"
-RISIKO_HIGH: Final[str] = "high"
-
-RISIKO_LEVELS: Final[list[str]] = [RISIKO_NONE, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_HIGH]
-RISIKO_RANK: Final[dict[str, int]] = {nivå: idx for idx, nivå in enumerate(RISIKO_LEVELS)}
 
 # Tick-intervaller per risiko-nivå (sekunder)
 TICK_INTERVAL_BY_RISIKO: Final[dict[str, int]] = {
-    RISIKO_NONE: 60,
-    RISIKO_LOW: 60,
-    RISIKO_MEDIUM: 30,
-    RISIKO_HIGH: 15,
+    RISIKO_GOD_MARGIN: 60,
+    RISIKO_NAERMER_SEG: 60,
+    RISIKO_LIKE_UNDER: 30,
+    RISIKO_OVER_TERSKEL: 15,
 }
+
+# Hovedbryter: én switch per config entry som slår all Effektvakt-automatikk av.
+# Nøkkelen inngår i unique_id, så den er låst av entitetsregisteret og kan ikke
+# endres uten å gi brukeren en ny entitet.
+SWITCH_KEY_AUTOMATIKK: Final[str] = "automatikk"
+DEFAULT_AUTOMATIKK_AKTIV: Final[bool] = True
 
 # Watchdog
 WATCHDOG_INTERVAL_SECONDS: Final[int] = 60

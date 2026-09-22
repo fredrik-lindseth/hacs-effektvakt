@@ -29,8 +29,10 @@ from .const import (
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
+    LEGACY_RISIKO_MAPPING,
     PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS,
     PEAK_SENSOR_NAME_PATTERNS,
+    RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
     STRATEGI_OPTIONS,
     VALID_ENERGY_UNITS,
@@ -51,6 +53,24 @@ def looks_like_peak_sensor(entity_id: str, *, friendly_name: str = "") -> bool:
         return True
     lower_name = friendly_name.lower()
     return any(kw in lower_name for kw in PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS)
+
+
+def _risiko_valg() -> list[selector.SelectOptionDict]:
+    """Nivåene brukeren kan velge som terskel for kutt.
+
+    Laveste nivå er utelatt: «kutt allerede når marginen er god» er ikke et
+    meningsfullt valg. Etikettene kommer fra selector-oversettelsen, så
+    dropdownen leser likt som sensoren.
+    """
+    valgbare = [lvl for lvl in RISIKO_LEVELS if lvl != RISIKO_GOD_MARGIN]
+    return [selector.SelectOptionDict(value=lvl, label=lvl) for lvl in valgbare]
+
+
+def _lagret_risiko(verdi: str | None) -> str:
+    """Nivået fra config entryen, oversatt fra de gamle verdiene om nødvendig."""
+    if verdi is None:
+        return DEFAULT_MIN_RISIKO_FOR_KUTT
+    return LEGACY_RISIKO_MAPPING.get(verdi, verdi)
 
 
 def _dso_options() -> list[selector.SelectOptionDict]:
@@ -194,12 +214,9 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_MIN_RISIKO_FOR_KUTT, default=DEFAULT_MIN_RISIKO_FOR_KUTT
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(value=lvl, label=lvl)
-                                for lvl in RISIKO_LEVELS
-                                if lvl != "none"
-                            ],
+                            options=_risiko_valg(),
                             mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key=CONF_MIN_RISIKO_FOR_KUTT,
                         ),
                     ),
                     vol.Required(
@@ -258,15 +275,12 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_MIN_RISIKO_FOR_KUTT,
-                        default=data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT),
+                        default=_lagret_risiko(data.get(CONF_MIN_RISIKO_FOR_KUTT)),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(value=lvl, label=lvl)
-                                for lvl in RISIKO_LEVELS
-                                if lvl != "none"
-                            ],
+                            options=_risiko_valg(),
                             mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key=CONF_MIN_RISIKO_FOR_KUTT,
                         ),
                     ),
                     vol.Required(

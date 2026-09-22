@@ -23,7 +23,7 @@
         "description": "These can be changed later via integration options.",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
-          "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
+          "min_risiko_for_kutt": "Cut from this level and up",
           "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
           "kutt_strategi": "Cut strategy",
           "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_pluss_ekstra)",
@@ -56,12 +56,54 @@
         "title": "Effektvakt settings",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
-          "min_risiko_for_kutt": "Minimum risk level that triggers load cut",
+          "min_risiko_for_kutt": "Cut from this level and up",
           "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
           "kutt_strategi": "Cut strategy",
           "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_pluss_ekstra)",
           "ekstra_power_sensors": "Extra power sensors (heating cables, EV charger, etc)"
         }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "kutt_ned_anbefalt": {
+        "name": "Load cut recommended",
+        "state": {
+          "off": "No action",
+          "on": "Cut recommended"
+        }
+      }
+    },
+    "sensor": {
+      "kostnad_neste_trinn": {
+        "name": "Cost of next tier"
+      },
+      "margin_til_neste_trinn": {
+        "name": "Margin to next tier"
+      },
+      "projisert_time_snitt": {
+        "name": "Projected hourly average"
+      },
+      "risiko_niva": {
+        "name": "Risk of reaching next tier",
+        "state": {
+          "god_margin": "Good margin",
+          "naermer_seg_terskel": "Approaching the threshold",
+          "like_under_terskel": "Just under the threshold",
+          "over_terskel": "Over the threshold"
+        }
+      },
+      "tilgjengelig_kutt": {
+        "name": "Available load to cut"
+      },
+      "topp_3_snitt_denne_maned": {
+        "name": "Top-3 average this month"
+      }
+    },
+    "switch": {
+      "automatikk": {
+        "name": "Automatic load cutting"
       }
     }
   },
@@ -71,6 +113,13 @@
         "blind": "Blind (assumes 0.3 kW water heater cut)",
         "vvb_status": "Water heater with status sensor (actual power)",
         "vvb_pluss_ekstra": "Water heater + extra loads (full flexibility)"
+      }
+    },
+    "min_risiko_for_kutt": {
+      "options": {
+        "naermer_seg_terskel": "Approaching the threshold",
+        "like_under_terskel": "Just under the threshold",
+        "over_terskel": "Over the threshold"
       }
     }
   },

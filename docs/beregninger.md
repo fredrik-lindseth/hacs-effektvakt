@@ -134,12 +134,12 @@ Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `u
 
 Rå risiko bestemmes av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):
 
-| Betingelse                      | Risiko   |
-| ------------------------------- | -------- |
-| `margin > 2 × buffer`           | `none`   |
-| `buffer < margin <= 2 × buffer` | `low`    |
-| `0 < margin <= buffer`          | `medium` |
-| `margin <= 0`                   | `high`   |
+| Betingelse                      | Risiko                |
+| ------------------------------- | --------------------- |
+| `margin > 2 × buffer`           | `god_margin`          |
+| `buffer < margin <= 2 × buffer` | `naermer_seg_terskel` |
+| `0 < margin <= buffer`          | `like_under_terskel`  |
+| `margin <= 0`                   | `over_terskel`        |
 
 Margin = `effective_threshold_kw - projected_avg`.
 
@@ -151,9 +151,9 @@ Rå risiko går direkte inn i `apply_hysteresis`. Regler:
 
 - **Oppgang** (høyere risiko): umiddelbar. Ingen ventetid.
 - **Nedgang** (lavere risiko): ett trinn av gangen. Hvert trinn ned krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min).
-- Multi-step: fra `high` til `none` skjer via `high -> medium -> low -> none`, med ny tidtaker per trinn.
+- Multi-step: fra `over_terskel` til `god_margin` skjer via `over_terskel -> like_under_terskel -> naermer_seg_terskel -> god_margin`, med ny tidtaker per trinn.
 
-Eksempel: Risiko er `high`. Rå risiko faller til `none`. Etter 5 min uten ny `high` settes risiko til `medium`. Etter ytterligere 5 min til `low`. Etter 5 min til til `none`.
+Eksempel: Risiko er `over_terskel`. Rå risiko faller til `god_margin`. Etter 5 min uten ny `over_terskel` settes risiko til `like_under_terskel`. Etter ytterligere 5 min til `naermer_seg_terskel`. Etter 5 min til til `god_margin`.
 
 Dette forhindrer at VVB eller panelovn slås raskt av og på ved forbruk som svinger rundt en grense.
 
@@ -163,14 +163,14 @@ Dette forhindrer at VVB eller panelovn slås raskt av og på ved forbruk som svi
 
 Coordinator-intervallet justeres basert på risiko-nivå:
 
-| Risiko   | Intervall   |
-| -------- | ----------- |
-| `none`   | 60 sekunder |
-| `low`    | 60 sekunder |
-| `medium` | 30 sekunder |
-| `high`   | 15 sekunder |
+| Risiko                | Intervall   |
+| --------------------- | ----------- |
+| `god_margin`          | 60 sekunder |
+| `naermer_seg_terskel` | 60 sekunder |
+| `like_under_terskel`  | 30 sekunder |
+| `over_terskel`        | 15 sekunder |
 
-Ved høy risiko leses sensorer og projeksjon oppdateres hvert 15 sekund for rask respons.
+Er terskelen passert, leses sensorer og projeksjon oppdateres hvert 15 sekund for rask respons.
 
 ---
 

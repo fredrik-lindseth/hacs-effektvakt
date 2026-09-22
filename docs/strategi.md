@@ -12,7 +12,7 @@ Strategien bestemmer hva `sensor.effektvakt_tilgjengelig_kutt` rapporterer. Den 
 
 **Hva den gjør**: Returnerer alltid 0,3 kW, basert på at en norsk standard VVB (2 kW element) er aktiv ca. 15% av tiden i normal drift.
 
-**Problem**: Duty cycle-antagelsen på 15% betyr at det er 85% sjanse for at VVB-en _ikke_ varmer i et gitt øyeblikk. Slår du av VVB blindt ved medium risiko, er den reelle forventede effektreduksjonen 0,15 × 2 kW = 0,3 kW. Noen ganger er VVB aktiv og kuttet gir 2 kW. Noen ganger er den allerede av og kuttet gir 0 kW.
+**Problem**: Duty cycle-antagelsen på 15% betyr at det er 85% sjanse for at VVB-en _ikke_ varmer i et gitt øyeblikk. Slår du av VVB blindt når timen ligger like under terskelen, er den reelle forventede effektreduksjonen 0,15 × 2 kW = 0,3 kW. Noen ganger er VVB aktiv og kuttet gir 2 kW. Noen ganger er den allerede av og kuttet gir 0 kW.
 
 **Når bruke**: Ingen smart plugg på VVB. Rask oppsett. Akseptabelt for testing eller husholdninger der VVB sjelden er den avgjørende faktoren.
 

@@ -1,6 +1,6 @@
 # Sensorer
 
-Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et sett felles attributter.
+Effektvakt oppretter ett device med 6 sensorer, 1 binary sensor og 1 switch. Sensorene deler et sett felles attributter.
 
 ## Oversikt
 
@@ -13,6 +13,13 @@ Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et
 | `sensor.effektvakt_tilgjengelig_kutt`        | kW     | measurement |
 | `sensor.effektvakt_kostnad_neste_trinn`      | kr/mnd | measurement |
 | `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | -           |
+| `switch.effektvakt_automatikk`               | on/off | -           |
+
+## Navn og entitets-id
+
+Navnene entitetene vises med kommer fra `strings.json` og `translations/`, og følger språket i Home Assistant. Entitets-id-ene gjør ikke det: de settes eksplisitt i `sensor.py`, `binary_sensor.py` og `switch.py`, slik at de står likt på alle språk. Lot vi HA utlede dem, ville en engelsk installasjon fått `sensor.effektvakt_projected_hourly_average`, og både tabellen over, blueprintene og kortet ville pekt på en id som ikke fantes.
+
+Skal du legge til en entitet: unique_id og entity_id skal ha samme nøkkel som `translation_key`, og alle tre oversettelsesfilene må få en `entity`-oppføring. `tests/test_translations.py` fanger en glemt fil.
 
 ---
 
@@ -22,7 +29,7 @@ Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et
 
 **Enhet**: kW
 
-**Oppdateres**: Hvert 60 sekund (none/low risiko), 30 sekund (medium), 15 sekund (high).
+**Oppdateres**: Hvert 60 sekund med margin til terskelen, 30 sekund like under den, 15 sekund over.
 
 **Pålitelighet**: God etter de første par minuttene av timen. Tidlig i timen (0-5 minutter) dominerer `current_kw`-leddet fullstendig, siden lite energi er registrert ennå. Mangler energy-sensor, estimeres `actual_kwh_this_hour` fra effekt \* tid, noe som kan gi avvik.
 
@@ -58,20 +65,24 @@ Effektvakt oppretter ett device med 6 sensorer og 1 binary sensor. Alle deler et
 
 ## `sensor.effektvakt_risiko_niva`
 
-**Hva**: Hysteresefull risikovurdering basert på margin til neste trinn og konfigurert sikkerhetsbuffer.
+**Hva**: Hvor nær neste kapasitetstrinn timen ligger an til å komme, med hysterese. Grunnlaget er margin til neste trinn og konfigurert sikkerhetsbuffer.
 
 **Enhet**: enum
 
 **Verdier**:
 
-| Nivå     | Betingelse                                        |
-| -------- | ------------------------------------------------- |
-| `none`   | Margin > 2 × sikkerhetsbuffer                     |
-| `low`    | Sikkerhetsbuffer < margin <= 2 × sikkerhetsbuffer |
-| `medium` | 0 < margin <= sikkerhetsbuffer                    |
-| `high`   | Margin <= 0 (terskelen er overskredet)            |
+| Nivå                  | Vises som             | Betingelse                                        |
+| --------------------- | --------------------- | ------------------------------------------------- |
+| `god_margin`          | God margin            | Margin > 2 × sikkerhetsbuffer                     |
+| `naermer_seg_terskel` | Nærmer seg terskelen  | Sikkerhetsbuffer < margin <= 2 × sikkerhetsbuffer |
+| `like_under_terskel`  | Like under terskelen  | 0 < margin <= sikkerhetsbuffer                    |
+| `over_terskel`        | Over terskelen        | Margin <= 0 (terskelen er overskredet)            |
 
-**Hysterese**: Oppgang til høyere risiko skjer umiddelbart. Nedgang skjer ett trinn av gangen og krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min) før det bekreftes.
+Tilstanden er verdien i venstre kolonne. Det er den automasjoner, maler og `dcat`-vennlige logger sammenligner mot. Teksten i midten er oversettelsen HA viser, på norsk og engelsk.
+
+Verdiene het `none`, `low`, `medium` og `high` fram til september 2026. Gamle verdier lagret i config entryen eller i hysterese-tilstanden oversettes automatisk, men historikk i recorder står igjen med de gamle navnene, så en graf over månedsskiftet ser delt ut.
+
+**Hysterese**: Oppgang til et mer alvorlig nivå skjer umiddelbart. Nedgang skjer ett trinn av gangen og krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min) før det bekreftes.
 
 **Oppdateres**: Samme frekvens som projisert time-snitt.
 
@@ -186,11 +197,27 @@ kapasitetstrinn:
 
 ## `binary_sensor.effektvakt_kutt_ned_anbefalt`
 
-**Hva**: `on` når hysteresefull risiko er lik eller høyere enn konfigurert `min_risiko_for_kutt` (standard `medium`).
+**Hva**: `on` når hysteresefull risiko er lik eller høyere enn konfigurert `min_risiko_for_kutt` (standard `like_under_terskel`).
 
-**Verdier**: `on` (kutt anbefalt), `off` (ingen handling), `unknown` (coordinator stale)
+**Verdier**: `on` (vises som «Kutt anbefalt»), `off` («Ingen handling»), `unknown` (coordinator stale)
 
 **Typisk bruk**: Trigger i enkel_lastkutt.yaml og climate_min_temp.yaml. Er en enklere grensesnitt enn å lese `risiko_niva` direkte.
+
+**Egne attributter**: `automatikk_aktiv` speiler `switch.effektvakt_automatikk`, så et dashboard kan skille «burde kuttes» fra «blir kuttet» uten å slå opp entitets-id-en til switchen.
+
+Sensoren følger ikke switchen. Den sier at risikoen er der, ikke at noen gjør noe med den. Fulgte den switchen, ville historikken vist færre kutt-verdige timer enn det faktisk var.
+
+---
+
+## `switch.effektvakt_automatikk`
+
+**Hva**: Hovedbryteren for all lastkutting. Er den av, kutter ingen av blueprintene, uansett hvor mange automasjoner du har.
+
+**Verdier**: `on` (standard), `off`
+
+**Overlever omstart**: ja. Alt annet enn et lagret `off`, altså første oppstart, tapt historikk og `unavailable`, gir `on`.
+
+**Hva den ikke gjør**: den rører ikke beregningen. Projisert time-snitt, risiko og kostnad regnes og vises som før, så du ser fortsatt hva timen koster mens du lar berederen gå. Den avbryter heller ikke et kutt som pågår; lasten kommer tilbake når blueprintets `max_off_minutes` løper ut. Se [blueprints.md](blueprints.md) for hvordan automasjonene leser den.
 
 ---
 

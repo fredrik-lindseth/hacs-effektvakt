@@ -16,6 +16,7 @@ custom_components/effektvakt/
     manifest.json       # HA integration manifest
     sensor.py           # De seks sensor-entitetene
     services.yaml       # Service-definisjoner
+    switch.py           # switch.effektvakt_automatikk, hovedbryteren
 
 docs/
     blueprints/         # Blueprint YAML-filer

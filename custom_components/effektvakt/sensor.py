@@ -6,6 +6,7 @@ import math
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.sensor import (
+    ENTITY_ID_FORMAT,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
@@ -58,6 +59,14 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(self, coordinator: EffektvaktCoordinator) -> None:
         super().__init__(coordinator)
+        self._attr_translation_key = self._sensor_key
+        # Entitets-id-en settes eksplisitt fordi HA ellers utleder object_id-en
+        # fra det engelske entitetsnavnet, og da ville en fersk installasjon
+        # fått sensor.effektvakt_projected_hourly_average. Docs, blueprintene og
+        # kortet navngir de norske id-ene, og de skal stå likt på alle språk.
+        # Eksisterende entiteter beholder id-en sin uansett, den er låst av
+        # entitetsregisteret gjennom unique_id.
+        self.entity_id = ENTITY_ID_FORMAT.format(f"{DOMAIN}_{self._sensor_key}")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{self._sensor_key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.entry.entry_id)},
@@ -90,7 +99,6 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
 
 
 class EffektvaktProjisertSensor(_EffektvaktBaseSensor):
-    _attr_name = "Projisert time-snitt"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -103,7 +111,6 @@ class EffektvaktProjisertSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktMarginSensor(_EffektvaktBaseSensor):
-    _attr_name = "Margin til neste trinn"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -116,7 +123,6 @@ class EffektvaktMarginSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktTopp3Sensor(_EffektvaktBaseSensor):
-    _attr_name = "Topp-3 snitt denne måned"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -129,7 +135,8 @@ class EffektvaktTopp3Sensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
-    _attr_name = "Risiko-nivå"
+    """Hvor nær neste kapasitetstrinn timen ligger an til å komme."""
+
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options: ClassVar[list[str]] = list(RISIKO_LEVELS)
 
@@ -145,7 +152,6 @@ class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
-    _attr_name = "Tilgjengelig kutt"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -174,7 +180,6 @@ class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
 class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
     """Kronene per måned som står på spill mellom trinnet vi ligger an til og neste."""
 
-    _attr_name = "Kostnad neste trinn"
     # Ingen device_class: MONETARY krever ISO-valutakode som enhet og en total-state_class,
     # og satser holdes i kr/mnd, slik strømkalkulator gjør det.
     _attr_native_unit_of_measurement = "kr/mnd"

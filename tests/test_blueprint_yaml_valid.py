@@ -45,6 +45,40 @@ def test_lastkutt_blueprints_har_max_off_minutes(blueprint_path: Path):
     assert "max_off_minutes" in inputs, f"{blueprint_path.name} mangler max_off_minutes failsafe-input"
 
 
+@pytest.mark.parametrize("blueprint_path", sorted(BLUEPRINTS_DIR.glob("*.yaml")))
+def test_alle_blueprints_sjekker_automatikk_bryteren(blueprint_path: Path):
+    """Hovedbryteren skal virke fra ett sted, så ingen blueprint får slippe unna."""
+    data = _load(blueprint_path)
+    assert "automatikk_switch" in data["blueprint"]["input"], f"{blueprint_path.name} leser ikke hovedbryteren"
+    assert "automatikk_switch" in data["variables"], f"{blueprint_path.name} mangler variabelen"
+    gate = "is_state(automatikk_switch, 'on')"
+    assert gate in blueprint_path.read_text(), f"{blueprint_path.name} har input men ingen condition"
+
+
+@pytest.mark.parametrize("blueprint_path", sorted(BLUEPRINTS_DIR.glob("*.yaml")))
+def test_automatikk_bryteren_er_valgfri(blueprint_path: Path):
+    """Uten default ville hver eksisterende automasjon brekt ved oppdatering.
+
+    Tom streng er den eneste defaulten som gir mening: den peker ikke på en
+    entitets-id som avhenger av config entryen, og condition-en slipper den
+    gjennom slik at automasjonen oppfører seg som før bryteren fantes.
+    """
+    felt = _load(blueprint_path)["blueprint"]["input"]["automatikk_switch"]
+    assert felt.get("default") == "", f"{blueprint_path.name} må ha tom default"
+
+
+@pytest.mark.parametrize("blueprint_path", LASTKUTT_BLUEPRINTS)
+def test_restore_er_ikke_gatet_av_bryteren(blueprint_path: Path):
+    """Bryteren skal stoppe kutt, ikke tilbakestilling.
+
+    Gatet vi også restore, kunne en last bli stående av fordi noen vippet
+    bryteren mens kuttet pågikk. Derfor sitter condition-en inne i choose-
+    grenene og aldri på toppnivå i en blueprint som slår noe på igjen.
+    """
+    data = _load(blueprint_path)
+    assert "condition" not in data, f"{blueprint_path.name} gater hele automasjonen"
+
+
 def test_finnes_minst_4_blueprints():
     paths = list(BLUEPRINTS_DIR.glob("*.yaml"))
     assert len(paths) >= 4

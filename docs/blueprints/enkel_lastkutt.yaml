@@ -19,6 +19,18 @@ blueprint:
       selector:
         entity:
           domain: switch
+    automatikk_switch:
+      name: Effektvakt automatikk-bryter (valgfri)
+      description: >
+        Bryteren fra Effektvakt-integrasjonen, typisk
+        switch.effektvakt_automatikk. Er den av, kutter ikke denne
+        automasjonen. Lar du feltet stå tomt, kutter den alltid, slik den
+        gjorde før bryteren fantes.
+      default: ""
+      selector:
+        entity:
+          domain: switch
+          integration: effektvakt
     max_off_minutes:
       name: Maks minutter slått av før tving-on (failsafe)
       description: Hvis Effektvakt henger, slås switchen på etter denne tiden.
@@ -33,6 +45,7 @@ variables:
   switch_entity: !input switch_entity
   binary_sensor_entity: !input binary_sensor_entity
   max_off_minutes: !input max_off_minutes
+  automatikk_switch: !input automatikk_switch
 
 trigger:
   - platform: state
@@ -49,8 +62,13 @@ mode: restart
 action:
   - choose:
       - conditions:
+          # Bare kuttingen er gatet. Å slå på igjen skal alltid få gå,
+          # ellers kan en last bli stående av fordi bryteren ble vippet.
           - condition: trigger
             id: trigger_off
+          - condition: template
+            value_template: >
+              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
           - service: switch.turn_off
             target:

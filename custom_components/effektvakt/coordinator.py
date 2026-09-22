@@ -24,19 +24,22 @@ from .const import (
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
     CONF_VVB_POWER_SENSOR,
+    DEFAULT_AUTOMATIKK_AKTIV,
     DEFAULT_KUTT_STRATEGI,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
     EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
+    LEGACY_RISIKO_MAPPING,
     LEGACY_STRATEGI_MAPPING,
+    MAX_ENERGY_DELTA_KWH,
     MAX_POWER_CLAMP_W,
-    RISIKO_HIGH,
+    RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
-    RISIKO_LOW,
-    RISIKO_MEDIUM,
-    RISIKO_NONE,
+    RISIKO_LIKE_UNDER,
+    RISIKO_NAERMER_SEG,
+    RISIKO_OVER_TERSKEL,
     RISIKO_RANK,
     STORAGE_VERSION,
     STRATEGI_BLIND,
@@ -51,6 +54,7 @@ from .const import (
 from .dso import KAPASITETSTRINN_PER_DSO
 
 if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,20 +148,19 @@ def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:
 def classify_raw_risk(*, margin_kw: float, safety_buffer_kw: float) -> str:
     """Klassifiser rå risiko basert på margin og safety_buffer.
 
-    Returnerer en av RISIKO_NONE, RISIKO_LOW, RISIKO_MEDIUM, RISIKO_HIGH.
-    Tabell:
-      none:   margin > 2 x buffer
-      low:    buffer < margin <= 2 x buffer
-      medium: 0 < margin <= buffer
-      high:   margin <= 0
+    Returnerer en av RISIKO_LEVELS. Tabell:
+      god_margin:          margin > 2 x buffer
+      naermer_seg_terskel: buffer < margin <= 2 x buffer
+      like_under_terskel:  0 < margin <= buffer
+      over_terskel:        margin <= 0
     """
     if margin_kw <= 0:
-        return RISIKO_HIGH
+        return RISIKO_OVER_TERSKEL
     if margin_kw <= safety_buffer_kw:
-        return RISIKO_MEDIUM
+        return RISIKO_LIKE_UNDER
     if margin_kw <= 2 * safety_buffer_kw:
-        return RISIKO_LOW
-    return RISIKO_NONE
+        return RISIKO_NAERMER_SEG
+    return RISIKO_GOD_MARGIN
 
 
 def top_n_average(daily_max_kw: dict[date, float], *, n: int) -> float | None:
@@ -338,7 +341,7 @@ class HystereseState:
 
 
 def _nivå_ett_under(nivå: str) -> str:
-    """Returner risiko-nivået ett trinn under det gitte. RISIKO_NONE returnerer seg selv."""
+    """Returner risiko-nivået ett trinn under det gitte. Laveste nivå returnerer seg selv."""
     idx = RISIKO_RANK[nivå]
     if idx == 0:
         return nivå
@@ -407,6 +410,64 @@ def compute_elapsed_h(now: datetime) -> float:
     return (now.minute + now.second / 60) / 60
 
 
+def parse_stored_datetime(raw: object) -> datetime | None:
+    """Les en lagret ISO-tid. None hvis den mangler eller ikke lar seg lese."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def hour_state_is_current(*, hour_start: datetime | None, now: datetime) -> bool:
+    """Om en time-akkumulator som starter i hour_start hører til timen vi står i nå.
+
+    Fire ting må stemme: timen må finnes, den kan ikke ligge i framtida, den kan
+    ikke være en time eller mer gammel, og både klokketimen og utc-offseten må
+    være de samme. Offseten skiller de to gangene klokka er 02 natta den settes
+    tilbake, og aldersgrensen fanger nedetid på et helt antall døgn der
+    klokketimen tilfeldigvis stemmer igjen.
+    """
+    if hour_start is None:
+        return False
+    if (hour_start.tzinfo is None) != (now.tzinfo is None):
+        return False
+    if not timedelta(0) <= now - hour_start < timedelta(hours=1):
+        return False
+    return (hour_start.hour, hour_start.utcoffset()) == (now.hour, now.utcoffset())
+
+
+def apply_energy_reading(
+    *,
+    energy_now: float,
+    energy_at_hour_start: float | None,
+    current_hour_kwh: float,
+) -> tuple[float, float]:
+    """Ta imot en avlesning av energimåleren og returner (kWh denne timen, ny startverdi).
+
+    Regnestykket er at timens forbruk er målerstanden minus startverdien, så
+    `energy_at_hour_start + current_hour_kwh` er alltid den forrige godtatte
+    avlesningen. Står måleren under den, er det ikke den samme måleren lenger: en
+    total_increasing-måler kan ikke gå ned uten å ha blitt nullstilt eller byttet.
+    Hopper den mer enn MAX_ENERGY_DELTA_KWH på ett tick, er avlesningen ikke til
+    å stole på uansett.
+
+    I begge tilfeller beholdes det som alt er målt denne timen, og startverdien
+    flyttes slik at tellingen fortsetter fra den nye standen. Da er startverdien
+    ikke lenger en målerstand som har vært, men den holder regnestykket riktig,
+    og alternativet er at timen fryser til måleren har klatret tilbake.
+    """
+    if energy_at_hour_start is None:
+        return current_hour_kwh, energy_now - current_hour_kwh
+    delta = energy_now - energy_at_hour_start - current_hour_kwh
+    if delta == 0:
+        return current_hour_kwh, energy_at_hour_start
+    if 0 < delta <= MAX_ENERGY_DELTA_KWH:
+        return current_hour_kwh + delta, energy_at_hour_start
+    return current_hour_kwh, energy_now - current_hour_kwh
+
+
 class EffektvaktCoordinator(DataUpdateCoordinator):
     """Coordinator for Effektvakt."""
 
@@ -415,13 +476,16 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=TICK_INTERVAL_BY_RISIKO[RISIKO_NONE]),
+            update_interval=timedelta(seconds=TICK_INTERVAL_BY_RISIKO[RISIKO_GOD_MARGIN]),
         )
-        self.entry = entry
+        self.entry: ConfigEntry = entry
         self.power_sensor: str | None = entry.data.get(CONF_POWER_SENSOR)
         self.energy_sensor: str | None = entry.data.get(CONF_ENERGY_SENSOR)
         self.safety_buffer_kw: float = float(entry.data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW))
-        self.min_risiko_for_kutt: str = entry.data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT)
+        # Bakoverkompatibilitet for risiko-verdier: en config entry fra før
+        # omdøpingen har "medium" lagret, og det er ikke lenger et nivå.
+        min_risiko_raw = entry.data.get(CONF_MIN_RISIKO_FOR_KUTT, DEFAULT_MIN_RISIKO_FOR_KUTT)
+        self.min_risiko_for_kutt: str = LEGACY_RISIKO_MAPPING.get(min_risiko_raw, min_risiko_raw)
         self.risiko_holdetid: timedelta = timedelta(
             minutes=int(entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER))
         )
@@ -441,15 +505,18 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             self.kapasitetstrinn = list(dso_info["kapasitetstrinn"]) if dso_info else []
 
         # Mutable state
+        # Hovedbryteren eier denne, ikke beregningen. Den styrer bare om
+        # automasjoner faar lov til aa kutte: sensorene regner videre uansett,
+        # saa projeksjon, risiko og kostnad er like sanne med vakten av.
+        self.automatikk_aktiv: bool = DEFAULT_AUTOMATIKK_AKTIV
         self._daily_max_kw: dict[date, float] = {}
         self._current_month: str = dt_util_now().strftime("%Y-%m")
         self._current_hour_kwh: float = 0.0
         self._current_hour_start: datetime | None = None
-        self._current_hour_bucket: tuple[int, timedelta | None] | None = None
         self._energy_at_hour_start: float | None = None
         self._previous_month_top_3_snitt_kw: float | None = None
         self._previous_month_name: str | None = None
-        self._hysterese_state = HystereseState(nivå=RISIKO_NONE)
+        self._hysterese_state = HystereseState(nivå=RISIKO_GOD_MARGIN)
         self._last_successful_update: datetime | None = None
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
         self._store_loaded = False
@@ -468,21 +535,29 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
                 self._daily_max_kw[d] = float(kw)
             except (ValueError, TypeError):
                 continue
+        self._current_month = str(data.get("current_month") or self._current_month)
         self._current_hour_kwh = float(data.get("current_hour_kwh", 0.0))
+        # Uten timen de hører til er kWh-en og startverdien ubrukelige. Da lar
+        # vi dem stå, og første tick forkaster dem fordi timen ikke stemmer.
+        self._current_hour_start = parse_stored_datetime(data.get("current_hour_start"))
         self._energy_at_hour_start = data.get("energy_at_hour_start")
         self._previous_month_top_3_snitt_kw = data.get("previous_month_top_3_snitt_kw")
         self._previous_month_name = data.get("previous_month_name")
         hyst = data.get("hysterese_state", {})
-        if hyst.get("nivå") in RISIKO_LEVELS:
-            self._hysterese_state.nivå = hyst["nivå"]
+        lagret_nivå = str(hyst.get("nivå", ""))
+        lagret_nivå = LEGACY_RISIKO_MAPPING.get(lagret_nivå, lagret_nivå)
+        if lagret_nivå in RISIKO_LEVELS:
+            self._hysterese_state.nivå = lagret_nivå
 
     async def _persist(self) -> None:
+        hour_start = self._current_hour_start
         await self._store.async_save(
             {
                 "data": {
                     "current_month": self._current_month,
                     "daily_max_kw": {d.isoformat(): kw for d, kw in self._daily_max_kw.items()},
                     "current_hour_kwh": self._current_hour_kwh,
+                    "current_hour_start": hour_start.isoformat() if hour_start else None,
                     "energy_at_hour_start": self._energy_at_hour_start,
                     "previous_month_top_3_snitt_kw": self._previous_month_top_3_snitt_kw,
                     "previous_month_name": self._previous_month_name,
@@ -503,13 +578,12 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         await self._load_stored_data()
         now = dt_util_now()
 
-        hour_bucket = (now.hour, now.utcoffset())
-        if self._current_hour_bucket is not None and self._current_hour_bucket != hour_bucket:
+        # Tilstanden kan komme rett fra disk, og da er dette første tick etter
+        # en omstart. Hører den til timen vi står i, fortsetter vi der forrige
+        # tick slapp. Ellers låses den gamle timen inn før vi begynner på ny.
+        if not hour_state_is_current(hour_start=self._current_hour_start, now=now):
             self._finalize_hour()
-        if self._current_hour_bucket is None or self._current_hour_bucket != hour_bucket:
-            self._current_hour_bucket = hour_bucket
             self._current_hour_start = now.replace(minute=0, second=0, microsecond=0)
-            self._current_hour_kwh = 0.0
             self._energy_at_hour_start = None
 
         month_str = now.strftime("%Y-%m")
@@ -532,12 +606,11 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         kutt_kilder = build_kutt_kilder(strategi=self.kutt_strategi, avlesninger=avlesninger)
 
         if energy_now is not None:
-            if self._energy_at_hour_start is None:
-                self._energy_at_hour_start = energy_now
-            else:
-                delta = energy_now - self._energy_at_hour_start - self._current_hour_kwh
-                if delta > 0:
-                    self._current_hour_kwh += delta
+            self._current_hour_kwh, self._energy_at_hour_start = apply_energy_reading(
+                energy_now=energy_now,
+                energy_at_hour_start=self._energy_at_hour_start,
+                current_hour_kwh=self._current_hour_kwh,
+            )
 
         elapsed_h = compute_elapsed_h(now)
         projected_avg = compute_projected_avg(
@@ -631,6 +704,13 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         return avlesninger
 
     def _finalize_hour(self) -> None:
+        """Lås timen som er ferdig inn i daily_max_kw og nullstill akkumulatoren.
+
+        Dagsverdien settes med max, så en omstart som kjører denne på nytt for en
+        time som alt er låst inn kan ikke telle dobbelt. Mangler
+        _current_hour_start, vet vi ikke hvilken dag kWh-en hører til, og da
+        forkastes den framfor å havne på feil dag.
+        """
         if self._current_hour_kwh > 0 and self._current_hour_start is not None:
             d = self._current_hour_start.date()
             existing = self._daily_max_kw.get(d, 0.0)

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.effektvakt.const import RISIKO_LEVELS
 from custom_components.effektvakt.sensor import (
     EffektvaktKostnadNesteTrinnSensor,
     EffektvaktMarginSensor,
@@ -25,7 +26,7 @@ def coord_mock():
         "projected_avg_kw": 5.5,
         "margin_kw": 4.5,
         "topp_3_snitt_denne_maned_kw": 4.2,
-        "risiko_niva": "low",
+        "risiko_niva": "naermer_seg_terskel",
         "next_tier_threshold_kw": 10.0,
         "next_tier_pris_per_maned": 415,
         "prev_tier_threshold_kw": 5.0,
@@ -79,13 +80,49 @@ def test_topp_3_sensor(coord_mock):
 
 def test_risiko_sensor_native_value(coord_mock):
     s = EffektvaktRisikoSensor(coord_mock)
-    assert s.native_value == "low"
+    assert s.native_value == "naermer_seg_terskel"
 
 
 def test_risiko_sensor_options(coord_mock):
     s = EffektvaktRisikoSensor(coord_mock)
-    assert "none" in s.options
-    assert "high" in s.options
+    assert s.options == RISIKO_LEVELS
+
+
+@pytest.mark.parametrize(
+    "klasse,noekkel",
+    [
+        (EffektvaktProjisertSensor, "projisert_time_snitt"),
+        (EffektvaktMarginSensor, "margin_til_neste_trinn"),
+        (EffektvaktTopp3Sensor, "topp_3_snitt_denne_maned"),
+        (EffektvaktRisikoSensor, "risiko_niva"),
+        (EffektvaktTilgjengeligKuttSensor, "tilgjengelig_kutt"),
+        (EffektvaktKostnadNesteTrinnSensor, "kostnad_neste_trinn"),
+    ],
+)
+def test_sensorene_henter_navnet_fra_oversettelsen(coord_mock, klasse, noekkel):
+    """_attr_name slaar oversettelsen i HA, saa den skal ikke finnes."""
+    s = klasse(coord_mock)
+    assert s._attr_translation_key == noekkel
+    assert not hasattr(s, "_attr_name")
+
+
+@pytest.mark.parametrize(
+    "klasse,noekkel",
+    [
+        (EffektvaktProjisertSensor, "projisert_time_snitt"),
+        (EffektvaktMarginSensor, "margin_til_neste_trinn"),
+        (EffektvaktTopp3Sensor, "topp_3_snitt_denne_maned"),
+        (EffektvaktRisikoSensor, "risiko_niva"),
+        (EffektvaktTilgjengeligKuttSensor, "tilgjengelig_kutt"),
+        (EffektvaktKostnadNesteTrinnSensor, "kostnad_neste_trinn"),
+    ],
+)
+def test_entitets_id_ene_staar_fast(coord_mock, klasse, noekkel):
+    """Docs, blueprintene og kortet navngir disse id-ene. Utledet av navnet
+    ville de blitt engelske for nye installasjoner."""
+    s = klasse(coord_mock)
+    assert s.entity_id == f"sensor.effektvakt_{noekkel}"
+    assert s._attr_unique_id == f"test_entry_{noekkel}"
 
 
 def test_tilgjengelig_kutt_sensor(coord_mock):
