@@ -86,6 +86,7 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
             return None
         return {
             "elapsed_minutes_in_hour": d.get("elapsed_minutes_in_hour"),
+            "minutter_igjen_av_timen": d.get("minutter_igjen_av_timen"),
             "actual_kwh_this_hour": d.get("actual_kwh_this_hour"),
             "current_kw": d.get("current_kw"),
             # Referansen marginen måles mot, i den rekkefølgen den regnes ut:
@@ -98,6 +99,9 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
             "topp_2_andre_dager_kw": d.get("topp_2_andre_dager_kw"),
             "kutt_anbefalt_kw": d.get("kutt_anbefalt_kw"),
             "kan_legge_paa_kw": d.get("kan_legge_paa_kw"),
+            # Marginen oversatt til last man kan slaa paa naa: margin delt paa
+            # resten av timen. Ti minutter igjen gjoer 1 kW margin til 6 kW.
+            "kan_legge_paa_resten_av_timen_kw": d.get("kan_legge_paa_resten_av_timen_kw"),
             "last_update": d.get("last_update"),
         }
 
@@ -153,6 +157,19 @@ class EffektvaktTopp3Sensor(_EffektvaktBaseSensor):
     @property
     def native_value(self) -> float | None:
         return self.coordinator.data.get("topp_3_snitt_denne_maned_kw") if self.coordinator.data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        d = self.coordinator.data
+        if not d:
+            return None
+        felles = super().extra_state_attributes or {}
+        return {
+            **felles,
+            "topp_3_dager": d.get("topp_3_dager"),
+            "topp_3_inkluderer_i_dag": d.get("topp_3_inkluderer_i_dag"),
+            "dag_som_ryker": d.get("dag_som_ryker"),
+        }
 
 
 class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
@@ -234,7 +251,9 @@ class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
             "trinn_na_ovre_grense_kw": d.get("trinn_na_ovre_grense_kw"),
             "trinn_neste_kr": d.get("trinn_neste_kr"),
             "besparelse_trinn_under_kr": d.get("besparelse_trinn_under_kr"),
+            "trinn_under_terskel_kw": d.get("trinn_under_terskel_kw"),
             "trinn_under_oppnaelig": d.get("trinn_under_oppnaelig"),
+            "trinn_under_realistisk": d.get("trinn_under_realistisk"),
             "kostnad_denne_timen_kr": d.get("kostnad_denne_timen_kr"),
             "topp_3_projisert_kw": d.get("topp_3_projisert_kw"),
             "minste_mulige_topp_3_kw": d.get("minste_mulige_topp_3_kw"),

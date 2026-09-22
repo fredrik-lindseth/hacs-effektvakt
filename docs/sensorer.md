@@ -67,6 +67,34 @@ Tallet er samtidig en nedre skranke for hva måneden kan ende på, og det er sam
 
 **Merk**: Sensoren viser 0,0 kW helt i starten av en ny måned (ingen dager logget ennå). Det er korrekt oppførsel, og tilbakestillingen skjer automatisk ved månedsskifte.
 
+### Attributter
+
+I tillegg til fellesattributtene lenger nede:
+
+| Attributt                 | Type  | Beskrivelse                                                             |
+| ------------------------- | ----- | ----------------------------------------------------------------------- |
+| `topp_3_dager`            | liste | De tre dagene snittet består av, `{dato, kw}`, høyest først             |
+| `topp_3_inkluderer_i_dag` | bool  | Om dagens egen dagsmaks alt er en av de tre                             |
+| `dag_som_ryker`           | dict  | Dagen en høyere dagsmaks i dag ville skjøvet ut, eller `null`           |
+
+Snittet alene sier ikke om timen du står i betyr noe. Sammensetningen gjør det: teller dagens maks alt med, bytter en ny time på samme nivå bare ut sin egen plass, og koster ingenting. Gjør den det ikke, er `dag_som_ryker` den laveste av de tre, altså den som forsvinner ut av regningen hvis dagen i dag setter en høyere topp.
+
+`dag_som_ryker` er `null` når dagen i dag alt teller med, og når måneden har færre enn tre dager: da er det en ledig plass å fylle framfor en dag å skyve ut.
+
+```yaml
+topp_3_dager:
+  - dato: "2026-06-02"
+    kw: 9.5
+  - dato: "2026-06-01"
+    kw: 9.0
+  - dato: "2026-06-03"
+    kw: 2.0
+topp_3_inkluderer_i_dag: false
+dag_som_ryker:
+  dato: "2026-06-03"
+  kw: 2.0
+```
+
 ---
 
 ## `sensor.effektvakt_risiko_niva`
@@ -187,7 +215,9 @@ I tillegg til fellesattributtene lenger nede:
 | `trinn_na_ovre_grense_kw`   | kW     | Øvre terskel for det trinnet. `null` på øverste trinn, som ikke har noen øvre grense    |
 | `trinn_neste_kr`            | kr/mnd | Månedsprisen for trinnet over. `null` når du alt er på øverste trinn                    |
 | `besparelse_trinn_under_kr` | kr/mnd | Hva du sparer på å komme ned et trinn. 0 på laveste trinn                               |
+| `trinn_under_terskel_kw`    | kW     | Terskelen til trinnet under. `null` på laveste trinn                                    |
 | `trinn_under_oppnaelig`     | bool   | Om trinnet under fortsatt er innen rekkevidde denne måneden                             |
+| `trinn_under_realistisk`    | bool   | Om trinnet under er noe boligen kunne siktet på i det hele tatt                          |
 | `kostnad_denne_timen_kr`    | kr/mnd | Samme tall som tilstanden, beholdt som attributt for automasjoner som leser det         |
 | `topp_3_projisert_kw`       | kW     | Topp-3-snittet med dagens projeksjon regnet inn. Dette er trinnet måneden ligger an til |
 | `minste_mulige_topp_3_kw`   | kW     | Nedre skranke: sum av inntil tre høyeste låste dagsmaks delt på 3                       |
@@ -203,6 +233,8 @@ kapasitetstrinn:
   - [15.0, 600]
   - [null, 6900]
 ```
+
+`trinn_under_realistisk` er det som avgjør om «trinnet under er ute av rekkevidde» er verdt å vise i det hele tatt. Under BKKs 2 til 5 kW-trinn ligger 0 til 2 kW, og ingen bolig lander der: `trinn_under_oppnaelig` står på `false` hele året, og en melding gatet på den alene ville stått permanent. En melding som alltid står er ikke informasjon. Belegget er husets eget forbruk, se [beregninger.md](beregninger.md#er-trinnet-under-realistisk).
 
 `trinn_under_oppnaelig` sammenligner `minste_mulige_topp_3_kw` mot terskelen til trinnet under. Skranken teller bare dagsmaks som alt er låst inn, ikke den inneværende timen, nettopp fordi den timen fortsatt kan kuttes. En enkelt dag på 7 kW gir 2,33, og trinnet under er da oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og løpet er kjørt for denne måneden.
 
@@ -243,6 +275,7 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | Attributt                     | Enhet    | Beskrivelse                                                       |
 | ----------------------------- | -------- | ----------------------------------------------------------------- |
 | `elapsed_minutes_in_hour`     | min      | Antall hele minutter passert i inneværende klokketime             |
+| `minutter_igjen_av_timen`     | min      | Minutter igjen av klokketimen. Summerer alltid til 60 med raden over |
 | `actual_kwh_this_hour`        | kWh      | Energi målt hittil denne timen (fra energy-sensor eller estimert) |
 | `current_kw`                  | kW       | Øyeblikkelig effekt fra power-sensor                              |
 | `maal_terskel_kw`             | kW       | Terskelen til det billigste trinnet måneden fortsatt kan ende på  |
@@ -253,7 +286,10 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | `topp_2_andre_dager_kw`       | kW       | Sum av de to høyeste dagsmaksene fra andre dager enn i dag        |
 | `kutt_anbefalt_kw`            | kW       | `max(0, -margin)`: hvor mye som bør kuttes nå                     |
 | `kan_legge_paa_kw`            | kW       | `max(0, margin)`: hvor mye time-snittet tåler å stige             |
+| `kan_legge_paa_resten_av_timen_kw` | kW  | Hvor mye last du kan slå på nå og la stå timen ut                 |
 | `last_update`                 | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering            |
+
+`kan_legge_paa_kw` og `kan_legge_paa_resten_av_timen_kw` svarer på to forskjellige spørsmål. Det første er hvor mye time-snittet tåler å stige, det andre hvor mye last du kan slå på. En last som står på i ti av seksti minutter flytter snittet med en sjettedel av effekten sin, så kl. 18:50 med 1 kW margin er svaret 6 kW og ikke 1. Det er «kan jeg sette på vaskemaskinen nå», og det er hele grunnen til at tallet finnes. Utledningen står i [beregninger.md](beregninger.md#resten-av-timen).
 
 Radene fra `maal_terskel_kw` til `topp_2_andre_dager_kw` er terskelmodellen, i den rekkefølgen den regnes. `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw` og `kan_legge_paa_kw` er `null` når det ikke finnes noe dyrere trinn å unngå, altså ved ukjent nettselskap eller på øverste trinn. Se [beregninger.md](beregninger.md#terskelmodellen).
 

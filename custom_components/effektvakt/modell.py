@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 from .const import (
     KORTVARIG_LAST_KW,
+    MAX_POWER_CLAMP_W,
     RISIKO_GOD_MARGIN,
     RISIKO_LIKE_UNDER,
     RISIKO_NAERMER_SEG,
@@ -129,6 +130,90 @@ def compute_projected_avg(
 def compute_elapsed_h(now: datetime) -> float:
     """Andel av klokketimen som er passert."""
     return (now.minute + now.second / 60) / 60
+
+
+# Taket paa «kan legge paa resten av timen». Formelen deler paa resten av timen
+# og gaar mot uendelig de siste sekundene, og et tall som spretter til 3600
+# knekker baade grafen og tilliten. Samme absoluttgrense som effektavlesningen
+# klampes mot, for ingen bolig trekker mer.
+MAKS_PAASLAG_KW: float = MAX_POWER_CLAMP_W / 1000
+
+
+@dataclass(frozen=True)
+class RestenAvTimen:
+    """Hva som er igjen av timen, og hvor mye last det er plass til i den.
+
+    `margin_kw` sier hvor mye time-snittet taaler aa stige, og det er ikke det
+    samme som hvor mye man kan slaa paa. En last som staar paa i ti av seksti
+    minutter flytter time-snittet med en sjettedel av effekten sin, saa
+    marginen blir mer tillatende jo naermere timeslutt man kommer: kl. 18:50
+    med 1 kW margin er det 6 kW som kan legges paa, ikke 1. Det er nettopp den
+    innsikten en effektvakt skal gi, og «margin 1,00 kW» gir den aldri.
+    """
+
+    minutter_igjen: int
+    kan_legge_paa_resten_av_timen_kw: float | None
+
+
+def beregn_resten_av_timen(*, margin_kw: float | None, elapsed_h: float) -> RestenAvTimen:
+    """Minutter igjen av timen, og kW som kan legges paa uten aa passere taket.
+
+    Utledningen: en last paa P kW som staar resten av timen loefter det
+    projiserte snittet med `P * (1 - elapsed_h)`, saa `P <= margin / (1 -
+    elapsed_h)`. Det er den samme marginen sensoren viser, bare oversatt til
+    noe man kan slaa paa.
+
+    Minuttene teller ned slik `elapsed_minutes_in_hour` teller opp, saa de to
+    alltid summerer til 60.
+    """
+    minutter_igjen = max(0, 60 - int(elapsed_h * 60))
+    rest_h = max(0.0, 1.0 - elapsed_h)
+    if margin_kw is None:
+        return RestenAvTimen(minutter_igjen=minutter_igjen, kan_legge_paa_resten_av_timen_kw=None)
+    if margin_kw <= 0:
+        return RestenAvTimen(minutter_igjen=minutter_igjen, kan_legge_paa_resten_av_timen_kw=0.0)
+    if rest_h <= 0:
+        return RestenAvTimen(minutter_igjen=minutter_igjen, kan_legge_paa_resten_av_timen_kw=MAKS_PAASLAG_KW)
+    return RestenAvTimen(
+        minutter_igjen=minutter_igjen,
+        kan_legge_paa_resten_av_timen_kw=min(MAKS_PAASLAG_KW, margin_kw / rest_h),
+    )
+
+
+@dataclass(frozen=True)
+class Topp3Dag:
+    """En av dagene topp-3-snittet er bygget av. Datoen er ISO-tekst for JSON."""
+
+    dato: str
+    kw: float
+
+
+@dataclass(frozen=True)
+class Topp3Oversikt:
+    """Hvilke dager som teller, og hva en hoeyere time i dag ville gjort med dem."""
+
+    dager: list[Topp3Dag]
+    i_dag_teller_med: bool
+    dag_som_ryker: Topp3Dag | None
+
+
+def beregn_topp_3_oversikt(daily_max_kw: Mapping[date, float], *, today: date) -> Topp3Oversikt:
+    """De tre dagene regningen faktisk bygger paa, hoeyest foerst.
+
+    Brukeren ser ellers bare snittet, aldri hva det bestaar av, og det er
+    sammensetningen som avgjoer om timen man staar i betyr noe. Teller dagens
+    maks alt med, koster en ny time paa samme nivaa ingenting: den bytter bare
+    ut sin egen plass. Gjoer den det ikke, er `dag_som_ryker` den laveste av de
+    tre, altsaa dagen en hoeyere dagsmaks i dag ville skjoevet ut av regningen.
+
+    Sorteringen er stabil paa dato naar to dager er like hoeye, saa listen ikke
+    bytter rekkefoelge mellom to tick.
+    """
+    sortert = sorted(daily_max_kw.items(), key=lambda par: (-par[1], par[0]))[:3]
+    dager = [Topp3Dag(dato=dag.isoformat(), kw=round(kw, 3)) for dag, kw in sortert]
+    i_dag_teller_med = any(dag == today for dag, _ in sortert)
+    ryker = None if i_dag_teller_med or len(dager) < 3 else dager[-1]
+    return Topp3Oversikt(dager=dager, i_dag_teller_med=i_dag_teller_med, dag_som_ryker=ryker)
 
 
 @dataclass(frozen=True)
@@ -266,7 +351,9 @@ class KostnadInfo:
     trinn_na_ovre_grense_kw: float | None
     trinn_neste_kr: int | None
     besparelse_trinn_under_kr: int
+    trinn_under_terskel_kw: float | None
     trinn_under_oppnaelig: bool
+    trinn_under_realistisk: bool
     kostnad_denne_timen_kr: int
     topp_3_projisert_kw: float
     minste_mulige_topp_3_kw: float
@@ -276,12 +363,41 @@ class KostnadInfo:
 KOSTNAD_FELT_NAVN: tuple[str, ...] = tuple(f.name for f in fields(KostnadInfo))
 
 
+def trinn_under_realistisk(
+    *,
+    under_terskel_kw: float,
+    daily_max_kw: Mapping[date, float],
+    forrige_maaned_topp_3_kw: float | None,
+) -> bool:
+    """Er trinnet under noe denne boligen kunne siktet paa i det hele tatt?
+
+    `trinn_under_oppnaelig` svarer paa om trinnet under er innen rekkevidde
+    denne maaneden. Det er et annet spoersmaal enn om det noen gang er det:
+    under BKKs 2 til 5 kW ligger 0 til 2 kW, og ingen bolig lander der. En
+    melding om at trinnet under er tapt ville staatt permanent hele aaret, og
+    en melding som alltid staar er ikke informasjon.
+
+    Belegget er husets eget forbruk. Enten landet forrige maaned paa eller
+    under terskelen, eller saa gjoer snittet av de tre roligste dagene saa
+    langt denne maaneden det: en maaned bygget av dagene huset faktisk har,
+    kunne da havnet der. Uten dager aa maale paa svarer vi nei, for en
+    nedslaaende melding uten dekning er verre enn ingen melding.
+    """
+    if forrige_maaned_topp_3_kw is not None and forrige_maaned_topp_3_kw <= under_terskel_kw:
+        return True
+    roligste = sorted(daily_max_kw.values())[:3]
+    if not roligste:
+        return False
+    return sum(roligste) / len(roligste) <= under_terskel_kw
+
+
 def compute_kostnad(
     *,
     trinn: Trinn,
     daily_max_kw: Mapping[date, float],
     today: date,
     projected_kw: float,
+    forrige_maaned_topp_3_kw: float | None = None,
 ) -> KostnadInfo | None:
     """Hva kapasitetsleddet koster, og hva som står på spill akkurat nå.
 
@@ -316,13 +432,20 @@ def compute_kostnad(
     trinn_neste_kr = None if er_hoyeste else trinn[idx + 1][1]
     kostnad_neste_trinn_kr = 0 if trinn_neste_kr is None else trinn_neste_kr - trinn_na_kr
 
+    under_terskel_kw: float | None = None
     if idx > 0:
         under_terskel_kw, under_kr = trinn[idx - 1]
         besparelse_trinn_under_kr = trinn_na_kr - under_kr
         trinn_under_oppnaelig = minste_mulige <= under_terskel_kw
+        er_realistisk = trinn_under_realistisk(
+            under_terskel_kw=under_terskel_kw,
+            daily_max_kw=daily_max_kw,
+            forrige_maaned_topp_3_kw=forrige_maaned_topp_3_kw,
+        )
     else:
         besparelse_trinn_under_kr = 0
         trinn_under_oppnaelig = False
+        er_realistisk = False
 
     trinn_uten_denne_timen_kr = trinn[trinn_indeks(minste_mulige, trinn)][1]
 
@@ -333,7 +456,9 @@ def compute_kostnad(
         trinn_na_ovre_grense_kw=None if math.isinf(ovre_grense_kw) else ovre_grense_kw,
         trinn_neste_kr=trinn_neste_kr,
         besparelse_trinn_under_kr=besparelse_trinn_under_kr,
+        trinn_under_terskel_kw=under_terskel_kw,
         trinn_under_oppnaelig=trinn_under_oppnaelig,
+        trinn_under_realistisk=er_realistisk,
         # Klemmen mot null er en sikring mot egendefinerte trinn-tabeller der
         # prisen ikke stiger med terskelen. Med en sortert tabell er differansen
         # aldri negativ, for det projiserte snittet ligger aldri under skranken.

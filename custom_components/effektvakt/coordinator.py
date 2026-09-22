@@ -48,7 +48,9 @@ from .laster import (
 )
 from .modell import (
     KOSTNAD_FELT_NAVN,
+    beregn_resten_av_timen,
     beregn_terskel,
+    beregn_topp_3_oversikt,
     classify_raw_risk,
     compute_elapsed_h,
     compute_kostnad,
@@ -240,6 +242,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             actual_kwh_this_hour=self._regnskap.current_hour_kwh,
             elapsed_h=elapsed_h,
         )
+        resten_av_timen = beregn_resten_av_timen(margin_kw=terskel.margin_kw, elapsed_h=elapsed_h)
+        topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
         rå = classify_raw_risk(
             margin_kw=terskel.margin_kw,
             safety_buffer_kw=self.safety_buffer_kw,
@@ -258,6 +262,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             daily_max_kw=self._regnskap.daily_max_kw,
             today=now.date(),
             projected_kw=projected_avg,
+            forrige_maaned_topp_3_kw=self._regnskap.previous_month_top_3_snitt_kw,
         )
         # Nøklene er feltnavnene i KostnadInfo. Uten kjente kapasitetstrinn er de alle None.
         kostnad_felter: dict[str, object | None] = (
@@ -272,6 +277,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "actual_kwh_this_hour": round(self._regnskap.current_hour_kwh, 3),
             "kwh_maalt_fra_minutt": self._regnskap.maalt_fra_minutt(),
             "elapsed_minutes_in_hour": int(elapsed_h * 60),
+            "minutter_igjen_av_timen": resten_av_timen.minutter_igjen,
             "margin_kw": rund(terskel.margin_kw),
             "time_tak_kw": rund(terskel.time_tak_kw),
             "dagstak_kw": rund(terskel.dagstak_kw),
@@ -282,6 +288,10 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "topp_3_snitt_denne_maned_kw": rund(terskel.minste_mulige_topp_3_kw),
             "kutt_anbefalt_kw": rund(terskel.kutt_anbefalt_kw),
             "kan_legge_paa_kw": rund(terskel.kan_legge_paa_kw),
+            "kan_legge_paa_resten_av_timen_kw": rund(resten_av_timen.kan_legge_paa_resten_av_timen_kw),
+            "topp_3_dager": [asdict(dag) for dag in topp_3.dager],
+            "topp_3_inkluderer_i_dag": topp_3.i_dag_teller_med,
+            "dag_som_ryker": None if topp_3.dag_som_ryker is None else asdict(topp_3.dag_som_ryker),
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
             "timen_flytter_trinnet": kriterium.oppfylt,

@@ -252,3 +252,70 @@ def test_topp_3_projisert_er_aldri_under_skranken():
         assert info is not None
         assert info.topp_3_projisert_kw >= info.minste_mulige_topp_3_kw
         assert info.kostnad_denne_timen_kr >= 0
+
+
+# --- er trinnet under noe man kunne siktet paa? -----------------------------
+
+
+def test_trinnet_under_er_urealistisk_naar_huset_aldri_har_vaert_i_naerheten():
+    """Fredriks sak: under BKKs 2 til 5 kW ligger 0 til 2 kW, som ingen bolig naar.
+
+    `trinn_under_oppnaelig` er False hele aaret, og en melding om at trinnet
+    under er tapt ville staatt permanent. Den skal bare vises naar trinnet
+    under er noe man kunne siktet paa.
+    """
+    info = compute_kostnad(trinn=BKK, daily_max_kw={D1: 4.0, D2: 4.5, D3: 3.8}, today=D3, projected_kw=4.0)
+    assert info is not None
+    assert info.trinn_na_ovre_grense_kw == 5.0
+    assert info.trinn_under_terskel_kw == 2.0
+    assert info.trinn_under_oppnaelig is False
+    assert info.trinn_under_realistisk is False
+
+
+def test_trinnet_under_er_realistisk_naar_de_roligste_dagene_ligger_der():
+    """En enkelt topp loefter maaneden til 10 kW-trinnet, men huset bor i 5 kW-trinnet.
+
+    De tre roligste dagene snitter 4,43. En maaned bygget av dager som disse
+    hadde landet under 5 kW, saa spoersmaalet om aa komme ned dit er ekte.
+    """
+    dager = {D1: 4.8, D2: 9.0, D3: 4.0, date(2026, 6, 4): 4.5}
+    info = compute_kostnad(trinn=BKK, daily_max_kw=dager, today=date(2026, 6, 4), projected_kw=9.0)
+    assert info is not None
+    assert info.trinn_na_ovre_grense_kw == 10.0
+    assert info.trinn_under_terskel_kw == 5.0
+    assert info.trinn_under_oppnaelig is False
+    assert info.trinn_under_realistisk is True
+
+
+def test_forrige_maaned_teller_som_belegg():
+    """Landet forrige maaned der, er trinnet naaelig selv om denne maaneden er tapt."""
+    dager = {D1: 12.0, D2: 11.0, D3: 13.0}
+    uten_historikk = compute_kostnad(trinn=BKK, daily_max_kw=dager, today=D3, projected_kw=12.0)
+    assert uten_historikk is not None
+    assert uten_historikk.trinn_under_terskel_kw == 10.0
+    assert uten_historikk.trinn_under_realistisk is False
+
+    info = compute_kostnad(
+        trinn=BKK,
+        daily_max_kw=dager,
+        today=D3,
+        projected_kw=12.0,
+        forrige_maaned_topp_3_kw=9.0,
+    )
+    assert info is not None
+    assert info.trinn_under_oppnaelig is False
+    assert info.trinn_under_realistisk is True
+
+
+def test_uten_dager_aa_maale_paa_sier_vi_ingenting():
+    """Helt i starten av en maaned uten historikk finnes det ikke belegg for en dom."""
+    info = compute_kostnad(trinn=BKK, daily_max_kw={}, today=D1, projected_kw=6.0)
+    assert info is not None
+    assert info.trinn_under_realistisk is False
+
+
+def test_laveste_trinn_har_ingen_terskel_under_seg():
+    info = compute_kostnad(trinn=BKK, daily_max_kw={D1: 1.0}, today=D2, projected_kw=1.0)
+    assert info is not None
+    assert info.trinn_under_terskel_kw is None
+    assert info.trinn_under_realistisk is False

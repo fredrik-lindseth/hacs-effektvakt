@@ -197,6 +197,25 @@ Da blir domeneregelen sann i koden og ikke bare i README: er dagens topp alt bla
 
 Eksempel: dagene 1,0 / 1,0 / 12,0, der 12,0 er i dag. Skranken er 14 / 3 = 4,67, altså 5 kW-trinnet, og dagstaket er kappet til 5,0. Men dagen har alt satt 12,0, så timetaket er 12,0. En time på 11 kW har 1 kW margin; en time på 13 kW flytter dagsmaksen og dermed måneden.
 
+### Resten av timen
+
+Marginen sier hvor mye time-snittet tåler å stige. Det er ikke det samme som hvor mye last du kan slå på, og forskjellen er hele poenget med en effektvakt.
+
+En last på `P` kW som slås på nå og står timen ut løfter det projiserte snittet med `P * (1 - elapsed_h)`:
+
+```
+P * (1 - elapsed_h) <= margin_kw
+
+kan_legge_paa_resten_av_timen_kw = margin_kw / (1 - elapsed_h)
+minutter_igjen_av_timen          = 60 - elapsed_minutes_in_hour
+```
+
+Kl. 18:50 med 1 kW margin er det 6 kW som kan legges på, ikke 1. «Margin 1,00 kW» forteller det aldri, og marginen blir mer tillatende jo nærmere timeslutt man kommer.
+
+Tallet kappes ved 100 kW. Formelen deler på resten av timen og går mot uendelig de siste sekundene, og en verdi som spretter til 3600 knekker både grafen og tilliten. Samme absoluttgrense som effektavlesningen klampes mot, for ingen bolig trekker mer.
+
+Er `margin_kw` `null`, er påslaget `null`: finnes det ikke noe dyrere trinn å unngå, finnes det heller ikke et tak å regne plass under.
+
 ### Ingen terskel å måle mot
 
 `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw`, `margin_kw` og `kan_legge_paa_kw` er alle `null` i to tilfeller: ukjent nettselskap (tomt trinn-sett) og måned som alt ligger på øverste trinn. Da finnes det ikke noe dyrere trinn å unngå. Risikoen er `god_margin`, og `kutt_anbefalt_kw` er 0.
@@ -244,6 +263,25 @@ trinn_under_oppnaelig = minste_mulige_topp_3_kw <= terskel for trinnet under
 ```
 
 Én dag på 7 kW gir 2,33 og trinnet under er oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og da er løpet kjørt.
+
+### Er trinnet under realistisk?
+
+«Er trinnet under innen rekkevidde denne måneden» og «er trinnet under noe denne boligen kunne siktet på» er to forskjellige spørsmål, og bare det første besvares av `trinn_under_oppnaelig`.
+
+Under BKKs 2 til 5 kW-trinn ligger 0 til 2 kW. Ingen bolig lander der, så `trinn_under_oppnaelig` er `false` hele året, og en dashbordlinje gatet på den alene sto permanent hos Fredrik. En melding som alltid står er ikke informasjon.
+
+`trinn_under_realistisk` svarer på det andre spørsmålet, og belegget er husets eget forbruk:
+
+```
+trinn_under_realistisk = forrige måneds topp-3-snitt <= terskel for trinnet under
+                         eller snitt av de tre LAVESTE dagsmaksene <= samme terskel
+```
+
+De tre laveste dagene er den mest velvillige måneden huset kunne hatt: hadde alle dager sett slik ut, ville måneden landet der. Klarer ikke engang den å komme under terskelen, er trinnet under en umulighet og ikke et mål.
+
+Uten dager å måle på, altså helt i starten av en måned uten historikk, er svaret `false`. En nedslående melding uten dekning er verre enn ingen melding.
+
+Merk at med tre eller færre dager logget faller de tre laveste sammen med de tre høyeste, og da er `trinn_under_realistisk` sant nøyaktig når `trinn_under_oppnaelig` er det. Det er riktig: er trinnet fortsatt innen rekkevidde, er det åpenbart realistisk.
 
 ### `kostnad_denne_timen_kr`
 

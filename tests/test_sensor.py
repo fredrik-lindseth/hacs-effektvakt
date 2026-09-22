@@ -35,7 +35,9 @@ def coord_mock():
         "topp_2_andre_dager_kw": 8.4,
         "kutt_anbefalt_kw": 0.0,
         "kan_legge_paa_kw": 4.5,
+        "kan_legge_paa_resten_av_timen_kw": 9.0,
         "elapsed_minutes_in_hour": 30,
+        "minutter_igjen_av_timen": 30,
         "actual_kwh_this_hour": 2.5,
         "current_kw": 5.5,
         "last_update": "2026-05-25T14:30:00",
@@ -44,11 +46,20 @@ def coord_mock():
         "trinn_na_ovre_grense_kw": 10.0,
         "trinn_neste_kr": 600,
         "besparelse_trinn_under_kr": 165,
+        "trinn_under_terskel_kw": 5.0,
         "trinn_under_oppnaelig": True,
+        "trinn_under_realistisk": True,
         "kostnad_denne_timen_kr": 0,
         "topp_3_projisert_kw": 8.4,
         "minste_mulige_topp_3_kw": 4.2,
         "hoyeste_trinn": False,
+        "topp_3_dager": [
+            {"dato": "2026-05-23", "kw": 6.1},
+            {"dato": "2026-05-24", "kw": 4.3},
+            {"dato": "2026-05-25", "kw": 2.2},
+        ],
+        "topp_3_inkluderer_i_dag": True,
+        "dag_som_ryker": None,
     }
     coord.kapasitetstrinn = [
         (2.0, 155),
@@ -96,6 +107,24 @@ def test_topp_3_sensor(coord_mock):
         EffektvaktKostnadNesteTrinnSensor(coord_mock).extra_state_attributes["minste_mulige_topp_3_kw"]
         == s.native_value
     )
+
+
+def test_topp_3_sensor_viser_hvilke_dager_snittet_bestaar_av(coord_mock):
+    """Snittet alene sier ikke om timen betyr noe. Dagene bak det gjoer det."""
+    attrs = EffektvaktTopp3Sensor(coord_mock).extra_state_attributes
+    assert attrs["topp_3_dager"][0] == {"dato": "2026-05-23", "kw": 6.1}
+    assert attrs["topp_3_inkluderer_i_dag"] is True
+    assert attrs["dag_som_ryker"] is None
+    # Fellesattributtene staar fortsatt
+    assert attrs["current_kw"] == 5.5
+
+
+def test_alle_sensorer_svarer_paa_hvor_mye_som_kan_slaas_paa_naa(coord_mock):
+    """Spoersmaalet er «kan jeg sette paa vaskemaskinen», og det er et fellesattributt."""
+    for klasse in (EffektvaktProjisertSensor, EffektvaktMarginSensor, EffektvaktKostnadNesteTrinnSensor):
+        attrs = klasse(coord_mock).extra_state_attributes
+        assert attrs["minutter_igjen_av_timen"] == 30
+        assert attrs["kan_legge_paa_resten_av_timen_kw"] == 9.0
 
 
 def test_risiko_sensor_native_value(coord_mock):
@@ -183,7 +212,9 @@ def test_kostnad_sensor_attributter(coord_mock):
     assert attrs["trinn_na_ovre_grense_kw"] == 10.0
     assert attrs["trinn_neste_kr"] == 600
     assert attrs["besparelse_trinn_under_kr"] == 165
+    assert attrs["trinn_under_terskel_kw"] == 5.0
     assert attrs["trinn_under_oppnaelig"] is True
+    assert attrs["trinn_under_realistisk"] is True
     assert attrs["kostnad_denne_timen_kr"] == 0
     assert attrs["topp_3_projisert_kw"] == 8.4
     assert attrs["minste_mulige_topp_3_kw"] == 4.2
@@ -214,14 +245,16 @@ def test_kapasitetstrinn_hele_attributtsettet_er_json_serialiserbart(coord_mock)
 
 
 def test_kostnad_sensor_uten_kjente_trinn(coord_mock):
-    """Ukjent nettselskap gir None på alle ti nøklene, og tom trinn-liste."""
+    """Ukjent nettselskap gir None på alle kostnadsnøklene, og tom trinn-liste."""
     for nokkel in (
         "kostnad_neste_trinn_kr",
         "trinn_na_kr",
         "trinn_na_ovre_grense_kw",
         "trinn_neste_kr",
         "besparelse_trinn_under_kr",
+        "trinn_under_terskel_kw",
         "trinn_under_oppnaelig",
+        "trinn_under_realistisk",
         "kostnad_denne_timen_kr",
         "topp_3_projisert_kw",
         "minste_mulige_topp_3_kw",
