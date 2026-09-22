@@ -50,20 +50,112 @@ jobs:
       - name: Unit tests with coverage
         run: just coverage-unit
 
-      - name: Coverage-terskel
-        run: just coverage-gate
-
       # Coverage-tallet er nyttig, men det er ikke en test, og dekning skal
-      # ikke avgjøre om CI er grønn: terskelen står i coverage-gate over.
-      # `fail_ci_if_error: false` dekker feil Codecov selv rapporterer,
-      # continue-on-error dekker resten, som at actionen ikke svarer.
+      # ikke avgjøre om CI er grønn: terskelen står i coverage-jobben, som
+      # venter på begge suitene. `fail_ci_if_error: false` dekker feil Codecov
+      # selv rapporterer, continue-on-error dekker resten, som at actionen
+      # ikke svarer.
       - name: Upload coverage to Codecov
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-unit.xml
+          disable_search: true
+          flags: unit
           fail_ci_if_error: false
+
+      - name: Ta vare på coverage-dataene til den samlede gaten
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-unit
+          path: .coverage.unit
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  # Den samme integrasjonen mot to ekte Home Assistant-versjoner: den
+  # hacs.json lover brukerne, og den nyeste vi har sett på. Feller minimum, er
+  # det enten en kompatibilitetsfeil å rette eller et minimum å heve med
+  # vilje. `fail-fast: false` fordi svaret «begge ryker» er et annet svar enn
+  # «bare den ene», og det er gratis å få vite hvilket.
+  test-ha:
+    name: Ekte Home Assistant (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [minimum, current]
+        # Coverage måles bare på current; se coverage-ha i justfile.
+        include:
+          - target: minimum
+            oppskrift: test-ha minimum
+          - target: current
+            oppskrift: coverage-ha
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Ekte-HA-tester
+        run: just ${{ matrix.oppskrift }}
+
+      - name: Upload coverage to Codecov
+        if: matrix.target == 'current'
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-ha.xml
+          disable_search: true
+          flags: ha
+          fail_ci_if_error: false
+
+      - name: Ta vare på coverage-dataene til den samlede gaten
+        if: matrix.target == 'current'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-ha
+          path: .coverage.ha
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  # Terskelen leser summen av de to suitene, aldri én av dem alene: hver av
+  # dem lar kode stå udekket som den andre dekker. Derfor en egen jobb som
+  # venter på begge og henter datafilene deres.
+  coverage:
+    name: Coverage (samlet, minst 95 %)
+    needs: [test-unit, test-ha]
+    runs-on: ubuntu-latest
+    steps:
+      # Kildene trengs for rapporten over manglende linjer.
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Hent coverage-dataene
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-data-*
+          merge-multiple: true
+
+      - name: Coverage-terskel
+        run: just coverage-gate
 
   check:
     name: Kvalitet (ruff, mypy, vulture)
@@ -163,7 +255,7 @@ jobs:
   release-gate:
     name: Releaseport
     if: always()
-    needs: [test-unit, check, hacs, hassfest]
+    needs: [test-unit, test-ha, coverage, check, hacs, hassfest]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -177,7 +269,7 @@ jobs:
           import sys
 
           results = json.loads(os.environ["JOB_RESULTS"])
-          required = ("test-unit", "check", "hacs", "hassfest")
+          required = ("test-unit", "test-ha", "coverage", "check", "hacs", "hassfest")
           blocked = []
           for job in required:
               result = results.get(job, {}).get("result", "missing")

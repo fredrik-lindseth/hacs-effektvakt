@@ -1,12 +1,16 @@
 # Codecov-konfigurasjon
 # https://docs.codecov.com/docs/codecovyml-reference
 #
-# CI laster opp én rapport per commit, fra unit-suiten. Det harde gulvet ligger
-# ikke her: `just coverage-gate` håndhever det i test-unit-jobben, uten Codecov.
+# CI laster opp to rapporter per commit: tests/ under flagget unit og tests_ha/
+# på current under ha. Bare summen av dem er meningsfull, så Codecov venter på
+# begge før den poster en status eller en kommentar. Det harde gulvet ligger
+# ikke her: `just coverage-gate` håndhever det i coverage-jobben, uten Codecov.
 # Tallet her er bare til sammenligning mot forrige commit, så et fall på mer
 # enn ett prosentpoeng blir synlig i PR-en.
-#
-# Flagg (unit/ha) legges inn når tests_ha/ finnes, sammen med after_n_builds: 2.
+
+codecov:
+  notify:
+    after_n_builds: 2
 
 coverage:
   status:
@@ -21,10 +25,22 @@ coverage:
         threshold: 1%
         if_ci_failed: error
 
+# Begge flaggene måler den samme koden fra hver sin kant: unit uten Home
+# Assistant, ha med. Et flagg som bare dekket «sine» filer ville derfor vært
+# feil, for det er nettopp overlappen som er poenget.
+flags:
+  unit:
+    paths:
+      - custom_components/effektvakt/
+  ha:
+    paths:
+      - custom_components/effektvakt/
+
 comment:
   layout: "header, diff, flags, components"
   behavior: default
   require_changes: false
+  after_n_builds: 2
 
 github_checks:
   annotations: true
