@@ -798,8 +798,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
                 continue
         self._current_month = str(data.get("current_month") or self._current_month)
         self._current_hour_kwh = stored_float(data.get("current_hour_kwh"))
-        # Uten timen de hører til er kWh-en og startverdien ubrukelige. Da lar
-        # vi dem stå, og første tick forkaster dem fordi timen ikke stemmer.
+        # Uten timen den hører til er kWh-en ubrukelig. Da lar vi den stå, og
+        # første tick forkaster den fordi timen ikke stemmer.
         self._current_hour_start = parse_stored_datetime(data.get("current_hour_start"))
         self._estimert_siden_maaler_kwh = stored_float(data.get("estimert_siden_maaler_kwh"))
         self._siste_maaler_kwh = self._les_siste_maalerstand(data)

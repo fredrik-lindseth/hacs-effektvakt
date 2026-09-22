@@ -42,6 +42,10 @@ slås av og på treffer like ofte før som etter en avlesning, og da er midtverd
 systematisk slagside. Går det mer enn fem minutter mellom to tick, har HA vært nede eller
 stått fast, og da integreres intervallet ikke i det hele tatt (se `MAX_INTEGRATION_GAP_H`).
 
+Siste effektavlesning lagres, så en omstart som tar under fem minutter integreres over
+med den effekten som sto da HA gikk ned. Det er et anslag, men et bundet et, og
+energy-sensoren retter det ved neste avlesning.
+
 **Energy-sensoren korrigerer.** Måleren er den nøyaktige kilden og skal vinne, men den
 legges ikke oppå anslaget. Coordinatoren holder rede på hvor mye av timen som er integrert
 anslag og ikke bekreftet av måleren (`_estimert_siden_maaler_kwh`), og når måleren flytter
