@@ -12,8 +12,8 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util_module
 
+from .avlesning import read_energy_kwh, read_friendly_name, read_power_kw, read_state_timestamp
 from .const import (
-    BLIND_ASSUMED_KUTT_KW,
     CONF_DSO,
     CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
@@ -30,25 +30,24 @@ from .const import (
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
-    EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
     LEGACY_RISIKO_MAPPING,
     LEGACY_STRATEGI_MAPPING,
     MAX_ENERGY_DELTA_KWH,
-    MAX_POWER_CLAMP_W,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
     RISIKO_RANK,
     STORAGE_VERSION,
-    STRATEGI_BLIND,
-    STRATEGI_VVB_PLUSS_EKSTRA,
-    STRATEGI_VVB_STATUS,
     TICK_INTERVAL_BY_RISIKO,
-    VALID_ENERGY_UNITS,
-    VALID_POWER_UNITS,
-    VVB_ACTIVE_THRESHOLD_W,
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
+from .laster import (
+    ROLLE_EKSTRA,
+    ROLLE_VVB,
+    KildeAvlesning,
+    build_kutt_kilder,
+    compute_tilgjengelig_kutt_kw,
+)
 from .modell import (
     KOSTNAD_FELT_NAVN,
     beregn_terskel,
@@ -62,24 +61,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
-
-# Rollene en kuttbar last kan ha. Verdiene går ut i attributtet kutt_kilder,
-# så de er en del av kontrakten mot dashboards.
-ROLLE_VVB = "vvb"
-ROLLE_EKSTRA = "ekstra"
-
-TERSKEL_PER_ROLLE: dict[str, float] = {
-    ROLLE_VVB: VVB_ACTIVE_THRESHOLD_W,
-    ROLLE_EKSTRA: EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
-}
-
-# Hvilke roller som faktisk teller med i summen, per strategi. blind leser ingen
-# sensorer i det hele tatt, og ukjent strategi teller ingenting.
-ROLLER_PER_STRATEGI: dict[str, frozenset[str]] = {
-    STRATEGI_BLIND: frozenset(),
-    STRATEGI_VVB_STATUS: frozenset({ROLLE_VVB}),
-    STRATEGI_VVB_PLUSS_EKSTRA: frozenset({ROLLE_VVB, ROLLE_EKSTRA}),
-}
 
 # Trapesintegrasjonen antar at effekten mellom to tick lå et sted mellom de to
 # avlesningene. Går det lenger enn dette, har HA vært nede eller stått fast, og
@@ -102,96 +83,6 @@ def rund(verdi: float | None, *, desimaler: int = 3) -> float | None:
     som et tall noen kan regne videre på.
     """
     return None if verdi is None else round(verdi, desimaler)
-
-
-def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
-    """Les power-sensor og returner verdi normalisert til kW.
-
-    Returnerer None hvis sensor ikke finnes, er unavailable, har ugyldig
-    unit, eller verdien er ikke-finit/over MAX_POWER_CLAMP_W.
-    """
-    if not entity_id:
-        return None
-    state = hass.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable", None):
-        return None
-    try:
-        value = float(state.state)
-    except (ValueError, TypeError):
-        return None
-    if not math.isfinite(value):
-        return None
-    unit = (state.attributes or {}).get("unit_of_measurement")
-    if unit not in VALID_POWER_UNITS:
-        return None
-    if unit == "W":
-        if value > MAX_POWER_CLAMP_W:
-            _LOGGER.warning("power_sensor %s = %s W > clamp %s", entity_id, value, MAX_POWER_CLAMP_W)
-            return None
-        return value / 1000
-    return value  # kW
-
-
-def read_friendly_name(hass: HomeAssistant, entity_id: str) -> str | None:
-    """HA sitt friendly_name for en entitet, None hvis den ikke finnes ennå."""
-    state = hass.states.get(entity_id)
-    if state is None:
-        return None
-    navn = (state.attributes or {}).get("friendly_name")
-    return navn if isinstance(navn, str) else None
-
-
-def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:
-    """Les energy-sensor og returner verdi normalisert til kWh.
-
-    Returnerer None hvis sensor ikke finnes, er unavailable, eller har ugyldig
-    unit.
-    """
-    if not entity_id:
-        return None
-    state = hass.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable", None):
-        return None
-    try:
-        value = float(state.state)
-    except (ValueError, TypeError):
-        return None
-    if not math.isfinite(value) or value < 0:
-        return None
-    unit = (state.attributes or {}).get("unit_of_measurement")
-    if unit not in VALID_ENERGY_UNITS:
-        return None
-    if unit == "Wh":
-        return value / 1000
-    return value  # kWh
-
-
-def read_state_timestamp(hass: HomeAssistant, entity_id: str | None, *, now: datetime) -> datetime | None:
-    """Når entiteten sist meldte en ny verdi, i samme tidsform som `now`.
-
-    Tidspunktet er viktigere enn det ser ut: en AMS-måler som rapporterer
-    10:00:13 leverer kWh-en som hører til timen før, og ticket som leser den
-    kommer gjerne et halvt minutt senere. Bruker vi tidspunktet for ticket i
-    stedet, havner hele timen på feil side av timeskiftet.
-
-    Returnerer None hvis tidsstempelet mangler, ikke lar seg gjøre om til lokal
-    tid, eller ender opp med en annen tidssone-form enn `now`. Da faller
-    kalleren tilbake på tidspunktet for ticket.
-    """
-    if not entity_id:
-        return None
-    state = hass.states.get(entity_id)
-    if state is None:
-        return None
-    rå = getattr(state, "last_changed", None)
-    if not isinstance(rå, datetime):
-        return None
-    lokal = dt_util_module.as_local(rå)
-    if not isinstance(lokal, datetime):
-        return None
-    if (lokal.tzinfo is None) != (now.tzinfo is None):
-        return None
-    return lokal
 
 
 @dataclass
@@ -1048,95 +939,6 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         # Dagsverdiene er arkivert. En retting av den siste timen i forrige måned
         # ville bare lagt dagen tilbake i en måned som er gjort opp.
         self._ventende_time = None
-
-
-@dataclass(frozen=True)
-class KildeAvlesning:
-    """Rå avlesning av en konfigurert kuttkilde, før strategien har sagt sitt.
-
-    `effekt_w` er None når sensoren er unavailable, unknown eller ulesbar. Det
-    er noe annet enn 0 W: da vet vi ikke hva lasten trekker.
-    """
-
-    entity_id: str
-    navn: str | None
-    effekt_w: float | None
-    rolle: str
-
-
-@dataclass(frozen=True)
-class KuttKilde:
-    """En kuttbar last slik den ser ut akkurat nå.
-
-    Feltnavnene er nøklene i attributtet kutt_kilder.
-    """
-
-    entity_id: str
-    navn: str | None
-    effekt_w: float | None
-    teller_med: bool
-    rolle: str
-    terskel_w: float
-
-
-def teller_med(*, strategi: str, rolle: str, effekt_w: float | None) -> bool:
-    """Om en kilde faktisk bidrar til tilgjengelig kutt akkurat nå.
-
-    Tre ting må stemme: strategien må bruke rollen, sensoren må ha en lesbar
-    verdi, og verdien må ligge over terskelen for rollen.
-    """
-    if effekt_w is None:
-        return False
-    if rolle not in ROLLER_PER_STRATEGI.get(strategi, frozenset()):
-        return False
-    return effekt_w > TERSKEL_PER_ROLLE[rolle]
-
-
-def build_kutt_kilder(*, strategi: str, avlesninger: list[KildeAvlesning]) -> list[KuttKilde]:
-    """Gjør avlesningene om til kutt_kilder-oppføringer.
-
-    Alle konfigurerte kilder er med, også de strategien ikke bruker. Forskjellen
-    mellom "finnes ikke" og "teller ikke nå" er nettopp det som er verdt å se.
-    """
-    return [
-        KuttKilde(
-            entity_id=a.entity_id,
-            navn=a.navn,
-            effekt_w=None if a.effekt_w is None else round(a.effekt_w, 1),
-            teller_med=teller_med(strategi=strategi, rolle=a.rolle, effekt_w=a.effekt_w),
-            rolle=a.rolle,
-            terskel_w=TERSKEL_PER_ROLLE[a.rolle],
-        )
-        for a in avlesninger
-    ]
-
-
-def compute_tilgjengelig_kutt_kw(
-    *,
-    strategi: str,
-    vvb_power_w: float | None,
-    ekstra_power_w: list[float | None] | None = None,
-) -> float:
-    """Beregn realistisk tilgjengelig kutt i kW basert på valgt strategi.
-
-    blind: antar BLIND_ASSUMED_KUTT_KW
-    vvb_status: bruker faktisk VVB-effekt, kun over VVB_ACTIVE_THRESHOLD_W
-    vvb_pluss_ekstra: VVB pluss sum av ekstra-sensorer over EKSTRA_SENSOR_ACTIVE_THRESHOLD_W
-
-    Summen går over de samme kildene som får teller_med i kutt_kilder, så de to
-    tallene kan ikke drifte fra hverandre. blind er unntaket: der er tilstanden
-    en antagelse, ikke en sum av kilder.
-    """
-    if strategi == STRATEGI_BLIND:
-        return BLIND_ASSUMED_KUTT_KW
-
-    total_w = 0.0
-    if vvb_power_w is not None and teller_med(strategi=strategi, rolle=ROLLE_VVB, effekt_w=vvb_power_w):
-        total_w += vvb_power_w
-    for p in ekstra_power_w or []:
-        if p is not None and teller_med(strategi=strategi, rolle=ROLLE_EKSTRA, effekt_w=p):
-            total_w += p
-    return total_w / 1000.0
 
 
 def is_coordinator_stale(
