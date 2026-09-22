@@ -15,10 +15,10 @@ from custom_components.effektvakt.const import (
     STRATEGI_VVB_STATUS,
     VVB_ACTIVE_THRESHOLD_W,
 )
-from custom_components.effektvakt.coordinator import (
+from custom_components.effektvakt.coordinator import EffektvaktCoordinator
+from custom_components.effektvakt.laster import (
     ROLLE_EKSTRA,
     ROLLE_VVB,
-    EffektvaktCoordinator,
     KildeAvlesning,
     build_kutt_kilder,
 )

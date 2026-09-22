@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from custom_components.effektvakt.coordinator import read_energy_kwh, read_power_kw
+from custom_components.effektvakt.avlesning import read_energy_kwh, read_power_kw
 from tests.conftest import make_state
 
 

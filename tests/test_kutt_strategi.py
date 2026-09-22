@@ -12,7 +12,7 @@ from custom_components.effektvakt.const import (
     STRATEGI_VVB_PLUSS_EKSTRA,
     STRATEGI_VVB_STATUS,
 )
-from custom_components.effektvakt.coordinator import compute_tilgjengelig_kutt_kw
+from custom_components.effektvakt.laster import compute_tilgjengelig_kutt_kw
 
 
 def test_blind_returnerer_duty_cycle_estimat():
