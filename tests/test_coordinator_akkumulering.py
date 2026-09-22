@@ -13,7 +13,9 @@ måleren rapporterer på sin egen rytme og effekten varierer gjennom timen.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -456,3 +458,54 @@ async def test_omstart_rett_foer_timeskiftet_gir_ikke_den_nye_timen_forrige_time
     # De to kWh-ene hører til timen 09 på 13 sekunder nær.
     assert coord._daily_max_kw[DAGEN] == pytest.approx(2.0 * 3587 / 3600, abs=0.01)
     assert data["actual_kwh_this_hour"] == pytest.approx(2.0 * 30 / 3600, abs=0.01)
+
+
+FIXTUR = Path(__file__).parent / "fixtures" / "bkk_januar_2026_hourly.json"
+
+
+def _sammenhengende_timer(hours: list[dict], antall: int) -> list[tuple[datetime, float]]:
+    """Første strekk på `antall` timer uten hull i fixturen."""
+    strekk: list[tuple[datetime, float]] = []
+    for h in hours:
+        if h["kwh"] is None:
+            strekk = []
+            continue
+        strekk.append((datetime.fromisoformat(h["start_local"]), float(h["kwh"])))
+        if len(strekk) == antall:
+            return strekk
+    raise AssertionError(f"fant ikke {antall} sammenhengende timer i fixturen")
+
+
+@pytest.mark.asyncio
+async def test_replay_av_ekte_timer_fra_han_maaleren():
+    """Tre døgn fra HAN-måleren på BKK-anlegget, med en måler som bare melder hver time.
+
+    Fixturen er timene slik Elhub ser dem, og det er de samme timene
+    kapasitetstrinnet regnes av. Kommer coordinatoren fram til dem på egen hånd,
+    med tidssone, døgnskifter og en måler som står stille mellom hver time,
+    stemmer dagsverdiene med det nettselskapet fakturerer.
+    """
+    timer = _sammenhengende_timer(json.loads(FIXTUR.read_text())["hours"], 72)
+    kwh_per_time = dict(timer)
+    start = timer[0][0]
+    slutt = timer[-1][0] + timedelta(hours=1, minutes=1)
+
+    def effekt(t: datetime) -> float:
+        return kwh_per_time.get(t.replace(minute=0, second=0, microsecond=0), 0.0)
+
+    anlegg = Anlegg(
+        start=start,
+        slutt=slutt,
+        effekt_kw=effekt,
+        rapporttider=timesrapporter(fra=start, til=slutt),
+    )
+    coord = _make_coordinator(start)
+    await kjor(coord, anlegg, fra=start, til=slutt, tick_s=120)
+
+    fasit: dict[date, float] = {}
+    for t, kwh in timer:
+        fasit[t.date()] = max(fasit.get(t.date(), 0.0), kwh)
+
+    assert coord._daily_max_kw.keys() == fasit.keys()
+    for dag, ventet in fasit.items():
+        assert coord._daily_max_kw[dag] == pytest.approx(ventet, abs=0.02), dag
