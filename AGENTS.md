@@ -113,6 +113,39 @@ trykkvarianten til det fysiske panelet kommer fra den samme SVG-generatoren.
 Tegner du skiven på nytt i JavaScript, drifter de fra hverandre. Panelet selv
 er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 
+## Når en fil skal deles
+
+Ikke når den er lang. Når to saker i backloggen må endre den samtidig og
+rører hver sin klynge.
+
+Testen er mekanisk, og gjøres slik: for en klasse, skriv opp hvilke
+instansattributter hver metode rører. Finnes det to grupper metoder med
+usammenfallende attributtsett, er det to objekter i samme klasse, og de skal
+ha hver sin fil. For en modul uten klasse: hvilke funksjoner kaller hvilke.
+To klaser som ikke kaller hverandre er to moduler.
+
+Det var dette som fant timeregnskapet i `coordinator.py`: tretten attributter
+og åtte metoder som ingen andre metoder i klassen rørte.
+
+Motsatt: en fil som bare vokser med flere rader i samme tabell skal stå.
+`faceplate.py` er 1154 linjer fordi STILER har to skiver og resten er rene
+tegnefunksjoner uten delt tilstand. En tredje skive er en ny oppføring, ikke
+en ny gren, og filen kan doble seg uten å bli vanskeligere. Det samme gjelder
+`dso.py`, som er generert og aldri redigeres for hånd.
+
+Timingen hører til avgjørelsen. To ting gjør en deling dyr: tester som
+importerer interne navn (`tests/test_faceplate.py` importerer over tretti
+private funksjoner fra `faceplate.py`), og brukere med data på disk.
+Integrasjonen er ikke sluppet, så det andre koster ingenting i dag og koster
+en migreringssti etter 0.4.0. Skal en fil deles, del den før den blir dyr å
+dele, ikke når den er blitt ubehagelig å lese.
+
+Skal du dele, gjør det i to commiter: først flyttingen med properties som
+delegerer, slik at suiten er grønn uten at en eneste testfil er endret, så
+testendringene for seg. Blandes de, ser en test som stille sluttet å teste
+noe ut som en mekanisk oppdatering. Dette repoet har hatt to strukturelle
+feil som overlevde fordi testene kodet inn samme antakelse som koden.
+
 ## Hovedfiler
 
 | Fil                                          | Innhold                                                                                   |
