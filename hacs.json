@@ -2,5 +2,8 @@
   "name": "Effektvakt",
   "homeassistant": "2025.1.0",
   "render_readme": true,
-  "country": ["NO"]
+  "country": ["NO"],
+  "zip_release": true,
+  "filename": "effektvakt.zip",
+  "hide_default_branch": true
 }

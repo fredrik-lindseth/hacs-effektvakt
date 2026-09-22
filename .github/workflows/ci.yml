@@ -1,14 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-  # Release-maskineriet (hacs-effektvakt-2xu0h57) kaller denne for
-  # kandidat-SHA-en sin og venter på hele grafen før det publiserer. Når
-  # release.yml finnes, skal push-triggeren over bort: da eier release.yml
-  # main, og to kjøringer av samme ting er to svar å velge mellom.
+  # Release-workflowen kaller denne for kandidat-SHA-en sin og venter på hele
+  # grafen før den publiserer. Derfor ingen egen push-trigger: på main er det
+  # release.yml som starter CI, og da finnes det bare én kjøring som gjelder
+  # nettopp den commiten. To kjøringer av samme ting er to svar å velge mellom.
   workflow_call:
 
 # CI kaller de samme just-oppskriftene som kjøres lokalt og av pre-commit.
@@ -209,6 +207,32 @@ jobs:
             exit 1
           fi
 
+      # release.yml bygger release-body-en fra CHANGELOG.md. Mangler seksjonen,
+      # feiler release-jobben etter at CI er grønn, og det er et dårlig sted å
+      # oppdage det. Datoen kreves ikke her: manifestversjonen bumpes når
+      # arbeidet mot den begynner, og seksjonen er «Ikke sluppet» helt til
+      # versjonen faktisk går ut. Det er release-flyten som krever datoen.
+      - name: CHANGELOG-seksjon for versjonen i manifestet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(jq -r '.version' custom_components/effektvakt/manifest.json)
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$VERSION er alt sluppet, CHANGELOG-seksjonen er historikk"
+            exit 0
+          fi
+          if ! python3 scripts/release_notes.py "$VERSION" >/dev/null; then
+            echo "CHANGELOG.md mangler release-noten for v$VERSION"
+            exit 1
+          fi
+          # Release-body-en er den korte varianten, så den må også kunne
+          # bygges. Uten merkede punkter ville den blitt tom, og det er verre
+          # enn ingen.
+          if ! python3 scripts/release_notes.py "$VERSION" --kort >/dev/null; then
+            echo "Den korte release-noten for v$VERSION lar seg ikke bygge"
+            exit 1
+          fi
+
       - name: Required files present
         run: |
           for f in \
@@ -222,6 +246,8 @@ jobs:
             custom_components/effektvakt/dso.py \
             README.md \
             CHANGELOG.md \
+            SECURITY.md \
+            hacs.json \
             LICENSE; do
             [ -f "$f" ] || { echo "Missing: $f"; exit 1; }
           done

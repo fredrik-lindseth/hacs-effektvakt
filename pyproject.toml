@@ -2,7 +2,7 @@
 name = "effektvakt"
 # Samme tall som custom_components/effektvakt/manifest.json. Sjekk-jobben i
 # ci.yml feller ved sprik, så de to kan ikke drifte fra hverandre igjen.
-version = "0.3.0"
+version = "0.4.0"
 description = "Home Assistant integration for prediktiv kapasitetstrinn-styring"
 readme = "README.md"
 # Gulvet er kjøretiden, ikke verktøykjeden: integrasjonen kjører i brukerens

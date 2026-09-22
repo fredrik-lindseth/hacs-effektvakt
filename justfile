@@ -135,3 +135,39 @@ coverage-gate:
         coverage combine --data-file=.coverage .coverage.unit .coverage.ha
     UV_PROJECT_ENVIRONMENT=.venv-unit uv run --frozen --python 3.13 --group unit \
         coverage report --data-file=.coverage --show-missing --fail-under=95
+
+# ---------------------------------------------------------------------------
+# Release
+#
+# Samme kjerne som .github/workflows/release.yml kjører, altså
+# scripts/release_publish.py. Ingen av oppskriftene her skriver noe på GitHub:
+# publiseringen skjer bare i workflowen, på en commit CI har sett grønn.
+#
+# Rekkefølgen på en release: skriv datoen i CHANGELOG-overskriften, bump
+# manifest.json og pyproject.toml i samme commit, og la release.yml gjøre
+# resten. Uten datoen melder flyten `utfall=venter` og skriver ingenting, så
+# manifestet kan stå på versjonen det jobbes mot hele veien.
+# ---------------------------------------------------------------------------
+
+# Deterministisk: samme commit gir bit-lik fil, så den kan sammenlignes med
+# den som ligger ute.
+#
+# Bygg HACS-ZIP-en for en commit og skriv sha256-en.
+release-zip sha="HEAD":
+    python3 scripts/release_publish.py build --sha {{sha}} --output dist/effektvakt.zip
+
+# Hva ville releaseflyten gjort med denne commiten? Leser GitHub, skriver ingenting.
+release-plan sha="HEAD":
+    python3 scripts/release_publish.py plan --sha {{sha}}
+
+# --krev-dato feller hvis overskriften fortsatt sier «Ikke sluppet».
+#
+# Release-noten HACS viser i oppdateringspanelet, hentet ut av CHANGELOG.md.
+release-note versjon:
+    python3 scripts/release_notes.py {{versjon}} --kort --krev-dato
+
+# Exit 2 hvis de ikke gjør det.
+#
+# Peker taggen, ZIP-en og attestasjonen på samme artefakt?
+release-verify tag:
+    python3 scripts/release_publish.py verify --sha {{tag}}

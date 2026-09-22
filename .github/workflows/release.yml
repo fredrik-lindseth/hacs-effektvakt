@@ -1,0 +1,141 @@
+name: Release
+
+# Releaseporten. Alt som skal være grønt for kandidat-SHA-en, kjøres som en del
+# av denne grafen (`needs: ci`), ikke som separate workflows vi håper er
+# ferdige. Kandidaten er `github.sha`, altså commiten denne kjøringen tilhører,
+# og både CI og releasesteget sjekker ut nøyaktig den. Da finnes det ikke et
+# vindu der main kan flytte seg mellom testing, bygging og tagging.
+#
+# Selve flyten ligger i scripts/release_publish.py, som er testbar og
+# gjenopptakbar. Draften publiseres som siste kall: feiler noe før det, finnes
+# det ingen halv release å rydde, og en ny kjøring på samme SHA plukker opp der
+# den slapp.
+#
+# Workflowen kjører på hvert push til main, men slipper ikke noe før
+# CHANGELOG-overskriften for manifestversjonen har fått en utgivelsesdato.
+# Fram til da melder plan-steget `utfall=venter`, og resten hoppes over.
+# Manifestet kan derfor stå på versjonen det jobbes mot gjennom hele
+# utviklingen uten at et push slipper en halvferdig versjon.
+
+on:
+  push:
+    branches: [main]
+  # Gjenopptak: «Re-run failed jobs» beholder SHA-en, eller kjør workflowen
+  # manuelt på taggen. Kandidaten følger alltid av ref-en, aldri av et fritt
+  # skjemafelt, så den kan ikke settes til noe CI ikke har sett.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Kjør flyten uten å skrive noe (leser bare)"
+        type: boolean
+        default: false
+      proveslipp:
+        description: "Prøveslipp fra en gren. Krever manifestversjon 0.0.0"
+        type: boolean
+        default: false
+
+# Én publisering om gangen. cancel-in-progress står av med vilje: å avbryte en
+# kjøring midt i opplastingen er nettopp halvveisen porten skal forhindre.
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    name: Publiser
+    # Ref-vakten. Uten den kan workflow_dispatch kjøres fra hvilken som helst
+    # gren og publisere noe som aldri har vært på main. Prøveslipp er den
+    # bevisste unntaksveien, og vakten i release-scriptet slipper den bare
+    # gjennom for manifestversjon 0.0.0, så avhuking på feil gren kan ikke
+    # slippe en ekte versjon. Den samme vakten sjekker kandidaten mot GitHubs
+    # egen hovedgren, så den gjelder like fullt når flyten kjøres for hånd.
+    if: >-
+      github.ref == 'refs/heads/main'
+      || startsWith(github.ref, 'refs/tags/v')
+      || inputs.proveslipp
+    # `needs` på en `uses:`-jobb venter på *alle* jobbene i ci.yml, altså
+    # test-unit, begge HA-målene, coverage-terskelen, kvalitet, hacs, hassfest
+    # og porten, og alle for denne kjøringens `github.sha`. Det er GitHub som
+    # holder den garantien, så den gjentas ikke i scriptet.
+    needs: [ci]
+    runs-on: ubuntu-latest
+    # Holder ikke concurrency-låsen lenger enn nødvendig om et API-kall henger.
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout kandidat-SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          # ZIP-en bygges fra git-objektene, og eksisterende tagger må kunne
+          # derefereres, så hele historikken og taggene må være her.
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Leser tilstanden på GitHub og sier om versjonen er klar, allerede ute,
+      # eller fortsatt under arbeid. Skriver ingenting. `utfall` er det som
+      # styrer resten av jobben, så ingen release avgjøres av en grep mot
+      # norsk prosa i loggen.
+      - name: Les tilstanden
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVESLIPP: ${{ inputs.proveslipp }}
+        run: |
+          kommando=(python3 scripts/release_publish.py plan --sha "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY")
+          if [ "$PROVESLIPP" = "true" ]; then
+            kommando+=(--proveslipp)
+          fi
+          "${kommando[@]}"
+
+      - name: Bygg deterministisk ZIP
+        if: steps.plan.outputs.utfall == 'klar'
+        id: bygg
+        run: |
+          DIGEST=$(python3 scripts/release_publish.py build --sha "$GITHUB_SHA" --output dist/effektvakt.zip)
+          echo "sha256=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "ZIP for ${GITHUB_SHA:0:12}: $DIGEST"
+
+      # Attestasjonen lages før noe legges ut, og verifiseres av publiseringen
+      # under. Da kan ingen versjon bli offentlig med en attestasjon som peker
+      # på en annen commit eller en annen fil.
+      - name: Attester bygget
+        if: steps.plan.outputs.utfall == 'klar'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/effektvakt.zip
+
+      - name: Verifiser og publiser
+        if: steps.plan.outputs.utfall == 'klar'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Tomme på push, "true" bare når noen ba om det i skjemaet.
+          TORRKJORING: ${{ inputs.dry_run }}
+          PROVESLIPP: ${{ inputs.proveslipp }}
+        run: |
+          kommando=(
+            python3 scripts/release_publish.py publish
+            --sha "$GITHUB_SHA"
+            --repo "$GITHUB_REPOSITORY"
+            --zip dist/effektvakt.zip
+          )
+          if [ "$TORRKJORING" = "true" ]; then
+            kommando+=(--dry-run)
+          fi
+          if [ "$PROVESLIPP" = "true" ]; then
+            kommando+=(--proveslipp)
+          fi
+          "${kommando[@]}"
