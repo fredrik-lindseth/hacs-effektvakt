@@ -90,13 +90,14 @@ repo-strukturen i sin helhet.
   `/effektvakt-static`, melder URL-en inn i Lovelace sitt ressursregister,
   websocket-kommandoen som leverer skiven), `config_flow.py` (config flow og
   options flow, sensorvalidering).
-- **Domene**: fire filer uten en eneste HA-import, så de kan regnes og testes
+- **Domene**: fem filer uten en eneste HA-import, så de kan regnes og testes
   uten stubber. `modell.py` har topp-3-aritmetikken, terskelmodellen,
   projeksjonen, risikoklassifiseringen og kostnaden. `timeregnskap.py` eier
   timen: trapesintegrasjon, avstemming mot måleren, den ventende timen over
   timeskiftet, dagsmaks, månedsrullering og lagringsformatet.
   `hysterese.py` er `HystereseState` og `apply_hysteresis`. `laster.py` er de
-  kuttbare lastene og `compute_tilgjengelig_kutt_kw`.
+  kuttbare lastene og `compute_tilgjengelig_kutt_kw`. `oppsett.py` slår opp
+  trinn-tabellen en config entry faktisk får, og navngir hullene i den.
 - **Drift**: `coordinator.py` er ticket, ikke regnestykket. Den leser config
   entry, henter sensorverdier gjennom `avlesning.py`, mater `Timeregnskap`,
   spør `modell.py`, `laster.py` og `hysterese.py`, setter tick-intervallet og
@@ -122,6 +123,7 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 | `custom_components/effektvakt/timeregnskap.py`| `Timeregnskap`: integrasjon, måleravstemming, ventende time, dagsmaks, månedsrullering, lagringsformat |
 | `custom_components/effektvakt/modell.py`     | Terskelmodellen, projeksjonen, risikoklassifiseringen og kostnaden. Ren Python, se regel 3 |
 | `custom_components/effektvakt/hysterese.py`  | `HystereseState` og `apply_hysteresis`, se regel 4                                         |
+| `custom_components/effektvakt/oppsett.py`     | Trinn-tabellen en config entry får, ukjent DSO-nøkkel og manglende topptrinn                |
 | `custom_components/effektvakt/laster.py`     | Kuttbare laster fra config entry, `compute_tilgjengelig_kutt_kw` og migreringen fra strategi |
 | `custom_components/effektvakt/const.py`      | Risiko-nivåer og rangering, tick-intervaller, watchdog-terskler, legacy-mapping, klamper   |
 | `custom_components/effektvakt/config_flow.py`| Config flow og options flow, validering av effekt- og energisensor                         |
