@@ -33,7 +33,7 @@ Det er ikke feil regnet. Holder du hver eneste dag under 2 kW, betaler du faktis
 
 To ting demper det. `kostnad_denne_timen_kr` er 0 i nettopp disse timene, for måneden er der uansett, og varsel-blueprintet leser den. Og timetaket er `max(dagens maks, dagstaket)`, så varselet slår bare ut på timer som setter ny dagsrekord, ikke hele dagen.
 
-Mest treffsikkert ville vært å la forrige måneds oppgjorte topp-3 være gulv for måltrinnet de første dagene. Det er ikke gjort, og `_previous_month_top_3_snitt_kw` ligger alt lagret hvis noen vil.
+Mest treffsikkert ville vært å la forrige måneds oppgjorte topp-3 være gulv for måltrinnet de første dagene. Det er ikke gjort, og `previous_month_top_3_snitt_kw` på `Timeregnskap` ligger alt lagret hvis noen vil.
 
 ---
 

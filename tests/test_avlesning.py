@@ -1,4 +1,4 @@
-"""Tester for helper-funksjoner i coordinator."""
+"""Tester for sensoravlesningen i avlesning.py."""
 
 from __future__ import annotations
 

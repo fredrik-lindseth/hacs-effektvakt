@@ -59,7 +59,7 @@ være.
    `docs/beregninger.md`.
 4. **Hysterese-invarianten**: oppgang i risiko er umiddelbar, nedgang krever
    holdetid, og flere trinn ned tas ett om gangen med ny timer per trinn.
-   `apply_hysteresis` i `coordinator.py`, tester i `tests/test_hysteresis.py`.
+   `apply_hysteresis` i `hysterese.py`, tester i `tests/test_hysteresis.py`.
    Bryter du dette, slår varmtvannsberederen av og på i takt med en støyete
    effektsensor.
 5. **Watchdog-kontrakten**: henger coordinatoren i mer enn
@@ -82,7 +82,7 @@ være.
 
 ## Arkitektur
 
-Tre lag. Filnavnene under er kartet, og `docs/development.md` har
+Fire lag. Filnavnene under er kartet, og `docs/development.md` har
 repo-strukturen i sin helhet.
 
 - **Entry-livssyklus og frontend**: `__init__.py` (setup, watchdog,
@@ -90,14 +90,19 @@ repo-strukturen i sin helhet.
   `/effektvakt-static`, melder URL-en inn i Lovelace sitt ressursregister,
   websocket-kommandoen som leverer skiven), `config_flow.py` (config flow og
   options flow, sensorvalidering).
-- **Beregning**: `modell.py` er domenet, `coordinator.py` er drift. `modell.py`
-  holder topp-3-aritmetikken, terskelmodellen og kostnaden, uten en eneste
-  HA-import, så den kan regnes og testes uten stubber. `coordinator.py` gjør
-  resten: avlesning av effekt- og energisensor, trapesintegrasjon av timen,
-  avstemming mot måleren, projeksjon, hysterese, kuttkilder, månedsrullering og
-  persistering til `Store`. Begge er delt i frie funksjoner som er testet hver
-  for seg. Legg ny logikk som en fri funksjon, ikke som en metode, og legg den
-  i `modell.py` hvis den er ren regning.
+- **Domene**: fire filer uten en eneste HA-import, så de kan regnes og testes
+  uten stubber. `modell.py` har topp-3-aritmetikken, terskelmodellen,
+  projeksjonen, risikoklassifiseringen og kostnaden. `timeregnskap.py` eier
+  timen: trapesintegrasjon, avstemming mot måleren, den ventende timen over
+  timeskiftet, dagsmaks, månedsrullering og lagringsformatet.
+  `hysterese.py` er `HystereseState` og `apply_hysteresis`. `laster.py` er de
+  kuttbare lastene og `compute_tilgjengelig_kutt_kw`.
+- **Drift**: `coordinator.py` er ticket, ikke regnestykket. Den leser config
+  entry, henter sensorverdier gjennom `avlesning.py`, mater `Timeregnskap`,
+  spør `modell.py`, `laster.py` og `hysterese.py`, setter tick-intervallet og
+  skriver tilstanden til `Store`. `avlesning.py` er den eneste andre filen som
+  rører `hass.states`. Legg ny logikk som en fri funksjon, ikke som en metode,
+  og legg den i domenelaget hvis den er ren regning.
 - **Entiteter**: `sensor.py` (seks sensorer), `binary_sensor.py`
   (`binary_sensor.effektvakt_kutt_ned_anbefalt`), `switch.py` (hovedbryteren),
   `diagnostics.py`.
@@ -112,8 +117,12 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 | Fil                                          | Innhold                                                                                   |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `custom_components/effektvakt/__init__.py`   | Entry-setup og -unload, watchdog-timer, de to tjenestene, `CONFIG_SCHEMA`                  |
-| `custom_components/effektvakt/coordinator.py`| Måling og drift: integrasjon, måleravstemming, projeksjon, hysterese, persist. Kaller `modell.py` |
-| `custom_components/effektvakt/modell.py`     | Terskelmodellen og kostnaden. Ren Python uten HA-import, se regel 3                        |
+| `custom_components/effektvakt/coordinator.py`| Ticket: leser config entry, kaller domenefilene, setter tick-intervall, persisterer til `Store` |
+| `custom_components/effektvakt/avlesning.py`  | Effekt-, energi- og tidsstempelavlesning fra `hass.states`, med enhet og klamp             |
+| `custom_components/effektvakt/timeregnskap.py`| `Timeregnskap`: integrasjon, måleravstemming, ventende time, dagsmaks, månedsrullering, lagringsformat |
+| `custom_components/effektvakt/modell.py`     | Terskelmodellen, projeksjonen, risikoklassifiseringen og kostnaden. Ren Python, se regel 3 |
+| `custom_components/effektvakt/hysterese.py`  | `HystereseState` og `apply_hysteresis`, se regel 4                                         |
+| `custom_components/effektvakt/laster.py`     | Kuttbare laster per strategi og `compute_tilgjengelig_kutt_kw`                             |
 | `custom_components/effektvakt/const.py`      | Risiko-nivåer og rangering, tick-intervaller, watchdog-terskler, legacy-mapping, klamper   |
 | `custom_components/effektvakt/config_flow.py`| Config flow og options flow, validering av effekt- og energisensor                         |
 | `custom_components/effektvakt/dso.py`        | Kapasitetstrinn per nettselskap. AUTOGENERERT, se regel 1                                  |
@@ -187,17 +196,20 @@ selv i CI fram til september 2026.
    `async_unload_entry` nettopp fordi `_loaded_coordinators` teller på den.
 7. **Månedsrulleringen kommer etter måleravstemmingen.** En avlesning som
    retter den siste timen i måneden skal inn i topp-3-en som arkiveres, ikke
-   lande i den ferske måneden.
+   lande i den ferske måneden. Rekkefølgen står i `_async_update_data` i
+   `coordinator.py`.
 8. **Effektankeret overlever en kort omstart.** Hele timetilstanden persisteres
    til `Store` (`effektvakt_<entry_id>`): akkumulert kWh, timestart, siste
    målerstand med tidspunkt, siste effekt med tidspunkt, dekningsvinduet og
-   hysterese-tilstanden. Legger du til felt, husk at eldre lagring mangler dem;
-   `_les_siste_maalerstand` viser mønsteret for å hente verdien ut av det gamle
-   formatet framfor å kaste den.
+   hysterese-tilstanden. Formatet eies av `Timeregnskap.til_lagring` og
+   `.fra_lagring` i `timeregnskap.py`, og `coordinator.py` legger bare
+   hysteresen ved siden av. Legger du til felt, husk at eldre lagring mangler
+   dem; `_les_siste_maalerstand` i `timeregnskap.py` viser mønsteret for å
+   hente verdien ut av det gamle formatet framfor å kaste den.
 9. **Målehull er et ærligere svar enn et anslag.** Går det mer enn
-   `MAX_INTEGRATION_GAP_H` (5 minutter) mellom to tick, har HA vært nede, og
-   trapesintegrasjonen hopper over vinduet. Energimåleren fyller det ved neste
-   avlesning.
+   `MAX_INTEGRATION_GAP_H` (5 minutter, definert i `timeregnskap.py`) mellom to
+   tick, har HA vært nede, og trapesintegrasjonen hopper over vinduet.
+   Energimåleren fyller det ved neste avlesning.
 10. **Risiko-verdiene er kontrakt.** Strengene i `RISIKO_LEVELS` står i
     automasjoner, i loggen og i utviklerverktøyene. Rekkefølgen i listen er
     terskelen `min_risiko_for_kutt` sammenlignes etter, så flytter du en verdi,
@@ -277,8 +289,9 @@ framfor å duplisere.
   og mva-sone i `scripts/dso_kilder.json`. Deretter
   `python3 scripts/generer_dso_fra_fri_nettleie.py` og commit `dso.py`.
 - **Endre en beregning**: legg den som en fri funksjon i `modell.py` med egen
-  test i `tests/`, framfor å utvide `_async_update_data`. Trenger den å lese
-  sensorer eller tilstand, hører den hjemme i `coordinator.py`.
+  test i `tests/`, framfor å utvide `_async_update_data`. Handler den om timen
+  som bygges opp, hører den i `timeregnskap.py`; trenger den å lese sensorer,
+  i `avlesning.py`. `coordinator.py` skal bare kalle.
 - **Endre skiven**: `faceplate.py` er eneste kilde. Prøv i
   `docs/kort-harness/server.py`, og sjekk trykkvarianten med
   `python3 scripts/export_faceplate.py --dso bkk --variant card --png`.

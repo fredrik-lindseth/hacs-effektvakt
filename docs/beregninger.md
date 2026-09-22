@@ -1,6 +1,12 @@
 # Beregninger
 
-Implementasjon: [`modell.py`](../custom_components/effektvakt/modell.py) (terskler og kostnad, ren Python uten Home Assistant), [`coordinator.py`](../custom_components/effektvakt/coordinator.py) (måling, integrasjon og hysterese) og [`const.py`](../custom_components/effektvakt/const.py).
+Implementasjon, alt sammen ren Python uten Home Assistant-import:
+[`modell.py`](../custom_components/effektvakt/modell.py) (terskler, projeksjon, risiko og kostnad),
+[`timeregnskap.py`](../custom_components/effektvakt/timeregnskap.py) (integrasjon, måleravstemming og dagsmaks),
+[`hysterese.py`](../custom_components/effektvakt/hysterese.py),
+[`laster.py`](../custom_components/effektvakt/laster.py) (tilgjengelig kutt) og
+[`const.py`](../custom_components/effektvakt/const.py) (konstantene).
+[`coordinator.py`](../custom_components/effektvakt/coordinator.py) regner ikke selv: den leser sensorene gjennom [`avlesning.py`](../custom_components/effektvakt/avlesning.py), kaller filene over i rekkefølge og legger svarene i data-dicten sensorene leser.
 
 ## Projisert time-snitt
 
@@ -40,15 +46,16 @@ Tiden hentes fra tidsstemplene og ikke fra et antatt tickintervall, for ticket h
 når HA har det travelt. Trapesregelen framfor å holde den forrige avlesningen: en last som
 slås av og på treffer like ofte før som etter en avlesning, og da er midtverdien uten
 systematisk slagside. Går det mer enn fem minutter mellom to tick, har HA vært nede eller
-stått fast, og da integreres intervallet ikke i det hele tatt (se `MAX_INTEGRATION_GAP_H`).
+stått fast, og da integreres intervallet ikke i det hele tatt (se `MAX_INTEGRATION_GAP_H` i
+`timeregnskap.py`).
 
 Siste effektavlesning lagres, så en omstart som tar under fem minutter integreres over
 med den effekten som sto da HA gikk ned. Det er et anslag, men et bundet et, og
 energy-sensoren retter det ved neste avlesning.
 
 **Energy-sensoren korrigerer.** Måleren er den nøyaktige kilden og skal vinne, men den
-legges ikke oppå anslaget. Coordinatoren holder rede på hvor mye av timen som er integrert
-anslag og ikke bekreftet av måleren (`_estimert_siden_maaler_kwh`), og når måleren flytter
+legges ikke oppå anslaget. `Timeregnskap` holder rede på hvor mye av timen som er integrert
+anslag og ikke bekreftet av måleren (`estimert_siden_maaler_kwh`), og når måleren flytter
 seg byttes nettopp den delen ut:
 
 ```
@@ -78,7 +85,7 @@ måler er over. Den kWh-en hører til timen før. Tre ting gjør at den havner r
 2. **Timeskiftet deler integrasjonen.** Ligger et timeskifte mellom to tick, interpoleres
    effekten ved skiftet og energien deles i to. Den delen som lå før, følger med over til
    timen som ble ferdig.
-3. **Timen holdes åpen for retting.** `_finalize_hour` låser timen inn med det vi vet ved
+3. **Timen holdes åpen for retting.** `Timeregnskap._finalize_hour` låser timen inn med det vi vet ved
    timeskiftet, men beholder den som en `VentendeTime` med `dagsmaks_foer`, altså
    dagsverdien slik den sto før. Kommer avlesningen som dekker skiftet, byttes den
    estimerte delen ut og timen låses inn på nytt, også nedover. Så snart måleren har
@@ -114,7 +121,7 @@ coordinator-data og i diagnostikken, og er ikke en egen sensor.
 
 ## NVE-modellen for kapasitetstrinn
 
-Norske nettselskap bruker snittet av de tre høyeste time-forbrukene fra tre ulike dager. Effektvakt implementerer dette slik:
+Norske nettselskap bruker snittet av de tre høyeste time-forbrukene fra tre ulike dager. `Timeregnskap` i `timeregnskap.py` fører dagsmaksene, `top_n_average` i `modell.py` regner snittet:
 
 1. For hver fullført klokketime, ta `actual_kwh_this_hour` som timer-forbruk.
 2. Sammenlign mot beste registrerte time samme dag. Oppdater hvis høyere.
@@ -198,7 +205,7 @@ Det står `null` og ikke uendelig med vilje: `inf` er ugyldig JSON og knekker b�
 
 ## Kostnad for neste trinn
 
-`compute_kostnad` i coordinator.py regner ut hva kapasitetsleddet koster og hva som står på spill akkurat nå. Resultatet mater `sensor.effektvakt_kostnad_neste_trinn`.
+`compute_kostnad` i `modell.py` regner ut hva kapasitetsleddet koster og hva som står på spill akkurat nå. Resultatet mater `sensor.effektvakt_kostnad_neste_trinn`.
 
 Først: hvilket trinn ligger måneden an til?
 
@@ -265,7 +272,7 @@ Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `u
 
 ## Risikoklassifisering
 
-Rå risiko bestemmes av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):
+`classify_raw_risk` i `modell.py` bestemmer rå risiko av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):
 
 | Betingelse                      | Risiko                |
 | ------------------------------- | --------------------- |
@@ -280,7 +287,7 @@ Margin = `time_tak_kw - projected_avg`, se [terskelmodellen](#terskelmodellen). 
 
 ## Hysterese
 
-Rå risiko går direkte inn i `apply_hysteresis`. Regler:
+Rå risiko går direkte inn i `apply_hysteresis` i [`hysterese.py`](../custom_components/effektvakt/hysterese.py). Regler:
 
 - **Oppgang** (høyere risiko): umiddelbar. Ingen ventetid.
 - **Nedgang** (lavere risiko): ett trinn av gangen. Hvert trinn ned krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min).
@@ -294,7 +301,7 @@ Dette forhindrer at VVB eller panelovn slås raskt av og på ved forbruk som svi
 
 ## Adaptiv tick-frekvens
 
-Coordinator-intervallet justeres basert på risiko-nivå:
+Coordinator-intervallet justeres basert på risiko-nivå, etter `TICK_INTERVAL_BY_RISIKO` i `const.py`:
 
 | Risiko                | Intervall   |
 | --------------------- | ----------- |
@@ -309,7 +316,7 @@ Er terskelen passert, leses sensorer og projeksjon oppdateres hvert 15 sekund fo
 
 ## Tilgjengelig kutt per strategi
 
-`compute_tilgjengelig_kutt_kw` i coordinator.py:
+`compute_tilgjengelig_kutt_kw` i `laster.py`:
 
 | Strategi           | Logikk                                                                  |
 | ------------------ | ----------------------------------------------------------------------- |

@@ -5,31 +5,49 @@
 ```
 custom_components/effektvakt/
     __init__.py         # Entry-setup, watchdog, service-registrering
+    avlesning.py        # Effekt, energi og tidsstempel lest fra hass.states
     binary_sensor.py    # binary_sensor.effektvakt_kutt_ned_anbefalt
     brand/              # icon.png og icon@2x.png, generert (HA leser brand-bilder herfra)
     config_flow.py      # Config flow og options flow
     const.py            # Konstanter og default-verdier
-    coordinator.py      # Beregningslogikk, hysterese, persist
+    coordinator.py      # Ticket: kaller domenefilene, setter intervall, persist
     diagnostics.py      # HA diagnostics-support
     dso.py              # Kapasitetstrinn per nettselskap (generert)
     faceplate.py        # SVG-kilde for GEHA-METER-skiven (kort og trykk)
+    frontend.py         # Statisk servering, Lovelace-ressurs, websocket-kommandoen
+    hysterese.py        # HystereseState og apply_hysteresis
+    laster.py           # Kuttbare laster per strategi, tilgjengelig kutt
     manifest.json       # HA integration manifest
+    modell.py           # Terskelmodell, projeksjon, risiko, kostnad (ren Python)
     sensor.py           # De seks sensor-entitetene
     services.yaml       # Service-definisjoner
+    strings.json        # Kildeteksten til oversettelsene
     switch.py           # switch.effektvakt_automatikk, hovedbryteren
+    timeregnskap.py     # Timen: integrasjon, måleravstemming, dagsmaks, lagring
+    translations/       # nb.json og en.json
+    www/                # effektvakt-card.js, Lovelace-kortet
 
 docs/
+    bilder/             # Skjermbildene README og docs viser
     blueprints/         # Blueprint YAML-filer
     kort-harness/       # Prøvebenk for Lovelace-kortet, uten Home Assistant
-    beregninger.md
     begrensninger.md
+    beregninger.md
     blueprints.md
+    dashboard-eksempel.yaml
+    dashboard-kort.md
     development.md
     dso.md
     faq.md
+    fysisk-panel.md
     input-sensorer.md
+    oppsett.md
     sensorer.md
     strategi.md
+
+esphome/
+    effektvakt-panel.yaml   # ESP32-panelet, se fysisk-panel.md (ikke bygget)
+    secrets.example.yaml
 
 images/
     icon.svg            # Kilden til integrasjonsikonet
@@ -61,7 +79,7 @@ pytest tests/ -v
 pytest tests/ --cov=custom_components/effektvakt --cov-report=term-missing
 
 # Kjør spesifikk testfil
-pytest tests/test_coordinator_projection.py -v
+pytest tests/test_terskelmodell.py -v
 ```
 
 ---
