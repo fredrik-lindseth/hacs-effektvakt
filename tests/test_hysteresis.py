@@ -10,7 +10,7 @@ from custom_components.effektvakt.const import (
     RISIKO_NAERMER_SEG,
     RISIKO_OVER_TERSKEL,
 )
-from custom_components.effektvakt.coordinator import HystereseState, apply_hysteresis
+from custom_components.effektvakt.hysterese import HystereseState, apply_hysteresis
 
 HOLDETID = timedelta(minutes=5)
 NOW = datetime(2026, 5, 25, 14, 0, 0)

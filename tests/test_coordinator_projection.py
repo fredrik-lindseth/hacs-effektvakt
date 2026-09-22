@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.effektvakt.coordinator import compute_projected_avg
+from custom_components.effektvakt.modell import compute_projected_avg
 
 
 def test_projected_avg_uten_energy_sensor_starten_av_timen():
