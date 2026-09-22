@@ -122,7 +122,7 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 | `custom_components/effektvakt/timeregnskap.py`| `Timeregnskap`: integrasjon, måleravstemming, ventende time, dagsmaks, månedsrullering, lagringsformat |
 | `custom_components/effektvakt/modell.py`     | Terskelmodellen, projeksjonen, risikoklassifiseringen og kostnaden. Ren Python, se regel 3 |
 | `custom_components/effektvakt/hysterese.py`  | `HystereseState` og `apply_hysteresis`, se regel 4                                         |
-| `custom_components/effektvakt/laster.py`     | Kuttbare laster per strategi og `compute_tilgjengelig_kutt_kw`                             |
+| `custom_components/effektvakt/laster.py`     | Kuttbare laster fra config entry, `compute_tilgjengelig_kutt_kw` og migreringen fra strategi |
 | `custom_components/effektvakt/const.py`      | Risiko-nivåer og rangering, tick-intervaller, watchdog-terskler, legacy-mapping, klamper   |
 | `custom_components/effektvakt/config_flow.py`| Config flow og options flow, validering av effekt- og energisensor                         |
 | `custom_components/effektvakt/dso.py`        | Kapasitetstrinn per nettselskap. AUTOGENERERT, se regel 1                                  |
@@ -244,9 +244,9 @@ Check-jobben feller ved sprik, så bump begge i samme commit.
 10. **Risiko-verdiene er kontrakt.** Strengene i `RISIKO_LEVELS` står i
     automasjoner, i loggen og i utviklerverktøyene. Rekkefølgen i listen er
     terskelen `min_risiko_for_kutt` sammenlignes etter, så flytter du en verdi,
-    flytter du terskelen for alle som har valgt den. `LEGACY_RISIKO_MAPPING` og
-    `LEGACY_STRATEGI_MAPPING` holder gamle lagrede verdier i live; ikke fjern
-    dem uten å vite at ingen har dem på disk.
+    flytter du terskelen for alle som har valgt den. `LEGACY_RISIKO_MAPPING`
+    holder gamle lagrede verdier i live; ikke fjern den uten å vite at ingen
+    har dem på disk.
 11. **`unique_id` er låst av entitetsregisteret.** Både sensorene,
     binary-sensoren og switchen bygger den av `entry_id` pluss en nøkkel.
     Endrer du nøkkelen, får brukeren en ny entitet og mister historikken.
@@ -306,7 +306,7 @@ framfor å duplisere.
 | [docs/sensorer.md](docs/sensorer.md)             | Sensorer og attributter                  |
 | [docs/input-sensorer.md](docs/input-sensorer.md) | Hva integrasjonen trenger som input      |
 | [docs/oppsett.md](docs/oppsett.md)               | Konfigurasjonsflyten steg for steg       |
-| [docs/strategi.md](docs/strategi.md)             | Kutt-strategiene sammenlignet            |
+| [docs/laster.md](docs/laster.md)                 | Kuttbare laster og tilgjengelig kutt     |
 | [docs/blueprints.md](docs/blueprints.md)         | Import, input, failsafe-garantien        |
 | [docs/dashboard-kort.md](docs/dashboard-kort.md) | Lovelace-kortet, stiler og merker        |
 | [docs/fysisk-panel.md](docs/fysisk-panel.md)     | ESP32-panel med ekte viser, ikke bygget  |
