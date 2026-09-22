@@ -144,16 +144,30 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 Portene kjøres med `just` og uv. Ingenting installeres i system-Python.
 
 ```bash
-just test-unit               # hele suiten, tests/ med stubbet Home Assistant
+just test-unit               # tests/ med stubbet Home Assistant
 just check                   # ruff check, ruff format --check, mypy, vulture
 just test                    # begge, det som kreves før commit
+just test-ha minimum         # tests_ha/ mot ekte HA 2025.1.0, det hacs.json lover
+just test-ha current         # tests_ha/ mot ekte HA 2026.9.2
+just coverage                # begge suitene slått sammen, feller under 95 %
 pre-commit run --files <filene dine>
 ```
 
 Oppskriftene i `justfile` er de samme kommandolinjene CI og pre-commit kjører,
-så en rød port kan reproduseres lokalt. Avhengighetene står som
-`[dependency-groups]` i `pyproject.toml`, låst i `uv.lock`, med ett venv per
-gruppe. `docs/development.md` har tabellen over miljøene.
+så en rød port kan reproduseres lokalt. `tests/test_testkommandoer.py` feller
+når justfile, denne filen, `docs/` og `ci.yml` ikke lenger sier det samme om
+kommandoene.
+
+`just test` krever ikke Home Assistant og er det som skal være grønt før hver
+commit. Ekte-HA-testene er tyngre og henger på CI, men begge målene skal være
+grønne: feller `minimum`, er det enten en kompatibilitetsfeil å rette eller et
+minimum å heve med vilje.
+
+`tests/` og `tests_ha/` kan ikke dele miljø. `tests/conftest.py` stubber
+`homeassistant.*` i `sys.modules`, og en ekte homeassistant ved siden av ville
+kollidert med stubbene. Derfor står avhengighetene som fire `[dependency-groups]`
+i `pyproject.toml`, låst i `uv.lock`, med ett venv per gruppe.
+`docs/development.md` har tabellen over miljøene.
 
 Pre-commit kjører ruff (lint og format), vulture, mypy og de vanlige
 whitespace-/JSON-/YAML-sjekkene. `pytest` henger på `pre-push`, ikke på
@@ -170,12 +184,20 @@ fri-nettleie på commiten i `dso_kilder.json`.
 så `ruff format --check` og pre-commit brekker linjer likt. `line-length` er 120
 i `pyproject.toml`, og E501 er slått av i ruff-lint.
 
-CI (`.github/workflows/ci.yml`) har fire jobber og en port: `test-unit`
-(fixtur-vakt, `just coverage-unit`, `just coverage-gate`, Codecov),
-`check` (`just check`, DSO-sjekken mot fri-nettleie på pinnet commit,
-manifest-validering og versjonssynk mot `pyproject.toml`), `hacs` og
-`hassfest`. `release-gate` feller når en av dem ikke er `success`; `skipped`
-teller som feil. `validate.yml` kjører HACS og hassfest om igjen nattlig.
+CI (`.github/workflows/ci.yml`) har seks jobber og en port: `test-unit`
+(fixtur-vakt, `just coverage-unit`, Codecov), `test-ha` (matrise over
+`minimum` og `current`, `fail-fast: false`, så svaret «begge ryker» skilles fra
+«bare den ene»), `coverage` (venter på begge suitene, henter datafilene deres
+og kjører `just coverage-gate`), `check` (`just check`, DSO-sjekken mot
+fri-nettleie på pinnet commit, manifest-validering og versjonssynk mot
+`pyproject.toml`), `hacs` og `hassfest`. `release-gate` feller når en av dem
+ikke er `success`; `skipped` teller som feil. `validate.yml` kjører HACS og
+hassfest om igjen nattlig.
+
+Coverage-terskelen er 95 % på summen av de to suitene, ikke på hver av dem for
+seg: hver av dem lar kode stå udekket som den andre dekker. Den sto på 90 fram
+til `tests_ha/` kom og dekket `config_flow.py`, `frontend.py` og
+`diagnostics.py`.
 
 `manifest.json` og `pyproject.toml` skal ha den samme versjonen.
 Check-jobben feller ved sprik, så bump begge i samme commit.

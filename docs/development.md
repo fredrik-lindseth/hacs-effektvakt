@@ -81,7 +81,7 @@ just test-unit             # hele suiten, tests/ med stubbet Home Assistant
 just test-unit -k terskel  # ekstra argumenter går videre til pytest
 just check                 # ruff check, ruff format --check, mypy, vulture
 just test                  # test-unit + check, det som kreves før commit
-just coverage              # coverage med terskel (feller under 90 %)
+just coverage              # coverage med terskel (feller under 95 %)
 just fmt                   # formater, den eneste oppskriften som skriver
 ```
 
