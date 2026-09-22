@@ -55,8 +55,11 @@ være.
    `unknown`. Sjekken kjører hvert minutt fra `async_setup_entry`.
    Automasjoner og blueprints regner med at `unknown` betyr «vet ikke», ikke
    «alt er fint».
-6. **Failsafe-regelen i blueprintene**: hver blueprint som styrer last tvinger
-   lasten tilbake etter `max_off_minutes`, uavhengig av hva Effektvakt sier.
+6. **Failsafe-regelen i blueprintene**: hver blueprint som styrer last slipper
+   den ved neste timeskifte, uavhengig av hva Effektvakt sier, fordi verdien av
+   et kutt slutter der. `max_off_minutes` er bare nødbremsen hvis timeskiftet
+   uteblir, og `min_on_minutes` krever at lasten har stått på en stund før den
+   kan kuttes igjen i den nye timen.
    Hovedbryteren `switch.effektvakt_automatikk` stopper nye kutt, men avbryter
    aldri en failsafe-timer som alt går. Fjerner du den grenen, kan en
    varmtvannsbereder bli stående av i det uendelige.
