@@ -39,7 +39,20 @@ jobs:
         run: python scripts/sync_dso_from_stromkalkulator.py --check
 
       - name: Tests with coverage
-        run: pytest tests/ -v --cov=custom_components/effektvakt --cov-report=term-missing
+        run: |
+          pytest tests/ -v --cov=custom_components/effektvakt \
+            --cov-report=term-missing --cov-report=xml
+
+      # Codecov rapporterer selv om opplastingen feiler, og dekningen skal ikke
+      # avgjøre om CI er grønn. continue-on-error dekker resten, som at actionen
+      # ikke svarer i det hele tatt.
+      - name: Upload coverage to Codecov
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
       - name: Manifest valid JSON
         run: jq empty custom_components/effektvakt/manifest.json
