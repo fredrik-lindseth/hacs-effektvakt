@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, WATCHDOG_INTERVAL_SECONDS
@@ -14,13 +15,23 @@ from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stal
 from .frontend import async_register_frontend, async_unregister_frontend
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, ServiceCall
     from homeassistant.helpers.typing import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+SERVICE_SET_SAFETY_BUFFER = "set_safety_buffer"
+SERVICE_RESET_TOPP_3 = "reset_topp_3"
+SERVICES: tuple[str, ...] = (SERVICE_SET_SAFETY_BUFFER, SERVICE_RESET_TOPP_3)
+
+# Effektvakt settes bare opp gjennom config entries, ingen YAML. Uten denne
+# sier hassfest fra om at en integrasjon med async_setup maa ha et skjema.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -31,6 +42,45 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     """
     await async_register_frontend(hass)
     return True
+
+
+def _loaded_coordinators(hass: HomeAssistant) -> list[EffektvaktCoordinator]:
+    """Alle coordinators som er lastet akkurat naa, paa tvers av entries."""
+    coordinators = []
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        coordinator = getattr(entry, "runtime_data", None)
+        if coordinator is not None:
+            coordinators.append(coordinator)
+    return coordinators
+
+
+def _async_register_services(hass: HomeAssistant) -> None:
+    """Registrer tjenestene en gang, ikke en gang per entry.
+
+    Tjenestene er domenetjenester uten maal, saa to oppsett ville ellers
+    registrert hver sin handler og latt det siste overstyre det foerste. De
+    virker derfor paa alle lastede entries.
+    """
+
+    async def _set_safety_buffer(call: ServiceCall) -> None:
+        kw = float(call.data["kw"])
+        for coordinator in _loaded_coordinators(hass):
+            coordinator.safety_buffer_kw = kw
+            await coordinator.async_request_refresh()
+
+    async def _reset_topp_3(_call: ServiceCall) -> None:
+        for coordinator in _loaded_coordinators(hass):
+            coordinator._daily_max_kw = {}
+            await coordinator.async_request_refresh()
+
+    hass.services.async_register(DOMAIN, SERVICE_SET_SAFETY_BUFFER, _set_safety_buffer)
+    hass.services.async_register(DOMAIN, SERVICE_RESET_TOPP_3, _reset_topp_3)
+
+
+def _async_unregister_services(hass: HomeAssistant) -> None:
+    """Fjern tjenestene naar siste entry er lastet ut."""
+    for service in SERVICES:
+        hass.services.async_remove(DOMAIN, service)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -46,7 +96,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
 
-    async def _watchdog_check(_now) -> None:
+    async def _watchdog_check(_now: datetime) -> None:
         if is_coordinator_stale(
             last_successful_update=coordinator._last_successful_update,
             now=dt_util_now(),
@@ -60,17 +110,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    async def _set_safety_buffer(call) -> None:
-        kw = float(call.data["kw"])
-        coordinator.safety_buffer_kw = kw
-        await coordinator.async_request_refresh()
-
-    async def _reset_topp_3(call) -> None:
-        coordinator._daily_max_kw = {}
-        await coordinator.async_request_refresh()
-
-    hass.services.async_register(DOMAIN, "set_safety_buffer", _set_safety_buffer)
-    hass.services.async_register(DOMAIN, "reset_topp_3", _reset_topp_3)
+    if not hass.services.has_service(DOMAIN, SERVICE_SET_SAFETY_BUFFER):
+        _async_register_services(hass)
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
@@ -83,8 +124,19 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Avregistrer platforms."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Avregistrer platforms, og tjenestene naar dette var siste entry."""
+    unload_ok: bool = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
+
+    # Ryddes her fordi _loaded_coordinators teller paa runtime_data: uten
+    # dette ville entryen vi nettopp lastet ut fortsatt telle som lastet, og
+    # tjenestene ville aldri blitt fjernet.
+    entry.runtime_data = None
+    if not _loaded_coordinators(hass):
+        _async_unregister_services(hass)
+
+    return True
 
 
 async def async_remove_entry(hass: HomeAssistant, _entry: ConfigEntry) -> None:
