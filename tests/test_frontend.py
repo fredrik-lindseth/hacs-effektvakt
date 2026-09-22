@@ -119,8 +119,19 @@ class SprengtRessurser(FakeRessurser):
 
 
 def med_lovelace(hass: MagicMock, ressurser: object) -> MagicMock:
-    """Heng en ressurssamling paa hass.data slik Lovelace gjoer."""
+    """Heng en ressurssamling paa hass.data slik nyere Lovelace gjoer."""
     hass.data["lovelace"] = MagicMock(resources=ressurser)
+    return hass
+
+
+def med_lovelace_dict(hass: MagicMock, ressurser: object) -> MagicMock:
+    """Samme, men slik HA 2025.1 gjoer det: en vanlig dict, ikke LovelaceData.
+
+    Minimumsversjonen hacs.json lover legger dataene som en dict paa
+    hass.data["lovelace"]. Leses de bare som attributt, finner vi aldri
+    registeret der.
+    """
+    hass.data["lovelace"] = {"resources": ressurser}
     return hass
 
 
@@ -309,6 +320,23 @@ async def test_reload_og_omstart_gir_bare_en_oppforing():
 
 
 @pytest.mark.asyncio
+async def test_registeret_finnes_ogsaa_naar_lovelace_er_en_dict():
+    """HA 2025.1 legger Lovelace-dataene som dict, ikke som LovelaceData.
+
+    Fant vi ikke registeret der, falt integrasjonen alltid tilbake paa
+    add_extra_js_url paa versjonen hacs.json lover brukerne, og det er
+    nettopp veien som ga «Konfigurasjonsfeil» ved kald lasting.
+    """
+    ressurser = FakeRessurser(HACS_RESSURSER)
+    hass = med_lovelace_dict(make_hass(), ressurser)
+
+    ha_frontend = await kjor_setup(hass)
+
+    assert ressurser.opprettet == [{"res_type": "module", "url": KORT_URL}]
+    ha_frontend.add_extra_js_url.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_yaml_modus_faller_tilbake_paa_js_url():
     """YAML-registeret er skrivebeskyttet, og da er reserveveien det vi har."""
     hass = med_lovelace(make_hass(), YamlRessurser())
@@ -346,6 +374,22 @@ async def test_async_remove_entry_beholder_oppforingen_naar_flere_oppsett_staar_
     await async_remove_entry(hass, make_entry(entry_id="borte"))
 
     assert KORT_URL in ressurser.urler()
+
+
+@pytest.mark.asyncio
+async def test_async_remove_entry_rydder_selv_om_entryen_enda_staar_i_registeret():
+    """HA 2025.1 kaller kroken foer entryen slettes fra config_entries.
+
+    Telles entryen som fjernes med, ser det ut som om det staar et oppsett
+    igjen, og ressursoppfoeringen blir liggende for alltid.
+    """
+    ressurser = FakeRessurser([*HACS_RESSURSER, {"id": "e", "url": KORT_URL, "type": "module"}])
+    entry = make_entry()
+    hass = med_lovelace(make_hass(entries=[entry]), ressurser)
+
+    await async_remove_entry(hass, entry)
+
+    assert ressurser.urler() == [r["url"] for r in HACS_RESSURSER]
 
 
 @pytest.mark.asyncio

@@ -86,9 +86,18 @@ def _lovelace_ressurser(hass: HomeAssistant) -> Any | None:
     None betyr enten at Lovelace ikke er lastet, eller at ressursene kommer fra
     ``configuration.yaml``. YAML-samlingen er skrivebeskyttet og har ingen
     ``async_create_item``, saa den kjenner vi igjen paa nettopp det.
+
+    Begge lagringsformene maa leses. HA 2025.1, minimumet ``hacs.json`` lover,
+    legger Lovelace-dataene som en vanlig dict paa ``hass.data["lovelace"]``;
+    nyere versjoner legger dataklassen ``LovelaceData`` der. Leses bare
+    attributtet, gir dict-en None, og da konkluderer vi feilaktig med
+    YAML-modus og faller tilbake paa ``add_extra_js_url``.
     """
     lovelace = hass.data.get(LOVELACE_DATA_KEY)
-    ressurser = getattr(lovelace, "resources", None)
+    if isinstance(lovelace, dict):
+        ressurser = lovelace.get("resources")
+    else:
+        ressurser = getattr(lovelace, "resources", None)
     if ressurser is None or not hasattr(ressurser, "async_create_item"):
         return None
     return ressurser

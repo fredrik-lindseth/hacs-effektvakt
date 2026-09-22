@@ -10,7 +10,7 @@ en flyt kan vaere aldri saa riktig og likevel lage en entry som ikke gaar opp.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import voluptuous as vol
@@ -33,18 +33,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-# EffektvaktOptionsFlow.__init__ setter self.config_entry. HA gjorde den om
-# til en property uten setter, saa fra og med 2025.12 kaster konstruktoeren og
-# Configure-dialogen aapner ikke i det hele tatt. Foert som
-# hacs-effektvakt-2xg8f1u. Markoeren er strict, saa testene blir roede med en
-# gang feilen rettes og markoeren ikke er tatt bort.
-OPTIONSFLOW_KASTER = config_entries.OptionsFlow.config_entry.fset is None
-paa_ny_optionsflow = pytest.mark.xfail(
-    OPTIONSFLOW_KASTER,
-    strict=True,
-    reason="EffektvaktOptionsFlow setter config_entry, som ikke lenger har setter (hacs-effektvakt-2xg8f1u)",
-)
-
 
 async def _start_flyt(hass: HomeAssistant, dso: str = "bkk") -> dict:
     """Foerste steg: velg nettselskap, faa sensorskjemaet."""
@@ -55,6 +43,24 @@ async def _start_flyt(hass: HomeAssistant, dso: str = "bkk") -> dict:
     resultat = await hass.config_entries.flow.async_configure(resultat["flow_id"], {CONF_DSO: dso})
     assert resultat["step_id"] == "sensors"
     return resultat
+
+
+def _svaret_dialogen_viser(skjema: vol.Schema) -> dict[str, Any]:
+    """Det Home Assistant sender tilbake naar brukeren bare trykker lagre.
+
+    Frontenden fyller hvert felt med ``default``, eller med ``suggested_value``
+    der det ikke finnes noen default, og sender verdiene tilbake som de staar.
+    """
+    svar: dict[str, Any] = {}
+    for marker in skjema.schema:
+        default = getattr(marker, "default", None)
+        if callable(default):
+            svar[str(marker.schema)] = default()
+            continue
+        foreslaatt = (marker.description or {}).get("suggested_value")
+        if foreslaatt is not None:
+            svar[str(marker.schema)] = foreslaatt
+    return svar
 
 
 async def test_hele_flyten_gir_en_entry_home_assistant_kan_laste(hass: HomeAssistant, maalere: None) -> None:
@@ -205,7 +211,6 @@ async def test_ugyldige_egendefinerte_trinn_blir_staaende_i_skjemaet(hass: HomeA
     assert resultat["errors"] == {CONF_KAPASITETSTRINN_CUSTOM: "kapasitetstrinn_invalid"}
 
 
-@paa_ny_optionsflow
 async def test_innstillingene_lagres_og_laster_oppsettet_paa_nytt(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
@@ -230,7 +235,6 @@ async def test_innstillingene_lagres_og_laster_oppsettet_paa_nytt(
     assert oppsett.runtime_data.safety_buffer_kw == 2.0
 
 
-@paa_ny_optionsflow
 async def test_innstillingsskjemaet_avviser_en_margin_utenfor_skalaen(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
@@ -250,7 +254,52 @@ async def test_innstillingsskjemaet_avviser_en_margin_utenfor_skalaen(
         )
 
 
-@paa_ny_optionsflow
+async def test_gammel_lagret_strategi_holder_skjemaet_gyldig(hass: HomeAssistant, maalere: None) -> None:
+    """Coordinatoren oversetter «vvb_billader», og dialogen maa gjoere det samme.
+
+    Sto den gamle verdien som default i dropdownen, avviste Home Assistant
+    sitt eget skjema i det brukeren trykket lagre.
+    """
+    entry = lag_entry(kutt_strategi="vvb_billader")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    resultat = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert resultat["data_schema"]({})["kutt_strategi"] == "vvb_pluss_ekstra"
+
+
+async def test_en_tur_innom_configure_uten_endringer_lar_alt_staa(hass: HomeAssistant, maalere: None) -> None:
+    """Dialogen aapnes, svares paa med det den viser, og lagres.
+
+    ``tests/`` proever den samme runden mot skjemafunksjonene. Her gaar den
+    gjennom flytmotoren, saa selectorenes egen validering av defaultene er med:
+    en default utenfor sitt eget valg ville felt nettopp her.
+    """
+    entry = lag_entry(
+        safety_buffer_kw=2.5,
+        min_risiko_for_kutt="over_terskel",
+        risiko_holdetid_minutter=12,
+        kutt_strategi="vvb_pluss_ekstra",
+        vvb_power_sensor="sensor.vvb_effekt",
+        ekstra_power_sensors=["sensor.billader", "sensor.varmekabler"],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    foer = dict(entry.data)
+
+    resultat = await hass.config_entries.options.async_init(entry.entry_id)
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], _svaret_dialogen_viser(resultat["data_schema"])
+    )
+    await hass.async_block_till_done()
+
+    assert resultat["type"] is FlowResultType.CREATE_ENTRY
+    assert dict(entry.data) == foer
+
+
 async def test_gammelt_lagret_risikonivaa_holder_skjemaet_gyldig(hass: HomeAssistant, maalere: None) -> None:
     """De gamle verdiene ligger i folks config entries og maa ikke velte dialogen.
 

@@ -31,6 +31,7 @@ from .const import (
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
     LEGACY_RISIKO_MAPPING,
+    LEGACY_STRATEGI_MAPPING,
     PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS,
     PEAK_SENSOR_NAME_PATTERNS,
     RISIKO_GOD_MARGIN,
@@ -78,6 +79,20 @@ def _lagret_risiko(verdi: str | None) -> str:
     if verdi is None:
         return DEFAULT_MIN_RISIKO_FOR_KUTT
     return LEGACY_RISIKO_MAPPING.get(verdi, verdi)
+
+
+def _lagret_strategi(verdi: str | None) -> str:
+    """Strategien fra config entryen, oversatt fra de gamle navnene.
+
+    Samme grunn som `_lagret_risiko`: defaulten i dropdownen maa vaere et av
+    valgene, ellers avviser Home Assistant sitt eget skjema naar brukeren
+    trykker lagre. Coordinatoren oversetter alt gjennom
+    LEGACY_STRATEGI_MAPPING, saa uten dette var dialogen det eneste stedet
+    «vvb_billader» fortsatt var ugyldig.
+    """
+    if verdi is None:
+        return DEFAULT_KUTT_STRATEGI
+    return LEGACY_STRATEGI_MAPPING.get(verdi, verdi)
 
 
 def _dso_options() -> list[selector.SelectOptionDict]:
@@ -152,7 +167,7 @@ def innstillinger_skjema(data: Mapping[str, Any]) -> vol.Schema:
             ),
             vol.Required(
                 CONF_KUTT_STRATEGI,
-                default=data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI),
+                default=_lagret_strategi(data.get(CONF_KUTT_STRATEGI)),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[selector.SelectOptionDict(value=s, label=s) for s in STRATEGI_OPTIONS],
@@ -329,12 +344,18 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> EffektvaktOptionsFlow:
-        return EffektvaktOptionsFlow(config_entry)
+        """Flyten bak Configure. Entryen sendes inn av HA, men skal ikke lagres.
+
+        `OptionsFlow.config_entry` er en property uten setter fra HA 2025.12,
+        og flytmotoren setter `handler` til entry_id-en rett etter at flyten er
+        laget. Tar vi imot entryen her og setter den selv, kaster konstruktoeren
+        og Configure-dialogen aapner ikke i det hele tatt.
+        """
+        return EffektvaktOptionsFlow()
 
 
 class EffektvaktOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    """Configure-dialogen. `self.config_entry` kommer fra HA, se over."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:

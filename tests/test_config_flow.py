@@ -146,6 +146,16 @@ def test_configure_oversetter_gammelt_risikonivaa():
     assert svar[CONF_MIN_RISIKO_FOR_KUTT] == RISIKO_LIKE_UNDER
 
 
+def test_configure_oversetter_gammel_strategi():
+    """Coordinatoren oversetter «vvb_billader», og dialogen maa gjoere det samme.
+
+    Sto den gamle verdien som default i dropdownen, avviste Home Assistant
+    sitt eget skjema i det brukeren trykket lagre.
+    """
+    svar = _svar_uten_endringer(innstillinger_skjema({CONF_KUTT_STRATEGI: "vvb_billader"}))
+    assert svar[CONF_KUTT_STRATEGI] == "vvb_pluss_ekstra"
+
+
 def test_bekreftelsesboksen_vises_foerst_etter_advarselen():
     uten = sensor_skjema({}, vis_bekreftelse=False)
     med = sensor_skjema({}, vis_bekreftelse=True)

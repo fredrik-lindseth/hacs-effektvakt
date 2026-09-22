@@ -16,8 +16,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pytest
-from homeassistant.components import frontend, lovelace
+from homeassistant.components import frontend
 from homeassistant.setup import async_setup_component
 
 from custom_components.effektvakt.const import (
@@ -41,23 +40,6 @@ MANIFEST = Path(__file__).resolve().parents[1] / "custom_components/effektvakt/m
 
 def _manifestversjon() -> str:
     return str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
-
-
-# Lovelace la dataene sine som en vanlig dict paa hass.data fram til
-# LovelaceData-dataklassen kom. frontend.py leser dem med
-# ``getattr(lovelace, "resources", None)``, som gir None paa en dict, saa paa
-# HA 2025.1 finner den aldri registeret og faller tilbake paa
-# add_extra_js_url. Det er den samme reserveveien som ga «Konfigurasjonsfeil»
-# ved kald lasting, og den er altsaa eneste vei paa versjonen hacs.json lover.
-# Foert som hacs-effektvakt-5rxigep. Testene under er markert xfail(strict) paa
-# den versjonen, saa de blir roede den dagen frontend.py rettes og markoeren
-# ikke er fjernet.
-LOVELACE_DATA_ER_DICT = not hasattr(lovelace, "LovelaceData")
-paa_gammel_lovelace = pytest.mark.xfail(
-    LOVELACE_DATA_ER_DICT,
-    strict=True,
-    reason="frontend.py finner ikke ressursregisteret naar hass.data['lovelace'] er en dict (hacs-effektvakt-5rxigep)",
-)
 
 
 def _ressurssamling(hass: HomeAssistant):
@@ -104,7 +86,6 @@ async def test_statisk_servering_staar_allerede_foer_foerste_oppsett(hass: HomeA
     assert (await klient.get(KORT_URL)).status == 200
 
 
-@paa_gammel_lovelace
 async def test_kortet_er_meldt_inn_som_lovelace_ressurs_med_cache_buster(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
@@ -119,7 +100,6 @@ async def test_kortet_er_meldt_inn_som_lovelace_ressurs_med_cache_buster(
     assert vaare[0]["type"] == "module"
 
 
-@paa_gammel_lovelace
 async def test_ressursregisteret_er_veien_inn_og_ikke_add_extra_js_url(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
@@ -133,7 +113,6 @@ async def test_ressursregisteret_er_veien_inn_og_ikke_add_extra_js_url(
     assert not [u for u in _ekstra_modul_urler(hass) if u.startswith(FRONTEND_URL_BASE)]
 
 
-@paa_gammel_lovelace
 async def test_reload_gir_ikke_en_ny_ressursoppforing(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
     """Registeret deles med HACS og brukeren, saa vi skal ikke gro i det."""
     await hass.config_entries.async_reload(oppsett.entry_id)
@@ -142,7 +121,6 @@ async def test_reload_gir_ikke_en_ny_ressursoppforing(hass: HomeAssistant, oppse
     assert len(_ressurser(hass)) == 1
 
 
-@paa_gammel_lovelace
 async def test_oppforingen_ryddes_naar_siste_oppsett_fjernes(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
     """``async_remove_entry`` tar kortet ut igjen ved avinstallasjon."""
     assert _ressurser(hass)
@@ -153,7 +131,6 @@ async def test_oppforingen_ryddes_naar_siste_oppsett_fjernes(hass: HomeAssistant
     assert _ressurser(hass) == []
 
 
-@paa_gammel_lovelace
 async def test_oppforingen_blir_staaende_saa_lenge_ett_oppsett_er_igjen(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:

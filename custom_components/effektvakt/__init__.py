@@ -206,13 +206,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_remove_entry(hass: HomeAssistant, _entry: ConfigEntry) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Ta kortet ut av Lovelace-ressursene naar siste oppsett er fjernet.
 
     Ressursregisteret er brukerens eget og deles med HACS, saa det vi la inn
     der skal ryddes ut igjen. Har brukeren flere Effektvakt-oppsett, blir
     oppfoeringen staaende til det siste er borte.
+
+    Entryen som fjernes filtreres bort framfor aa stole paa at HA har tatt den
+    ut av registeret alt. HA 2025.1 kaller denne kroken foer entryen slettes
+    fra ``_entries``, 2026.9 etter, saa et raatt ``async_entries``-oppslag ville
+    ment at det staar et oppsett igjen paa den eldste versjonen og latt
+    oppfoeringen bli liggende for alltid.
     """
-    if hass.config_entries.async_entries(DOMAIN):
+    if [e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id != entry.entry_id]:
         return
     await async_unregister_frontend(hass)
