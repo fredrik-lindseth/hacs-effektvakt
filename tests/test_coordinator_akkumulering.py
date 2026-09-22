@@ -423,3 +423,36 @@ def test_tidsandeler_uten_varighet_gaar_til_timen_na():
         forrige_time_start=datetime(2026, 9, 22, 8, 0),
     )
     assert andeler.denne_timen == 1.0
+
+
+@pytest.mark.asyncio
+async def test_omstart_rett_foer_timeskiftet_gir_ikke_den_nye_timen_forrige_times_kwh():
+    """HA kommer opp 09:55, og 10:00:13 melder måleren hele timen 09.
+
+    Anslaget dekker bare de siste fem minuttene av timen 09, så det kan ikke
+    veies rått mot de tretten sekundene av timen 10. Da ville den nye timen fått
+    nesten en tidel av forrige times kWh i fanget. Vekten er snitteffekten vi
+    så, ganget med tiden av måler-vinduet som ligger i hver time.
+    """
+    fra = datetime(2026, 9, 22, 9, 55)
+    coord = _make_coordinator(fra)
+    stand, ny_stand = 135865.150, 135867.150
+    rapport = datetime(2026, 9, 22, 9, 0, 13)
+
+    t = fra
+    while t <= datetime(2026, 9, 22, 10, 0, 30):
+        if t >= datetime(2026, 9, 22, 10, 0, 13):
+            stand, rapport = ny_stand, datetime(2026, 9, 22, 10, 0, 13)
+        coord.hass = make_hass_with_states(
+            {
+                "sensor.power": make_state("2000", unit="W"),
+                "sensor.energy": make_state(stand, unit="kWh", last_changed=rapport),
+            }
+        )
+        with patch(NOW_PATH, return_value=t):
+            data = await coord._async_update_data()
+        t += timedelta(seconds=30)
+
+    # De to kWh-ene hører til timen 09 på 13 sekunder nær.
+    assert coord._daily_max_kw[DAGEN] == pytest.approx(2.0 * 3587 / 3600, abs=0.01)
+    assert data["actual_kwh_this_hour"] == pytest.approx(2.0 * 30 / 3600, abs=0.01)

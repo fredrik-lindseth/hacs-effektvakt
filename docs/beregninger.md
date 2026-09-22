@@ -81,8 +81,12 @@ måler er over. Den kWh-en hører til timen før. Tre ting gjør at den havner r
    bekreftet tiden forbi skiftet, er timen gjort opp og kan ikke ta imot mer.
 
 Fordelingen av en måleravlesning mellom de to timene følger anslaget, ikke tiden: måleren
-sier hvor mye som gikk med, integrasjonen sier når. Er anslaget null, altså ingen
-effekt-sensor, deles det på tid i stedet. Rekker vinduet mellom to avlesninger lenger
+sier hvor mye som gikk med, integrasjonen sier når. Vekten er ikke anslaget rått, men
+snitteffekten vi faktisk målte ganget med den tiden av måler-vinduet som ligger i timen.
+Forskjellen betyr noe når HA kom opp igjen fem minutter før timen var omme: fem minutter
+med anslag er for lite til å veies mot tretten sekunder av den neste timen, og uten
+skaleringen ville den nye timen fått en tiendedel av forrige times kWh i fanget. Er
+anslaget null, altså ingen effekt-sensor, deles det på tid i stedet. Rekker vinduet mellom to avlesninger lenger
 tilbake enn de to timene vi kan rette på, skaleres kWh-en ned til den andelen av tiden som
 faktisk lar seg plassere. Resten hører til timer som er låst, og å legge den på timen vi
 står i ville bygget en falsk topp.

@@ -638,12 +638,49 @@ def fordel_maalerdelta(
     )
 
 
+def vektet_estimat(
+    *,
+    estimat_kwh: float,
+    vindu_fra: datetime,
+    vindu_til: datetime,
+    estimat_til: datetime,
+    dekket_fra: datetime | None,
+) -> float:
+    """Hvor tungt en time veier når en måleravlesning skal fordeles.
+
+    Anslaget og måler-vinduet dekker sjelden nøyaktig den samme tiden: måleren
+    rapporterte 10:00:13, mens integrasjonen har talt fram til ticket vårt et
+    halvt minutt senere, og var HA nede i starten av timen mangler anslaget den
+    biten helt. Vekten er derfor snitteffekten vi faktisk så, ganget med den
+    tiden av vinduet som ligger i timen.
+
+    Hva som skjedde i hullet vet vi ikke, men snitteffekten er det beste vi har å
+    veie med, og totalen er det måleren som bestemmer uansett. Dette avgjør bare
+    fordelingen mellom to timer.
+    """
+    if len({t.tzinfo is None for t in (vindu_fra, vindu_til, estimat_til)}) > 1:
+        return estimat_kwh
+    vindu = (vindu_til - vindu_fra).total_seconds()
+    if vindu <= 0:
+        return 0.0
+    # Anslaget begynner der målingen begynte, ikke der vinduet begynte.
+    start = vindu_fra
+    if dekket_fra is not None and (dekket_fra.tzinfo is None) == (vindu_fra.tzinfo is None):
+        start = max(vindu_fra, dekket_fra)
+    spenn = (estimat_til - start).total_seconds()
+    if spenn <= 0:
+        return estimat_kwh
+    return estimat_kwh * vindu / spenn
+
+
 @dataclass
 class VentendeTime:
     """En time som er låst inn, men som fortsatt kan rettes når måleren melder seg.
 
     `estimat_kwh` er den delen av `kwh` som er integrert effekt og ikke bekreftet
     av måleren. Kommer avlesningen som dekker timen, byttes nettopp den delen ut.
+    `dekket_fra` sier hvor i timen anslaget begynner å gjelde, så en time som
+    bare er delvis målt ikke veier for lett når avlesningen skal fordeles.
     `dagsmaks_foer` er dagsverdien slik den sto før timen ble lagt inn, så en
     retting nedover ikke blir stående og ligne på dagens topp.
     """
@@ -652,6 +689,7 @@ class VentendeTime:
     kwh: float
     estimat_kwh: float
     dagsmaks_foer: float
+    dekket_fra: datetime | None = None
 
 
 def stored_float(rå: object, standard: float = 0.0) -> float:
@@ -675,6 +713,7 @@ def les_ventende_time(rå: object) -> VentendeTime | None:
         kwh=stored_float(rå.get("kwh")),
         estimat_kwh=stored_float(rå.get("estimat_kwh")),
         dagsmaks_foer=stored_float(rå.get("dagsmaks_foer")),
+        dekket_fra=parse_stored_datetime(rå.get("dekket_fra")),
     )
 
 
@@ -822,6 +861,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
                             "kwh": ventende.kwh,
                             "estimat_kwh": ventende.estimat_kwh,
                             "dagsmaks_foer": ventende.dagsmaks_foer,
+                            "dekket_fra": iso_eller_none(ventende.dekket_fra),
                         }
                     ),
                     "previous_month_top_3_snitt_kw": self._previous_month_top_3_snitt_kw,
@@ -1027,7 +1067,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             return
         maaler_ts = self._maaler_tidspunkt(now=now)
         delta = maalerdelta(energy_now=energy_now, forrige_avlesning=self._siste_maaler_kwh)
-        if delta is None or self._siste_maaler_ts is None:
+        vindu_fra = self._siste_maaler_ts
+        if delta is None or vindu_fra is None or timer_mellom(vindu_fra, now) is None:
             # Første avlesning, nullstilt eller byttet måler, eller en stand uten
             # et tidspunkt å måle den mot. Det som alt er målt denne timen
             # beholdes, og tellingen fortsetter fra den nye standen.
@@ -1043,10 +1084,16 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         ventende = self._ventende_time
         fordeling = fordel_maalerdelta(
             delta_kwh=delta,
-            estimat_forrige_time_kwh=ventende.estimat_kwh if ventende else 0.0,
-            estimat_denne_timen_kwh=self._estimert_siden_maaler_kwh,
+            estimat_forrige_time_kwh=self._vekt_forrige_time(vindu_fra=vindu_fra, vindu_til=maaler_ts),
+            estimat_denne_timen_kwh=vektet_estimat(
+                estimat_kwh=self._estimert_siden_maaler_kwh,
+                vindu_fra=max(vindu_fra, time_start),
+                vindu_til=maaler_ts,
+                estimat_til=now,
+                dekket_fra=self._dekket_fra,
+            ),
             andeler=tidsandeler(
-                fra=self._siste_maaler_ts,
+                fra=vindu_fra,
                 til=maaler_ts,
                 time_start=time_start,
                 forrige_time_start=ventende.hour_start if ventende else None,
@@ -1064,10 +1111,28 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             # gjort opp og kan ikke ta imot mer.
             self._ventende_time = None
 
-        self._utvid_dekning(fra=self._siste_maaler_ts, time_start=time_start)
+        self._utvid_dekning(fra=vindu_fra, time_start=time_start)
         self._estimert_siden_maaler_kwh = 0.0
         self._siste_maaler_kwh = energy_now
         self._siste_maaler_ts = maaler_ts
+
+    def _vekt_forrige_time(self, *, vindu_fra: datetime, vindu_til: datetime) -> float:
+        """Hvor tungt den ventende timen veier når måleravlesningen skal fordeles.
+
+        Bare den delen av vinduet som ligger inni den timen teller, og anslaget
+        skaleres opp hvis vi bare målte en del av den.
+        """
+        ventende = self._ventende_time
+        if ventende is None:
+            return 0.0
+        time_slutt = ventende.hour_start + timedelta(hours=1)
+        return vektet_estimat(
+            estimat_kwh=ventende.estimat_kwh,
+            vindu_fra=max(vindu_fra, ventende.hour_start),
+            vindu_til=min(vindu_til, time_slutt),
+            estimat_til=time_slutt,
+            dekket_fra=ventende.dekket_fra,
+        )
 
     def _maaler_tidspunkt(self, *, now: datetime) -> datetime:
         """Når måleren sist meldte en ny verdi, klemt inn i vinduet vi kan bruke.
@@ -1135,6 +1200,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
                 kwh=self._current_hour_kwh,
                 estimat_kwh=self._estimert_siden_maaler_kwh,
                 dagsmaks_foer=self._daily_max_kw.get(hour_start.date(), 0.0),
+                dekket_fra=self._dekket_fra,
             )
             self._laas_inn_time(self._ventende_time)
         self._current_hour_kwh = 0.0
