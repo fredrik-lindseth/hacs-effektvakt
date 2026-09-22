@@ -53,6 +53,7 @@ from .modell import (
     compute_elapsed_h,
     compute_kostnad,
     compute_projected_avg,
+    vurder_kuttkriterium,
 )
 from .timeregnskap import Timeregnskap
 
@@ -231,7 +232,19 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             today=now.date(),
             projected_kw=projected_avg,
         )
-        rå = classify_raw_risk(margin_kw=terskel.margin_kw, safety_buffer_kw=self.safety_buffer_kw)
+        kriterium = vurder_kuttkriterium(
+            trinn=self.kapasitetstrinn,
+            daily_max_kw=self._regnskap.daily_max_kw,
+            today=now.date(),
+            projected_kw=projected_avg,
+            actual_kwh_this_hour=self._regnskap.current_hour_kwh,
+            elapsed_h=elapsed_h,
+        )
+        rå = classify_raw_risk(
+            margin_kw=terskel.margin_kw,
+            safety_buffer_kw=self.safety_buffer_kw,
+            timen_flytter_trinnet=kriterium.oppfylt,
+        )
         apply_hysteresis(self._hysterese_state, rå_nivå=rå, now=now, holdetid=self.risiko_holdetid)
 
         new_interval = timedelta(seconds=TICK_INTERVAL_BY_RISIKO[self._hysterese_state.nivå])
@@ -271,6 +284,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "kan_legge_paa_kw": rund(terskel.kan_legge_paa_kw),
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
+            "timen_flytter_trinnet": kriterium.oppfylt,
+            "varig_projeksjon_kw": round(kriterium.varig_projeksjon_kw, 3),
+            "kortvarig_paaslag_kw": round(kriterium.kortvarig_paaslag_kw, 3),
             "last_update": now.isoformat(),
             "tilgjengelig_kutt_kw": round(tilgjengelig_kutt_kw, 3),
             "vvb_power_w": vvb_power_w,

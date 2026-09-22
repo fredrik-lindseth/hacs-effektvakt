@@ -71,7 +71,7 @@ Tallet er samtidig en nedre skranke for hva måneden kan ende på, og det er sam
 
 ## `sensor.effektvakt_risiko_niva`
 
-**Hva**: Hvor nær neste kapasitetstrinn timen ligger an til å komme, med hysterese. Grunnlaget er margin til neste trinn og konfigurert sikkerhetsbuffer.
+**Hva**: Hvor nær neste kapasitetstrinn timen ligger an til å komme, med hysterese. Grunnlaget er margin til neste trinn, konfigurert sikkerhetsbuffer og om timen faktisk flytter trinnet.
 
 **Enhet**: enum
 
@@ -83,6 +83,10 @@ Tallet er samtidig en nedre skranke for hva måneden kan ende på, og det er sam
 | `naermer_seg_terskel` | Nærmer seg terskelen  | Sikkerhetsbuffer < margin <= 2 × sikkerhetsbuffer |
 | `like_under_terskel`  | Like under terskelen  | 0 < margin <= sikkerhetsbuffer                    |
 | `over_terskel`        | Over terskelen        | Margin <= 0 (terskelen er overskredet)            |
+
+De to øverste nivåene krever i tillegg at timen faktisk koster penger. Koster den ingenting, står sensoren på `naermer_seg_terskel` selv om projeksjonen ligger over taket. Det er med vilje: projeksjonen tidlig i timen er nesten bare øyeblikkseffekten, og en vannkoker skal ikke slå av berederen på en time som ender langt under. Se [kuttkriteriet i beregninger.md](beregninger.md#kuttkriteriet-flytter-denne-timen-trinnet) for utledningen og for hva ventingen koster.
+
+Følgen er at `like_under_terskel` bare opptrer på vei ned: hysteresen går innom den når risikoen faller fra `over_terskel`. Den kan ikke lenger oppstå direkte av margin og buffer.
 
 Tilstanden er verdien i venstre kolonne. Det er den automasjoner, maler og `dcat`-vennlige logger sammenligner mot. Teksten i midten er oversettelsen HA viser, på norsk og engelsk.
 
@@ -207,6 +211,8 @@ kapasitetstrinn:
 ## `binary_sensor.effektvakt_kutt_ned_anbefalt`
 
 **Hva**: `on` når hysteresefull risiko er lik eller høyere enn konfigurert `min_risiko_for_kutt` (standard `like_under_terskel`).
+
+Siden de to øverste risikonivåene krever at timen faktisk koster penger, gjør den også det. Setter du `min_risiko_for_kutt` til `naermer_seg_terskel`, slår sensoren på også for timer som er gratis; det er den aggressive innstillingen, og den er ment slik.
 
 **Verdier**: `on` (vises som «Kutt anbefalt»), `off` («Ingen handling»), `unknown` (coordinator stale)
 

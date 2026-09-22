@@ -77,6 +77,21 @@ DEFAULT_SAFETY_BUFFER_KW: Final[float] = 1.0
 DEFAULT_MIN_RISIKO_FOR_KUTT: Final[str] = RISIKO_LIKE_UNDER
 DEFAULT_RISIKO_HOLDETID_MINUTTER: Final[int] = 5
 
+# Hvor stor en kortvarig last kan være før projeksjonen skal tas på ordet.
+#
+# Projeksjonen ganger den øyeblikkelige effekten med resten av timen, så en
+# vannkoker som slås på ved minutt to løfter den med nesten hele sine 2 kW selv
+# om den er ferdig etter fire minutter. `kortvarig_paaslag_kw` i modell.py
+# trekker derfor fra så mye som en last på denne størrelsen ville ha lagt på,
+# og fradraget krymper mot null utover i timen i takt med at projeksjonen blir
+# målt faktum framfor framskrivning.
+#
+# Tallet er samtidig en nedre grense for hvor mye kuttbar last som må til for
+# at varselet skal komme tidsnok: et kutt som er minst så stort rekker alltid å
+# hente inn en overskridelse før timen er omme. Fredriks bereder er 2 kW, så
+# 1,5 kW gir margin. Utledningen står i docs/beregninger.md.
+KORTVARIG_LAST_KW: Final[float] = 1.5
+
 # Tick-intervaller per risiko-nivå (sekunder)
 TICK_INTERVAL_BY_RISIKO: Final[dict[str, int]] = {
     RISIKO_GOD_MARGIN: 60,

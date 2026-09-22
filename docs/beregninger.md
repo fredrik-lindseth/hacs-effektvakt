@@ -31,6 +31,8 @@ remaining_h    = 1.0 - 0.75 = 0.25
 projected_avg  = 2.4 + 3.2 * 0.25 = 3.2 kW
 ```
 
+Tidlig i timen er tallet nesten bare framskrivning, og en last som slås på der løfter det med nesten hele sin effekt. Projeksjonen er likevel riktig som den står, for den svarer på «hvor ender timen om det fortsetter slik». At den ikke kan tas på ordet som grunnlag for å kutte, håndteres i [kuttkriteriet](#kuttkriteriet-flytter-denne-timen-trinnet).
+
 ### `actual_kwh_this_hour`
 
 Timen bygges av to kilder som avstemmes mot hverandre, ikke av energy-sensoren alene.
@@ -270,9 +272,34 @@ Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `u
 
 ---
 
+## Kuttkriteriet: flytter denne timen trinnet?
+
+Projeksjonen ganger den øyeblikkelige effekten med resten av timen. Ved minutt to er nesten hele tallet framskrivning, og en vannkoker på 2 kW oppå 3,5 kW grunnlast gir projisert 5,4 kW mot et tak på 5,0. Timen ender på 3,6. Fram til september 2026 var det nok til å kutte berederen, og det er den feilen `vurder_kuttkriterium` i `modell.py` retter.
+
+Kriteriet for å kutte er kroner, ikke geometri. `kostnad_denne_timen_kr` er prisen timen er i ferd med å låse inn, altså prisen på trinnet vi ligger an til minus prisen på trinnet dagene alene gir. Er den null, koster timen ingenting uansett hvor dramatisk projeksjonen ser ut, og topp-3-regelen gjør at de fleste timer er nettopp det.
+
+Prisen regnes ikke av projeksjonen rå, men av `varig_projeksjon_kw`:
+
+```
+kortvarig_paaslag_kw = KORTVARIG_LAST_KW × (1 − elapsed_h)
+varig_projeksjon_kw  = max(actual_kwh_this_hour, projected_avg − kortvarig_paaslag_kw)
+```
+
+En last på P kW som slås på ved `e0` løfter projeksjonen med `P × (1 − e0)` og holder den der så lenge den går, mens den ekte virkningen på time-snittet bare er `P × varigheten`. Fradraget har derfor samme form: det er akkurat det en last på `KORTVARIG_LAST_KW` ville lagt på om den ble slått på nå. Ved minutt null er det 1,5 kW, ved minutt tretti 0,75, og når timen er omme er det null og projeksjonen er målt faktum. Gulvet er kilowattimene timen alt har brukt; de kan ikke kuttes bort igjen, så fradraget skal aldri ta oss under dem.
+
+### Avveiningen
+
+Ventingen koster noe. Et varsel som kommer for sent er like ubrukelig som et som kommer for tidlig, for verdien av et kutt faller med resten av timen: kutter du 2 kW ved minutt ti, forsvinner 1,67 kW av time-snittet, ved minutt femti bare 0,33.
+
+At begge sidene skalerer med `1 − elapsed_h` er det som holder avveiningen på plass. Fradraget slipper taket når overskridelsen passerer `KORTVARIG_LAST_KW × (1 − elapsed_h)`, og et kutt som står igjen på samme tidspunkt henter inn `kuttet × (1 − elapsed_h)`. **Er den kuttbare lasten minst like stor som `KORTVARIG_LAST_KW`, rekker kuttet alltid å hente inn hele overskridelsen**, uansett når i timen den dukker opp. Derfor er 1,5 kW satt under de 2 kW en varmtvannsbereder trekker.
+
+Prisen er at små overskridelser varsles sent. En vedvarende time på 6,0 kW mot et tak på 5,0 meldes rundt minutt tjue, ikke ved minutt null, og en på 5,2 kW først rundt minutt femti. Har du bare 0,3 kW kuttbar last, altså `blind`-strategien uten sensorer, kommer varselet i praksis for sent til at kuttet berger timen; men 0,3 kW hadde uansett ikke berget den. Tallet hører hjemme i `const.py` som `KORTVARIG_LAST_KW`, og skal kalibreres mot ekte drift framfor mot følelsen av at det er for tregt.
+
+---
+
 ## Risikoklassifisering
 
-`classify_raw_risk` i `modell.py` bestemmer rå risiko av margin og konfigurert `safety_buffer_kw` (standard 1,0 kW):
+`classify_raw_risk` i `modell.py` bestemmer rå risiko av margin, konfigurert `safety_buffer_kw` (standard 1,0 kW) og kuttkriteriet over:
 
 | Betingelse                      | Risiko                |
 | ------------------------------- | --------------------- |
@@ -282,6 +309,12 @@ Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `u
 | `margin <= 0`                   | `over_terskel`        |
 
 Margin = `time_tak_kw - projected_avg`, se [terskelmodellen](#terskelmodellen). Er `margin_kw` `null`, altså ukjent nettselskap eller øverste trinn, er risikoen `god_margin`: det finnes ikke noe dyrere trinn å advare mot.
+
+Kuttkriteriet er et veto over tabellen. **De to øverste nivåene er forbeholdt timer som faktisk koster penger.** Er `timen_flytter_trinnet` usann, settes nivået ned til `naermer_seg_terskel` uansett hvor høyt projeksjonen står. Vetoet ligger i klassifiseringen og ikke i binærsensoren nettopp fordi det ikke skal kunne omgås av `min_risiko_for_kutt`: det er en retting av hva projeksjonen er verdt, ikke en preferanse.
+
+Sikkerhetsbufferen er dermed ikke lenger noe som utløser kutt alene. Jobben den har igjen er forvarselet: den bestemmer hvor tidlig `naermer_seg_terskel` lyser, så et dashbord eller en varslings-blueprint kan si fra før automatikken griper inn.
+
+En følge av vetoet er at `like_under_terskel` ikke lenger kan oppstå som rå nivå. Kriteriet er oppfylt bare når den varige projeksjonen alt ligger over taket, og den er aldri høyere enn projeksjonen selv, så marginen er negativ og nivået `over_terskel`. Er kriteriet ikke oppfylt, settes nivået ned til `naermer_seg_terskel`. Verdien lever videre i sensoren, for hysteresen går innom den på vei ned fra `over_terskel`, og `min_risiko_for_kutt` kan fortsatt stå på den; forskjellen fra `over_terskel` er da at kuttet holdes ett hysteresetrinn lenger. Invarianten står som hypothesis-test i `tests/test_tidlig_i_timen.py`.
 
 ---
 

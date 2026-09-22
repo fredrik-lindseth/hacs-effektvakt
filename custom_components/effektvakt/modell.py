@@ -30,10 +30,12 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 from .const import (
+    KORTVARIG_LAST_KW,
     RISIKO_GOD_MARGIN,
     RISIKO_LIKE_UNDER,
     RISIKO_NAERMER_SEG,
     RISIKO_OVER_TERSKEL,
+    RISIKO_RANK,
 )
 
 if TYPE_CHECKING:
@@ -211,14 +213,27 @@ def beregn_terskel(
     )
 
 
-def classify_raw_risk(*, margin_kw: float | None, safety_buffer_kw: float) -> str:
-    """Klassifiser rå risiko ut fra margin og safety_buffer.
+def classify_raw_risk(
+    *,
+    margin_kw: float | None,
+    safety_buffer_kw: float,
+    timen_flytter_trinnet: bool,
+) -> str:
+    """Klassifiser rå risiko ut fra margin, safety_buffer og om timen koster noe.
 
-    Returnerer en av RISIKO_LEVELS. Tabell:
+    Returnerer en av RISIKO_LEVELS. Marginen gir posisjonen:
       god_margin:          margin > 2 x buffer
       naermer_seg_terskel: buffer < margin <= 2 x buffer
       like_under_terskel:  0 < margin <= buffer
       over_terskel:        margin <= 0
+
+    `timen_flytter_trinnet` er vetoet over den tabellen. De to øverste nivåene
+    er forbeholdt timer som faktisk koster penger, altså der
+    `vurder_kuttkriterium` finner kroner å spare. Gjør timen ikke det, settes
+    nivået ned til `naermer_seg_terskel` uansett hvor høyt projeksjonen står.
+    Uten vetoet melder en vannkoker ved minutt to kutt på en time som ender
+    langt under, fordi projeksjonen der er nesten bare den øyeblikkelige
+    effekten.
 
     Margin None betyr at det ikke finnes noe dyrere trinn å unngå. Da er det
     ingenting å advare mot, og nivået er god_margin.
@@ -226,12 +241,17 @@ def classify_raw_risk(*, margin_kw: float | None, safety_buffer_kw: float) -> st
     if margin_kw is None:
         return RISIKO_GOD_MARGIN
     if margin_kw <= 0:
-        return RISIKO_OVER_TERSKEL
-    if margin_kw <= safety_buffer_kw:
-        return RISIKO_LIKE_UNDER
-    if margin_kw <= 2 * safety_buffer_kw:
+        nivå = RISIKO_OVER_TERSKEL
+    elif margin_kw <= safety_buffer_kw:
+        nivå = RISIKO_LIKE_UNDER
+    elif margin_kw <= 2 * safety_buffer_kw:
+        nivå = RISIKO_NAERMER_SEG
+    else:
+        nivå = RISIKO_GOD_MARGIN
+
+    if not timen_flytter_trinnet and RISIKO_RANK[nivå] > RISIKO_RANK[RISIKO_NAERMER_SEG]:
         return RISIKO_NAERMER_SEG
-    return RISIKO_GOD_MARGIN
+    return nivå
 
 
 @dataclass(frozen=True)
@@ -321,4 +341,71 @@ def compute_kostnad(
         topp_3_projisert_kw=round(topp_3_projisert, 3),
         minste_mulige_topp_3_kw=round(minste_mulige, 3),
         hoyeste_trinn=er_hoyeste,
+    )
+
+
+def kortvarig_paaslag_kw(*, elapsed_h: float) -> float:
+    """Hvor mye av projeksjonen som kan være en last som ikke varer timen ut.
+
+    En last på P kW som slås på ved `e0` løfter projeksjonen med `P * (1 - e0)`
+    og holder den der så lenge den går, mens den ekte virkningen på time-snittet
+    bare er `P * varigheten`. Ved minutt to er de to nesten like store, ved
+    minutt femti er framskrivningen en sjettedel. Fradraget følger derfor samme
+    form: `KORTVARIG_LAST_KW * (1 - elapsed_h)`, altså akkurat det en last på
+    den størrelsen ville lagt på om den ble slått på nå, og null når timen er
+    omme og projeksjonen er målt faktum.
+
+    At fradraget krymper i takt med resten av timen er også det som gjør at
+    varselet kommer tidsnok: et kutt på `KORTVARIG_LAST_KW` eller mer rekker
+    alltid å hente inn overskridelsen når fradraget endelig slipper taket, for
+    begge skalerer med `1 - elapsed_h`. Avveiningen står i docs/beregninger.md.
+    """
+    return KORTVARIG_LAST_KW * max(0.0, 1.0 - elapsed_h)
+
+
+@dataclass(frozen=True)
+class Kuttkriterium:
+    """Svaret på «koster denne timen noe når vi ikke tror på en kortvarig topp».
+
+    `oppfylt` er det eneste som gater kutt. De to andre feltene er
+    mellomregningen, eksponert så et kutt kan forklares i ettertid.
+    """
+
+    oppfylt: bool
+    varig_projeksjon_kw: float
+    kortvarig_paaslag_kw: float
+
+
+def vurder_kuttkriterium(
+    *,
+    trinn: Trinn,
+    daily_max_kw: Mapping[date, float],
+    today: date,
+    projected_kw: float,
+    actual_kwh_this_hour: float,
+    elapsed_h: float,
+) -> Kuttkriterium:
+    """Flytter denne timen kapasitetstrinnet, også uten en kortvarig topp?
+
+    Kriteriet for å kutte er kroner, ikke geometri: `kostnad_denne_timen_kr` er
+    prisen timen er i ferd med å låse inn, og er den null, er timen gratis
+    uansett hvor dramatisk projeksjonen ser ut. Topp-3-regelen gjør at de fleste
+    timer er nettopp det.
+
+    Prisen regnes av `varig_projeksjon_kw`, som er projeksjonen minus
+    `kortvarig_paaslag_kw`. Gulvet er kilowattimene timen alt har brukt: de kan
+    ikke kuttes bort igjen, så fradraget skal aldri ta oss under dem.
+    """
+    paaslag = kortvarig_paaslag_kw(elapsed_h=elapsed_h)
+    varig = max(actual_kwh_this_hour, projected_kw - paaslag)
+    kostnad = compute_kostnad(
+        trinn=trinn,
+        daily_max_kw=daily_max_kw,
+        today=today,
+        projected_kw=varig,
+    )
+    return Kuttkriterium(
+        oppfylt=kostnad is not None and kostnad.kostnad_denne_timen_kr > 0,
+        varig_projeksjon_kw=varig,
+        kortvarig_paaslag_kw=paaslag,
     )
