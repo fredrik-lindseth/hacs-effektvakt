@@ -13,11 +13,18 @@ jobs:
       - name: Checkout effektvakt
         uses: actions/checkout@v6
 
-      - name: Checkout strømkalkulator for DSO-sync
+      # Commiten står i scripts/dso_kilder.json, så workflowen og generatoren
+      # ikke kan peke på hver sin versjon av tariffene.
+      - name: Finn pinnet fri-nettleie-commit
+        id: frinett
+        run: echo "commit=$(jq -r '._meta.commit' scripts/dso_kilder.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout fri-nettleie
         uses: actions/checkout@v6
         with:
-          repository: fredrik-lindseth/Stromkalkulator
-          path: _stromkalkulator
+          repository: kraftsystemet/fri-nettleie
+          ref: ${{ steps.frinett.outputs.commit }}
+          path: _fri-nettleie
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -33,10 +40,15 @@ jobs:
       - name: Type check (mypy, warnings only)
         run: mypy custom_components/effektvakt/ --ignore-missing-imports || true
 
-      - name: Verify DSO sync
-        env:
-          STROMKALKULATOR_ROOT: ${{ github.workspace }}/_stromkalkulator
-        run: python scripts/sync_dso_from_stromkalkulator.py --check
+      - name: Verify DSO-tabell mot fri-nettleie
+        run: python scripts/generer_dso_fra_fri_nettleie.py --check --kilde _fri-nettleie
+
+      # Fixturene lå som symlink ut av repoet til september 2026, og da skippet
+      # replay-testene seg selv i CI. Feller vi her, ser vi det med en gang.
+      - name: Replay-fixturer finnes
+        run: |
+          n=$(ls tests/fixtures/bkk_*_hourly.json 2>/dev/null | wc -l)
+          [ "$n" -ge 9 ] || { echo "Fant bare $n replay-fixturer"; exit 1; }
 
       - name: Tests with coverage
         run: |

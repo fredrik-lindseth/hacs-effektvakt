@@ -1,0 +1,437 @@
+{
+  "_meta": {
+    "kilde": "https://github.com/kraftsystemet/fri-nettleie",
+    "lisens": "CC-BY-4.0",
+    "commit": "da8a6886137bbf7fd4925cfd4458a3f04302f615",
+    "hentet": "2026-09-22",
+    "tariff_dato": "2026-09-22"
+  },
+  "nettselskap": {
+    "area_nett_omrade1": {
+      "navn": "Area Nett Område 1 (Nordkapp, Måsøy)",
+      "prisomrade": "NO4",
+      "slug": "area-nettinord",
+      "mva": 0.0
+    },
+    "area_nett_omrade2": {
+      "navn": "Area Nett Område 2 (Karasjok, Porsanger)",
+      "prisomrade": "NO4",
+      "slug": "area-luostejok",
+      "mva": 0.0
+    },
+    "area_nett_omrade3": {
+      "navn": "Area Nett Område 3 (Gamvik, Lebesby)",
+      "prisomrade": "NO4",
+      "slug": "area-lega",
+      "mva": 0.0
+    },
+    "arva": {
+      "navn": "Arva",
+      "prisomrade": "NO4",
+      "slug": "arva",
+      "mva": 0.0
+    },
+    "asker_nett": {
+      "navn": "Asker Nett",
+      "prisomrade": "NO1",
+      "slug": "asker",
+      "mva": 0.25
+    },
+    "barents_nett": {
+      "navn": "Barents Nett",
+      "prisomrade": "NO4",
+      "slug": "barentsnett",
+      "mva": 0.0
+    },
+    "bindal_kraftnett": {
+      "navn": "Bindal Kraftnett",
+      "prisomrade": "NO3",
+      "slug": "bindalkraftlag",
+      "mva": 0.0
+    },
+    "bkk": {
+      "navn": "BKK",
+      "prisomrade": "NO5",
+      "slug": "bkk",
+      "mva": 0.25
+    },
+    "bomlo_kraftnett": {
+      "navn": "Bømlo Kraftnett",
+      "prisomrade": "NO5",
+      "slug": "bomlokraftnett",
+      "mva": 0.25
+    },
+    "breheim_nett": {
+      "navn": "Breheim Nett",
+      "prisomrade": "NO5",
+      "slug": "breheim",
+      "mva": 0.25
+    },
+    "de_nett": {
+      "navn": "De Nett",
+      "prisomrade": "NO2",
+      "slug": "denett",
+      "mva": 0.25
+    },
+    "elinett": {
+      "navn": "Elinett",
+      "prisomrade": "NO3",
+      "slug": "elinett",
+      "mva": 0.25
+    },
+    "elmea": {
+      "navn": "Elmea",
+      "prisomrade": "NO4",
+      "slug": "elmea",
+      "mva": 0.0
+    },
+    "elvenett": {
+      "navn": "Elvenett",
+      "prisomrade": "NO1",
+      "slug": "elvenett",
+      "mva": 0.25
+    },
+    "elvia": {
+      "navn": "Elvia",
+      "prisomrade": "NO1",
+      "slug": "elvia",
+      "mva": 0.25
+    },
+    "enida": {
+      "navn": "Enida",
+      "prisomrade": "NO2",
+      "slug": "enida",
+      "mva": 0.25
+    },
+    "etna_nett": {
+      "navn": "Etna Nett",
+      "prisomrade": "NO1",
+      "slug": "etna",
+      "mva": 0.25
+    },
+    "everket": {
+      "navn": "Everket",
+      "prisomrade": "NO1",
+      "slug": "everket",
+      "mva": 0.25
+    },
+    "fagne": {
+      "navn": "Fagne",
+      "prisomrade": "NO2",
+      "slug": "fagne",
+      "mva": 0.25
+    },
+    "foie": {
+      "navn": "Føie",
+      "prisomrade": "NO1",
+      "slug": "foie",
+      "mva": 0.25
+    },
+    "fore": {
+      "navn": "Føre",
+      "prisomrade": "NO2",
+      "slug": "foere",
+      "mva": 0.25
+    },
+    "glitre": {
+      "navn": "Glitre Nett",
+      "prisomrade": "NO1",
+      "slug": "glitre",
+      "mva": 0.25
+    },
+    "griug": {
+      "navn": "Griug",
+      "prisomrade": "NO1",
+      "slug": "griug",
+      "mva": 0.25
+    },
+    "haringnett": {
+      "navn": "Haringnett",
+      "prisomrade": "NO5",
+      "slug": "haringnett",
+      "mva": 0.25
+    },
+    "havnett": {
+      "navn": "Havnett",
+      "prisomrade": "NO5",
+      "slug": "havnett",
+      "mva": 0.25
+    },
+    "holand_setskog": {
+      "navn": "Høland og Setskog Elverk",
+      "prisomrade": "NO1",
+      "slug": "holandogsetskogelverk",
+      "mva": 0.25
+    },
+    "indre_hordaland": {
+      "navn": "Indre Hordaland Kraftnett",
+      "prisomrade": "NO5",
+      "slug": "indrehordalandkraftnett",
+      "mva": 0.25
+    },
+    "jaren_everk": {
+      "navn": "Jæren Everk",
+      "prisomrade": "NO2",
+      "slug": "jaereneverk",
+      "mva": 0.25
+    },
+    "ke_nett": {
+      "navn": "KE Nett",
+      "prisomrade": "NO2",
+      "slug": "kenett",
+      "mva": 0.25
+    },
+    "klive": {
+      "navn": "Klive",
+      "prisomrade": "NO3",
+      "slug": "klive",
+      "mva": 0.25
+    },
+    "kystnett": {
+      "navn": "Kystnett",
+      "prisomrade": "NO4",
+      "slug": "kystnett",
+      "mva": 0.0
+    },
+    "lede": {
+      "navn": "Lede",
+      "prisomrade": "NO2",
+      "slug": "lede",
+      "mva": 0.25
+    },
+    "linea": {
+      "navn": "Linea",
+      "prisomrade": "NO4",
+      "slug": "linea",
+      "mva": 0.0
+    },
+    "linja": {
+      "navn": "Linja",
+      "prisomrade": "NO5",
+      "slug": "linja",
+      "mva": 0.25
+    },
+    "lnett": {
+      "navn": "Lnett",
+      "prisomrade": "NO2",
+      "slug": "lnett",
+      "mva": 0.25
+    },
+    "lucerna": {
+      "navn": "Lucerna",
+      "prisomrade": "NO4",
+      "slug": "lucerna",
+      "mva": 0.0
+    },
+    "lysna": {
+      "navn": "Lysna",
+      "prisomrade": "NO5",
+      "slug": "lysna",
+      "mva": 0.25
+    },
+    "mellom": {
+      "navn": "Mellom",
+      "prisomrade": "NO3",
+      "slug": "mellom",
+      "mva": 0.25
+    },
+    "meloy_energi": {
+      "navn": "Meløy Energi",
+      "prisomrade": "NO4",
+      "slug": "meloy",
+      "mva": 0.0
+    },
+    "midtnett": {
+      "navn": "Midtnett",
+      "prisomrade": "NO1",
+      "slug": "midtnett",
+      "mva": 0.25
+    },
+    "modalen_kraftlag": {
+      "navn": "Modalen Kraftlag",
+      "prisomrade": "NO5",
+      "slug": "mostraum",
+      "mva": 0.25
+    },
+    "nettselskapet": {
+      "navn": "Nettselskapet",
+      "prisomrade": "NO3",
+      "slug": "nettselskapet",
+      "mva": 0.25
+    },
+    "noranett": {
+      "navn": "Noranett",
+      "prisomrade": "NO4",
+      "slug": "noranett",
+      "mva": 0.0
+    },
+    "noranett_andoy": {
+      "navn": "Noranett Andøy",
+      "prisomrade": "NO4",
+      "slug": "noranett-andoy",
+      "mva": 0.0
+    },
+    "noranett_hadsel": {
+      "navn": "Noranett Hadsel",
+      "prisomrade": "NO4",
+      "slug": "noranett-hadsel",
+      "mva": 0.0
+    },
+    "nordvest_nett": {
+      "navn": "Nordvest Nett",
+      "prisomrade": "NO3",
+      "slug": "nordvest",
+      "mva": 0.25
+    },
+    "norefjell_nett": {
+      "navn": "Norefjell Nett",
+      "prisomrade": "NO1",
+      "slug": "norefjell",
+      "mva": 0.25
+    },
+    "norgesnett": {
+      "navn": "Norgesnett (Glitre Nett)",
+      "prisomrade": "NO1",
+      "slug": "norgesnett",
+      "mva": 0.25
+    },
+    "r_nett": {
+      "navn": "R-Nett",
+      "prisomrade": "NO1",
+      "slug": "rnett",
+      "mva": 0.25
+    },
+    "rakkestad_energi": {
+      "navn": "Rakkestad Energi",
+      "prisomrade": "NO1",
+      "slug": "elvia",
+      "mva": 0.25
+    },
+    "rk_nett": {
+      "navn": "RK Nett",
+      "prisomrade": "NO2",
+      "slug": "rknett",
+      "mva": 0.25
+    },
+    "romsdalsnett": {
+      "navn": "Romsdalsnett",
+      "prisomrade": "NO3",
+      "slug": "romsdalsnett",
+      "mva": 0.25
+    },
+    "s_nett": {
+      "navn": "S-Nett",
+      "prisomrade": "NO3",
+      "slug": "snett",
+      "mva": 0.25
+    },
+    "sor_aurdal_energi": {
+      "navn": "Sør Aurdal Energi",
+      "prisomrade": "NO1",
+      "slug": "soraurdalenergi",
+      "mva": 0.25
+    },
+    "stannum": {
+      "navn": "Stannum",
+      "prisomrade": "NO2",
+      "slug": "stannum",
+      "mva": 0.25
+    },
+    "stram": {
+      "navn": "Stram",
+      "prisomrade": "NO4",
+      "slug": "stram",
+      "mva": 0.0
+    },
+    "straumen_nett": {
+      "navn": "Straumen Nett",
+      "prisomrade": "NO3",
+      "slug": "straumen",
+      "mva": 0.25
+    },
+    "straumnett": {
+      "navn": "Straumnett",
+      "prisomrade": "NO5",
+      "slug": "straumnett",
+      "mva": 0.25
+    },
+    "sygnir": {
+      "navn": "Sygnir",
+      "prisomrade": "NO5",
+      "slug": "sygnir",
+      "mva": 0.25
+    },
+    "telemark_nett": {
+      "navn": "TNett (tidligere Telemark Nett)",
+      "prisomrade": "NO2",
+      "slug": "tnett",
+      "mva": 0.25
+    },
+    "tendranett": {
+      "navn": "Tendranett",
+      "prisomrade": "NO5",
+      "slug": "tendranett",
+      "mva": 0.25
+    },
+    "tensio_tn": {
+      "navn": "Tensio TN",
+      "prisomrade": "NO3",
+      "slug": "tensio-tn",
+      "mva": 0.25
+    },
+    "tensio_ts": {
+      "navn": "Tensio TS",
+      "prisomrade": "NO3",
+      "slug": "tensio-ts",
+      "mva": 0.25
+    },
+    "tinfos": {
+      "navn": "Tinfos",
+      "prisomrade": "NO2",
+      "slug": "tinfos",
+      "mva": 0.25
+    },
+    "uvdal_kraftforsyning": {
+      "navn": "Uvdal Kraftforsyning",
+      "prisomrade": "NO1",
+      "slug": "uvdal",
+      "mva": 0.25
+    },
+    "vang_energiverk": {
+      "navn": "Vang Energiverk",
+      "prisomrade": "NO1",
+      "slug": "vang",
+      "mva": 0.25
+    },
+    "vestall": {
+      "navn": "Vestall",
+      "prisomrade": "NO4",
+      "slug": "vestall",
+      "mva": 0.0
+    },
+    "vestmar_nett": {
+      "navn": "Vestmar Nett",
+      "prisomrade": "NO2",
+      "slug": "vestmar",
+      "mva": 0.25
+    },
+    "vevig": {
+      "navn": "Vevig",
+      "prisomrade": "NO3",
+      "slug": "vevig",
+      "mva": 0.25
+    },
+    "viermie": {
+      "navn": "Viermie",
+      "prisomrade": "NO3",
+      "slug": "viermie",
+      "mva": 0.25
+    },
+    "vissi": {
+      "navn": "Vissi",
+      "prisomrade": "NO4",
+      "slug": "vissi",
+      "mva": 0.0
+    }
+  }
+}

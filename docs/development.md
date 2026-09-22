@@ -11,7 +11,7 @@ custom_components/effektvakt/
     const.py            # Konstanter og default-verdier
     coordinator.py      # Beregningslogikk, hysterese, persist
     diagnostics.py      # HA diagnostics-support
-    dso.py              # Kapasitetstrinn per DSO (auto-generert)
+    dso.py              # Kapasitetstrinn per nettselskap (generert)
     faceplate.py        # SVG-kilde for GEHA-METER-skiven (kort og trykk)
     manifest.json       # HA integration manifest
     sensor.py           # De seks sensor-entitetene
@@ -35,13 +35,14 @@ images/
     icon.svg            # Kilden til integrasjonsikonet
 
 scripts/
+    dso_kilder.json                   # Nøkkel, navn, prisområde og kilde per nettselskap
     export_faceplate.py               # Eksporter skiven til SVG for trykk og CAD
     generate_brand_images.py          # Rendre icon.svg til brand/-PNG-ene
-    sync_dso_from_stromkalkulator.py  # Sync DSO-data fra strømkalkulator
+    generer_dso_fra_fri_nettleie.py   # Skriver dso.py fra fri-nettleie-tariffene
 
 tests/
     conftest.py
-    fixtures/
+    fixtures/          # Timesforbruk for replay-testene, committet
     test_*.py
 ```
 
@@ -78,15 +79,22 @@ Hooks kjører ruff (lint + format), mypy og vulture. CI kjører de samme sjekken
 
 ## Oppdatere DSO-data
 
-DSO-data i `custom_components/effektvakt/dso.py` er auto-generert fra `hacs-strømkalkulator/custom_components/stromkalkulator/dso.py`. Kjør synk-scriptet:
+`custom_components/effektvakt/dso.py` er generert fra tariffilene i
+[kraftsystemet/fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) (CC-BY-4.0), pinnet til
+commiten som står i `scripts/dso_kilder.json`. Slik tar du inn nye satser:
 
 ```bash
-python scripts/sync_dso_from_stromkalkulator.py
+# 1. sett _meta.commit og _meta.tariff_dato i scripts/dso_kilder.json
+# 2. regenerer
+python3 scripts/generer_dso_fra_fri_nettleie.py
+# 3. les diffen, kjør testene, commit dso.py og dso_kilder.json
+python3 -m pytest tests/test_dso_data.py
 ```
 
-Scriptet forutsetter at `hacs-strømkalkulator` ligger parallelt med `hacs-effektvakt` (dvs. `../hacs-strømkalkulator`). Etter generering: kjør tester og commit `dso.py`.
-
-DSO-test i `tests/test_dso_data.py` verifiserer at alle trinn-lister er sortert, har gyldige terskel-verdier og at prisene er positive.
+Scriptet laster ned tariffene selv. Har du en utsjekk av fri-nettleie, gir `--kilde <sti>` samme
+resultat uten nett, og det er den varianten CI bruker. `--check` feller hvis `dso.py` ikke er
+nøyaktig det generatoren ville skrevet. Se [dso.md](dso.md) for formatet og for de to
+nettselskapene som ikke følger NVE-modellen.
 
 ---
 

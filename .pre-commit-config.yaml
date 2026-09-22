@@ -1,8 +1,8 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.16.8
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
         types_or: [python, pyi]
       - id: ruff-format
@@ -51,9 +51,10 @@ repos:
         always_run: true
         stages: [pre-push]
 
-      - id: sync_dso
-        name: Verify DSO sync
-        entry: python3 scripts/sync_dso_from_stromkalkulator.py --check
+      - id: dso_kilde
+        name: DSO-tabell mot fri-nettleie
+        # Henter tariffene fra nett med mindre FRI_NETTLEIE_ROOT peker på en utsjekk
+        entry: python3 scripts/generer_dso_fra_fri_nettleie.py --check
         language: system
         pass_filenames: false
-        files: ^(custom_components/effektvakt/dso\.py|scripts/sync_dso_from_stromkalkulator\.py)$
+        files: ^(custom_components/effektvakt/dso\.py|scripts/(generer_dso_fra_fri_nettleie\.py|dso_kilder\.json))$
