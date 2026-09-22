@@ -38,7 +38,7 @@ from .const import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
-    from datetime import date
+    from datetime import date, datetime
 
 # Kapasitetstrinn slik dso.py leverer dem: (øvre terskel i kW, månedspris i kr),
 # sortert stigende. Øverste trinn har float("inf") som terskel.
@@ -106,6 +106,27 @@ def dagstak(*, maal_terskel_kw: float, topp_2_andre_kw: float) -> float:
     den slår aldri til med tall modellen har regnet ut selv.
     """
     return max(0.0, min(maal_terskel_kw, 3 * maal_terskel_kw - topp_2_andre_kw))
+
+
+def compute_projected_avg(
+    *,
+    actual_kwh_this_hour: float,
+    current_kw: float,
+    elapsed_h: float,
+) -> float:
+    """Projisert time-snitt-kW.
+
+    actual_kwh_this_hour: hva som er målt så langt denne klokketimen.
+    current_kw: instant power-sensor-verdi.
+    elapsed_h: hvor langt inn i timen vi er (0.0 til 1.0).
+    """
+    remaining_h = max(0.0, 1.0 - elapsed_h)
+    return actual_kwh_this_hour + current_kw * remaining_h
+
+
+def compute_elapsed_h(now: datetime) -> float:
+    """Andel av klokketimen som er passert."""
+    return (now.minute + now.second / 60) / 60
 
 
 @dataclass(frozen=True)

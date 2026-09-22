@@ -35,12 +35,12 @@ from .const import (
     MAX_ENERGY_DELTA_KWH,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
-    RISIKO_RANK,
     STORAGE_VERSION,
     TICK_INTERVAL_BY_RISIKO,
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
+from .hysterese import HystereseState, apply_hysteresis
 from .laster import (
     ROLLE_EKSTRA,
     ROLLE_VVB,
@@ -52,7 +52,9 @@ from .modell import (
     KOSTNAD_FELT_NAVN,
     beregn_terskel,
     classify_raw_risk,
+    compute_elapsed_h,
     compute_kostnad,
+    compute_projected_avg,
     top_n_average,
 )
 
@@ -83,85 +85,6 @@ def rund(verdi: float | None, *, desimaler: int = 3) -> float | None:
     som et tall noen kan regne videre på.
     """
     return None if verdi is None else round(verdi, desimaler)
-
-
-@dataclass
-class HystereseState:
-    """Stateful hysterese-tilstand."""
-
-    nivå: str
-    pending_nivå: str | None = None
-    pending_since: datetime | None = None
-
-
-def _nivå_ett_under(nivå: str) -> str:
-    """Returner risiko-nivået ett trinn under det gitte. Laveste nivå returnerer seg selv."""
-    idx = RISIKO_RANK[nivå]
-    if idx == 0:
-        return nivå
-    return RISIKO_LEVELS[idx - 1]
-
-
-def apply_hysteresis(
-    state: HystereseState,
-    *,
-    rå_nivå: str,
-    now: datetime,
-    holdetid: timedelta,
-) -> None:
-    """Oppdater hysterese-state in-place.
-
-    Oppgang er umiddelbar. Nedgang krever holdetid. Multi-step nedgang
-    skjer ett trinn av gangen med ny timer per trinn. Se spec for full
-    policy.
-    """
-    rå_rank = RISIKO_RANK[rå_nivå]
-    cur_rank = RISIKO_RANK[state.nivå]
-
-    if rå_rank >= cur_rank:
-        state.nivå = rå_nivå
-        state.pending_nivå = None
-        state.pending_since = None
-        return
-
-    if state.pending_nivå != rå_nivå:
-        state.pending_nivå = rå_nivå
-        state.pending_since = now
-        return
-
-    if state.pending_since is None:
-        state.pending_since = now
-        return
-
-    if (now - state.pending_since) >= holdetid:
-        ett_under = _nivå_ett_under(state.nivå)
-        state.nivå = ett_under
-        if RISIKO_RANK[state.nivå] > rå_rank:
-            state.pending_since = now
-        else:
-            state.pending_nivå = None
-            state.pending_since = None
-
-
-def compute_projected_avg(
-    *,
-    actual_kwh_this_hour: float,
-    current_kw: float,
-    elapsed_h: float,
-) -> float:
-    """Projisert time-snitt-kW.
-
-    actual_kwh_this_hour: hva som er målt så langt denne klokketimen.
-    current_kw: instant power-sensor-verdi.
-    elapsed_h: hvor langt inn i timen vi er (0.0 til 1.0).
-    """
-    remaining_h = max(0.0, 1.0 - elapsed_h)
-    return actual_kwh_this_hour + current_kw * remaining_h
-
-
-def compute_elapsed_h(now: datetime) -> float:
-    """Andel av klokketimen som er passert."""
-    return (now.minute + now.second / 60) / 60
 
 
 def iso_eller_none(tid: datetime | None) -> str | None:
