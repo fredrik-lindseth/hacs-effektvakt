@@ -21,6 +21,15 @@ tittel: Effektvakt
 
 Det er alt som trengs. Resten finner kortet selv.
 
+Vil du ha hele dashbordet fra skjermbildene i README, altså skiven med kortene
+som sier hvor mye timen tåler, hva som kan kuttes nå og hvordan uken har sett
+ut, ligger det i [dashboard-eksempel.yaml](dashboard-eksempel.yaml). Lag et nytt
+dashbord, velg «Rediger i YAML» under de tre prikkene, og lim inn hele filen.
+Kortene leser sensorene og attributtene Effektvakt lager selv, så de virker som
+de står. Det eneste du må bytte er energisensoren i ukesgrafen, som er din egen
+kumulative kWh-teller og heter noe forskjellig for hver AMS-leser; den er merket
+`BYTT_MEG` i filen.
+
 ## Konfigurasjon
 
 | Nøkkel           | Påkrevd | Hva det gjør                                                     |
