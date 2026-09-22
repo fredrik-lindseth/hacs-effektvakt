@@ -37,7 +37,7 @@ def test_coordinator_init_leser_konfig(base_states):
     assert coord.power_sensor == "sensor.power"
     assert coord.energy_sensor == "sensor.energy"
     assert coord.safety_buffer_kw == 1.0
-    assert coord._daily_max_kw == {}
+    assert coord._regnskap.daily_max_kw == {}
 
 
 def test_gammel_risikoverdi_i_config_entryen_oversettes(base_states):
@@ -87,8 +87,8 @@ async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
         return_value=datetime(2026, 5, 25, 14, 30, 0),
     ):
         await coord._async_update_data()
-    assert coord._current_hour_kwh == 0.0
-    assert coord._siste_maaler_kwh == 100.0
+    assert coord._regnskap.current_hour_kwh == 0.0
+    assert coord._regnskap.siste_maaler_kwh == 100.0
 
     # 14:45 - energi økt med 2.5 kWh
     states["sensor.energy"] = make_state("102.5", unit="kWh")
@@ -98,7 +98,7 @@ async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
         return_value=datetime(2026, 5, 25, 14, 45, 0),
     ):
         await coord._async_update_data()
-    assert coord._current_hour_kwh == pytest.approx(2.5)
+    assert coord._regnskap.current_hour_kwh == pytest.approx(2.5)
 
     # 15:00 - ny time, energi nå 103.0 kWh. Hele vinduet 14:45 til 15:00 lå i
     # timen 14, så de 0,5 kWh skal dit og ingenting til den nye timen.
@@ -109,9 +109,9 @@ async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
         return_value=datetime(2026, 5, 25, 15, 0, 0),
     ):
         await coord._async_update_data()
-    assert coord._current_hour_kwh == 0.0
-    assert coord._siste_maaler_kwh == 103.0
-    assert coord._daily_max_kw[date(2026, 5, 25)] == pytest.approx(3.0)
+    assert coord._regnskap.current_hour_kwh == 0.0
+    assert coord._regnskap.siste_maaler_kwh == 103.0
+    assert coord._regnskap.daily_max_kw[date(2026, 5, 25)] == pytest.approx(3.0)
 
 
 @pytest.mark.asyncio
@@ -130,7 +130,7 @@ async def test_to_tunge_dager_bak_seg_gir_kutt_og_ikke_god_margin():
         "sensor.energy": make_state("100.0", unit="kWh"),
     }
     coord = _make_coordinator(states)
-    coord._daily_max_kw = {date(2026, 6, 1): 6.0, date(2026, 6, 2): 5.8}
+    coord._regnskap.daily_max_kw = {date(2026, 6, 1): 6.0, date(2026, 6, 2): 5.8}
 
     with patch(
         "custom_components.effektvakt.coordinator.dt_util_now",
@@ -170,7 +170,7 @@ async def test_topp_3_sensoren_er_monoton_gjennom_maaneden():
         {date(2026, 6, 1): 6.0, date(2026, 6, 2): 4.0},
         {date(2026, 6, 1): 6.0, date(2026, 6, 2): 4.0, date(2026, 6, 3): 1.0},
     ):
-        coord._daily_max_kw = dict(dager)
+        coord._regnskap.daily_max_kw = dict(dager)
         coord._store_loaded = True
         with patch(
             "custom_components.effektvakt.coordinator.dt_util_now",

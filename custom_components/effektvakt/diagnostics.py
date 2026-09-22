@@ -16,8 +16,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "config": dict(entry.data),
         "coordinator": {
             "data": coordinator.data,
-            "daily_max_kw_count": len(coordinator._daily_max_kw),
-            "previous_month_top_3_snitt_kw": coordinator._previous_month_top_3_snitt_kw,
+            "daily_max_kw_count": len(coordinator._regnskap.daily_max_kw),
+            "previous_month_top_3_snitt_kw": coordinator._regnskap.previous_month_top_3_snitt_kw,
             "hysterese_state": {
                 "nivå": coordinator._hysterese_state.nivå,
                 "pending_nivå": coordinator._hysterese_state.pending_nivå,

@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.effektvakt.coordinator import (
-    EffektvaktCoordinator,
+from custom_components.effektvakt.coordinator import EffektvaktCoordinator
+from custom_components.effektvakt.timeregnskap import (
     Tidsandeler,
     fordel_maalerdelta,
     integrer_effekt,
@@ -217,7 +217,7 @@ async def test_kwh_som_kommer_etter_timeskiftet_havner_paa_timen_foer():
 
     data = await kjor(coord, anlegg, fra=fra, til=til)
 
-    assert coord._daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], abs=0.02)
+    assert coord._regnskap.daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], abs=0.02)
     # Den nye timen har bare det minuttet som faktisk har gått.
     assert data["actual_kwh_this_hour"] == pytest.approx(0.7 / 60, abs=0.02)
 
@@ -238,14 +238,14 @@ async def test_hele_morgenen_gir_riktig_dagsmaks_med_timesmaaler():
     timer: dict[int, float] = {}
 
     def observer(t: datetime, _data: dict) -> None:
-        if coord._ventende_time is not None:
-            timer[coord._ventende_time.hour_start.hour] = coord._ventende_time.kwh
+        if coord._regnskap.ventende_time is not None:
+            timer[coord._regnskap.ventende_time.hour_start.hour] = coord._regnskap.ventende_time.kwh
 
     await kjor(coord, anlegg, fra=fra, til=til, observer=observer)
 
     for time, fasit in FASIT_KWH.items():
         assert timer[time] == pytest.approx(fasit, abs=0.03), f"timen {time}"
-    assert coord._daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], abs=0.03)
+    assert coord._regnskap.daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], abs=0.03)
 
 
 @pytest.mark.asyncio
@@ -265,7 +265,7 @@ async def test_uten_energisensor_folger_timen_effektintegrasjonen():
     await kjor(coord, anlegg, fra=fra, til=til, med_maaler=False, observer=observer)
 
     assert ved_58["projected_avg_kw"] == pytest.approx(FASIT_KWH[8], abs=0.05)
-    assert coord._daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], rel=0.02)
+    assert coord._regnskap.daily_max_kw[DAGEN] == pytest.approx(FASIT_KWH[8], rel=0.02)
 
 
 @pytest.mark.asyncio
@@ -456,7 +456,7 @@ async def test_omstart_rett_foer_timeskiftet_gir_ikke_den_nye_timen_forrige_time
         t += timedelta(seconds=30)
 
     # De to kWh-ene hører til timen 09 på 13 sekunder nær.
-    assert coord._daily_max_kw[DAGEN] == pytest.approx(2.0 * 3587 / 3600, abs=0.01)
+    assert coord._regnskap.daily_max_kw[DAGEN] == pytest.approx(2.0 * 3587 / 3600, abs=0.01)
     assert data["actual_kwh_this_hour"] == pytest.approx(2.0 * 30 / 3600, abs=0.01)
 
 
@@ -506,6 +506,6 @@ async def test_replay_av_ekte_timer_fra_han_maaleren():
     for t, kwh in timer:
         fasit[t.date()] = max(fasit.get(t.date(), 0.0), kwh)
 
-    assert coord._daily_max_kw.keys() == fasit.keys()
+    assert coord._regnskap.daily_max_kw.keys() == fasit.keys()
     for dag, ventet in fasit.items():
-        assert coord._daily_max_kw[dag] == pytest.approx(ventet, abs=0.02), dag
+        assert coord._regnskap.daily_max_kw[dag] == pytest.approx(ventet, abs=0.02), dag

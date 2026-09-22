@@ -54,16 +54,7 @@ from .modell import (
     compute_kostnad,
     compute_projected_avg,
 )
-from .timeregnskap import (
-    Tidsandeler,
-    Timeregnskap,
-    VentendeTime,
-    fordel_maalerdelta,
-    hour_state_is_current,
-    integrer_effekt,
-    maalerdelta,
-    tidsandeler,
-)
+from .timeregnskap import Timeregnskap
 
 if TYPE_CHECKING:
     from datetime import date
@@ -72,19 +63,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
-
-# Regnskapsfunksjonene bor i timeregnskap.py etter oppdelingen, men testene
-# importerer dem fortsatt herfra. Re-eksporten står til testene er pekt om.
-__all__ = [
-    "EffektvaktCoordinator",
-    "Tidsandeler",
-    "fordel_maalerdelta",
-    "hour_state_is_current",
-    "integrer_effekt",
-    "is_coordinator_stale",
-    "maalerdelta",
-    "tidsandeler",
-]
 
 
 def dt_util_now() -> datetime:
@@ -154,42 +132,19 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
         self._store_loaded = False
 
-    # --- delegasjon til timeregnskapet ------------------------------------
-    # Midlertidig, mens testene og reset-tjenesten fortsatt leser feltene her.
-    # Flyttingen skal kunne bevises å være en flytting, så ingen testfil endres
-    # i samme commit som koden.
-
     @property
     def _daily_max_kw(self) -> dict[date, float]:
+        """Dagsmaksene, der reset-topp-3-tjenesten i __init__.py skriver dem tomme.
+
+        Den siste delegasjonen til timeregnskapet. Resten av pakken går på
+        `_regnskap` direkte; denne står til tjenesten får en egen metode å
+        kalle framfor å sette et felt utenfra.
+        """
         return self._regnskap.daily_max_kw
 
     @_daily_max_kw.setter
     def _daily_max_kw(self, verdi: dict[date, float]) -> None:
         self._regnskap.daily_max_kw = verdi
-
-    @property
-    def _current_month(self) -> str:
-        return self._regnskap.current_month
-
-    @property
-    def _current_hour_kwh(self) -> float:
-        return self._regnskap.current_hour_kwh
-
-    @property
-    def _siste_maaler_kwh(self) -> float | None:
-        return self._regnskap.siste_maaler_kwh
-
-    @property
-    def _ventende_time(self) -> VentendeTime | None:
-        return self._regnskap.ventende_time
-
-    @property
-    def _previous_month_top_3_snitt_kw(self) -> float | None:
-        return self._regnskap.previous_month_top_3_snitt_kw
-
-    @property
-    def _previous_month_name(self) -> str | None:
-        return self._regnskap.previous_month_name
 
     # --- Store-I/O --------------------------------------------------------
 
