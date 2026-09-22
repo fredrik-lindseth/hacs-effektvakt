@@ -25,17 +25,82 @@ remaining_h    = 1.0 - 0.75 = 0.25
 projected_avg  = 2.4 + 3.2 * 0.25 = 3.2 kW
 ```
 
-### `actual_kwh_this_hour` med energy-sensor
+### `actual_kwh_this_hour`
 
-Hvis energy-sensoren er tilgjengelig, leses delta fra hour-start:
+Timen bygges av to kilder som avstemmes mot hverandre, ikke av energy-sensoren alene.
+
+**Effektintegrasjon hvert tick.** Energien mellom to tick er trapesregelen over de to
+effektavlesningene, med faktisk tid mellom tidsstemplene:
 
 ```
-actual_kwh_this_hour += max(0, energy_now - energy_at_hour_start - current_hour_kwh)
+kwh = (forrige_kw + na_kw) / 2 * timer_mellom_ticks
 ```
 
-Kun positive delta aksepteres (kumulativ sensor kan ikke gå ned). Verdien nullstilles ved time-skifte.
+Tiden hentes fra tidsstemplene og ikke fra et antatt tickintervall, for ticket hopper over
+når HA har det travelt. Trapesregelen framfor å holde den forrige avlesningen: en last som
+slås av og på treffer like ofte før som etter en avlesning, og da er midtverdien uten
+systematisk slagside. Går det mer enn fem minutter mellom to tick, har HA vært nede eller
+stått fast, og da integreres intervallet ikke i det hele tatt (se `MAX_INTEGRATION_GAP_H`).
 
-Uten energy-sensor estimeres forbruket via effekt \* tid mellom ticks. Dette gir typisk 1-5 % avvik over en time, avhengig av tick-frekvens og forbruksmønster.
+**Energy-sensoren korrigerer.** Måleren er den nøyaktige kilden og skal vinne, men den
+legges ikke oppå anslaget. Coordinatoren holder rede på hvor mye av timen som er integrert
+anslag og ikke bekreftet av måleren (`_estimert_siden_maaler_kwh`), og når måleren flytter
+seg byttes nettopp den delen ut:
+
+```
+actual_kwh_this_hour = actual_kwh_this_hour - estimert_siden_maaler + maalerens_andel
+```
+
+Dermed telles ingenting to ganger, og en måler som oppdaterer hvert tiende sekund gir
+nøyaktig sin egen differanse. Står måleren stille, er det ingenting å avstemme, og
+anslaget får stå. Vi kan ikke se forskjell på en måler med null forbruk og en som bare
+ikke har rapportert ennå.
+
+Går måleren ned, er den nullstilt eller byttet. Hopper den mer enn `MAX_ENERGY_DELTA_KWH`,
+er avlesningen ikke til å stole på uansett. I begge tilfeller beholdes det som alt er målt
+denne timen, og tellingen fortsetter fra den nye standen.
+
+Uten energy-sensor er integrasjonen alt som finnes, og timen blir like god som
+effekt-sensoren og tick-frekvensen tillater. Typisk 1-5 % avvik over en time.
+
+### kWh som kommer etter timeskiftet
+
+En norsk HAN-avleser rapporterer gjerne 13 sekunder på timen, altså etter at timen den
+måler er over. Den kWh-en hører til timen før. Tre ting gjør at den havner riktig:
+
+1. **Tidspunktet er målerens, ikke ticket sitt.** `last_changed` på energy-sensoren sier
+   når måleren faktisk meldte seg. Ticket som leser den kommer gjerne et halvt minutt
+   senere, og brukes det tidspunktet i stedet, havner hele timen på feil side av skiftet.
+2. **Timeskiftet deler integrasjonen.** Ligger et timeskifte mellom to tick, interpoleres
+   effekten ved skiftet og energien deles i to. Den delen som lå før, følger med over til
+   timen som ble ferdig.
+3. **Timen holdes åpen for retting.** `_finalize_hour` låser timen inn med det vi vet ved
+   timeskiftet, men beholder den som en `VentendeTime` med `dagsmaks_foer`, altså
+   dagsverdien slik den sto før. Kommer avlesningen som dekker skiftet, byttes den
+   estimerte delen ut og timen låses inn på nytt, også nedover. Så snart måleren har
+   bekreftet tiden forbi skiftet, er timen gjort opp og kan ikke ta imot mer.
+
+Fordelingen av en måleravlesning mellom de to timene følger anslaget, ikke tiden: måleren
+sier hvor mye som gikk med, integrasjonen sier når. Er anslaget null, altså ingen
+effekt-sensor, deles det på tid i stedet. Rekker vinduet mellom to avlesninger lenger
+tilbake enn de to timene vi kan rette på, skaleres kWh-en ned til den andelen av tiden som
+faktisk lar seg plassere. Resten hører til timer som er låst, og å legge den på timen vi
+står i ville bygget en falsk topp.
+
+### `kwh_maalt_fra_minutt`
+
+Hvilket minutt av den inneværende timen vi har sammenhengende måling fra. Null i normal
+drift. Over null betyr at `actual_kwh_this_hour` mangler starten av timen, og da er
+projeksjonen for lav. Det skjer i to tilfeller:
+
+- Integrasjonen ble satt opp midt i en time. Vi kan ikke integrere bakover, og finner ikke
+  på et tall for det vi ikke så.
+- HA var nede lenger enn `MAX_INTEGRATION_GAP_H`, eller effekt-sensoren var utilgjengelig.
+
+Dekningen utvides av seg selv så snart energy-sensoren rapporterer en avlesning som rekker
+tilbake til før hullet, for den kWh-en inneholder det vi gikk glipp av. Med en timesmåler
+skjer det ved neste timeskifte. Uten energy-sensor står hullet ut timen. Tallet ligger i
+coordinator-data og i diagnostikken, og er ikke en egen sensor.
 
 ---
 
@@ -47,6 +112,11 @@ Norske nettselskap bruker snittet av de tre høyeste time-forbrukene fra tre uli
 2. Sammenlign mot beste registrerte time samme dag. Oppdater hvis høyere.
 3. `daily_max_kw` inneholder én verdi per dag: høyeste registrerte time den dagen.
 4. `topp_3_snitt` = snitt av de 3 høyeste verdiene i `daily_max_kw`.
+
+Dagsverdien settes med max mot det dagen hadde før timen ble lagt inn, ikke mot det den
+har nå. Forskjellen betyr noe når en måleravlesning retter den timen som nettopp ble låst
+inn: rettingen skal også kunne gå nedover, uten at den må konkurrere med seg selv. En
+omstart som kjører innlåsingen på nytt for den samme timen kan fortsatt ikke telle dobbelt.
 
 Dette er dag-snitt av maks-timer, ikke rå time-verdier. Modellen er identisk med Elhubs metode for kapasitetstrinn-bestemmelse.
 

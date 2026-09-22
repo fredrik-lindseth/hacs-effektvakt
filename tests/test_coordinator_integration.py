@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -69,8 +69,12 @@ async def test_coordinator_low_power_gir_god_margin(base_states):
 
 
 @pytest.mark.asyncio
-async def test_energy_at_hour_start_resets_pa_time_rollover():
-    """Etter time-rollover skal første tick ikke gi falsk delta-spike."""
+async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
+    """Etter time-rollover skal første tick ikke gi falsk delta-spike.
+
+    kWh-en måleren melder ved timeskiftet ble brukt i timen som nettopp ble
+    ferdig, ikke i den som så vidt har begynt.
+    """
     states = {
         "sensor.power": make_state("500", unit="W"),
         "sensor.energy": make_state("100.0", unit="kWh"),
@@ -84,7 +88,7 @@ async def test_energy_at_hour_start_resets_pa_time_rollover():
     ):
         await coord._async_update_data()
     assert coord._current_hour_kwh == 0.0
-    assert coord._energy_at_hour_start == 100.0
+    assert coord._siste_maaler_kwh == 100.0
 
     # 14:45 - energi økt med 2.5 kWh
     states["sensor.energy"] = make_state("102.5", unit="kWh")
@@ -96,8 +100,8 @@ async def test_energy_at_hour_start_resets_pa_time_rollover():
         await coord._async_update_data()
     assert coord._current_hour_kwh == pytest.approx(2.5)
 
-    # 15:00 - ny time, energi nå 103.0 kWh
-    # Forventet: rollover nullstiller begge, første tick setter ny baseline uten delta
+    # 15:00 - ny time, energi nå 103.0 kWh. Hele vinduet 14:45 til 15:00 lå i
+    # timen 14, så de 0,5 kWh skal dit og ingenting til den nye timen.
     states["sensor.energy"] = make_state("103.0", unit="kWh")
     coord.hass = make_hass_with_states(states)
     with patch(
@@ -106,4 +110,5 @@ async def test_energy_at_hour_start_resets_pa_time_rollover():
     ):
         await coord._async_update_data()
     assert coord._current_hour_kwh == 0.0
-    assert coord._energy_at_hour_start == 103.0
+    assert coord._siste_maaler_kwh == 103.0
+    assert coord._daily_max_kw[date(2026, 5, 25)] == pytest.approx(3.0)

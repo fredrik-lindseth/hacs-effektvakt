@@ -179,6 +179,9 @@ sys.modules["homeassistant.components"] = _components_mod
 
 _dt_util_mock = MagicMock()
 _dt_util_mock.now.return_value = datetime(2026, 6, 15, 12, 0, 0)
+# Testene kjører i naiv tid. as_local skal da la tidsstempelet stå som det er,
+# ikke gi tilbake en MagicMock koden ikke kan sammenligne noe med.
+_dt_util_mock.as_local = lambda tid: tid
 _ha_util_mock = MagicMock()
 _ha_util_mock.dt = _dt_util_mock
 sys.modules["homeassistant.util"] = _ha_util_mock
@@ -191,11 +194,19 @@ def make_state(
     unit: str | None = None,
     state_class: str | None = None,
     friendly_name: str | None = None,
+    last_changed: datetime | None = None,
 ):
-    """Mock HA state-objekt."""
+    """Mock HA state-objekt.
+
+    last_changed er None som standard, altså en MagicMock coordinatoren ikke
+    kjenner igjen som en datetime. Da faller den tilbake på tidspunktet for
+    ticket, slik den gjør mot en integrasjon som ikke setter tidsstempel.
+    """
     state = MagicMock()
     state.state = str(value)
     state.attributes = {}
+    if last_changed is not None:
+        state.last_changed = last_changed
     if unit is not None:
         state.attributes["unit_of_measurement"] = unit
     if state_class is not None:

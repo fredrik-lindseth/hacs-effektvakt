@@ -1,8 +1,8 @@
 """Tester for at time-akkumulatoren overlever en omstart.
 
-Feilen disse dekker: lagret current_hour_kwh og energy_at_hour_start ble lest
-inn ved oppstart og kastet igjen to linjer senere, fordi ingen visste hvilken
-time de hørte til. Resten av timen talte integrasjonen bare fra omstarten, og
+Feilen disse dekker: lagret current_hour_kwh og målerstanden ble lest inn ved
+oppstart og kastet igjen to linjer senere, fordi ingen visste hvilken time de
+hørte til. Resten av timen talte integrasjonen bare fra omstarten, og
 projisert time-snitt ble for lavt. For lavt gir ingen risiko, ingen varsel og
 ingen kutt, så retningen på feilen er den farlige.
 """
@@ -16,8 +16,8 @@ import pytest
 
 from custom_components.effektvakt.coordinator import (
     EffektvaktCoordinator,
-    apply_energy_reading,
     hour_state_is_current,
+    maalerdelta,
 )
 from tests.conftest import make_entry, make_hass_with_states, make_state
 
@@ -62,7 +62,8 @@ def _lagret_time(
     *,
     hour_start: str | None = "2026-05-25T14:00:00",
     kwh: float = 2.5,
-    energy_at_hour_start: float | None = 100.0,
+    siste_maaler_kwh: float | None = 102.5,
+    siste_maaler_ts: str | None = "2026-05-25T14:45:00",
     daily_max: dict[str, float] | None = None,
     current_month: str = "2026-05",
 ) -> dict:
@@ -73,7 +74,8 @@ def _lagret_time(
             "daily_max_kw": daily_max or {},
             "current_hour_kwh": kwh,
             "current_hour_start": hour_start,
-            "energy_at_hour_start": energy_at_hour_start,
+            "siste_maaler_kwh": siste_maaler_kwh,
+            "siste_maaler_ts": siste_maaler_ts,
         }
     }
 
@@ -93,7 +95,7 @@ async def test_timen_lagres_med_tidspunktet_sitt():
     data = _lagret(coord)["data"]
     assert data["current_hour_start"] == "2026-05-25T14:00:00"
     assert data["current_hour_kwh"] == pytest.approx(2.5)
-    assert data["energy_at_hour_start"] == pytest.approx(100.0)
+    assert data["siste_maaler_kwh"] == pytest.approx(102.5)
 
 
 @pytest.mark.asyncio
@@ -105,32 +107,42 @@ async def test_omstart_midt_i_timen_fortsetter_der_den_slapp():
     data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh="103.0"))
 
     assert data["actual_kwh_this_hour"] == pytest.approx(3.0)
-    assert coord._energy_at_hour_start == pytest.approx(100.0)
+    assert coord._siste_maaler_kwh == pytest.approx(103.0)
     # 3,0 kWh brukt pluss 0,5 kW i de ti minuttene som står igjen.
     assert data["projected_avg_kw"] == pytest.approx(3.083, abs=0.001)
 
 
 @pytest.mark.asyncio
 async def test_omstart_midt_i_timen_mister_ikke_timen_om_maaleren_star_stille():
-    """Ingen forbruk mellom siste tick og omstarten er ikke det samme som ingen time."""
+    """En måler som ikke har rapportert er ikke det samme som ingen time.
+
+    De 2,5 kWh fra Store består, og de fem minuttene på 0,5 kW siden forrige
+    tick kommer i tillegg fra effektintegrasjonen.
+    """
     forrige = await _kjor_en_time_til_1445()
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 50), stored=_lagret(forrige))
     data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh="102.5"))
 
-    assert data["actual_kwh_this_hour"] == pytest.approx(2.5)
+    assert data["actual_kwh_this_hour"] == pytest.approx(2.5 + 0.5 * 5 / 60, abs=0.001)
 
 
 @pytest.mark.asyncio
 async def test_omstart_etter_timeskifte_laaser_inn_den_gamle_timen():
+    """Timen 14 låses inn, og kWh-en som kom etter timeskiftet deles på tid.
+
+    Måleren sto på 102,5 kl. 14:45 og på 103,0 når HA er oppe igjen 15:05. De
+    0,5 kWh ble brukt et sted i de tjue minuttene, og femten av dem lå i timen
+    14. Uten effektavlesninger å fordele etter er tid det eneste vi har.
+    """
     forrige = await _kjor_en_time_til_1445()
 
     coord = _make_coordinator(datetime(2026, 5, 25, 15, 5), stored=_lagret(forrige))
     data = await _tick(coord, datetime(2026, 5, 25, 15, 5), _states(energy_kwh="103.0"))
 
-    assert data["actual_kwh_this_hour"] == 0.0
-    assert coord._energy_at_hour_start == pytest.approx(103.0)
-    assert coord._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5)
+    assert data["actual_kwh_this_hour"] == pytest.approx(0.5 * 5 / 20)
+    assert coord._siste_maaler_kwh == pytest.approx(103.0)
+    assert coord._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5 + 0.5 * 15 / 20)
 
 
 @pytest.mark.asyncio
@@ -138,7 +150,8 @@ async def test_timen_kan_ikke_telles_to_ganger_i_daily_max():
     """To omstarter over det samme timeskiftet skal gi den samme dagsverdien.
 
     Kræsjer HA igjen før den rakk å lagre, leses den samme timen inn på nytt.
-    _finalize_hour setter dagsverdien med max, så den kan bare gjentas.
+    Dagsverdien settes med max mot det dagen hadde før timen ble lagt inn, så
+    den kan bare gjentas, aldri legges oppå seg selv.
     """
     forrige = await _kjor_en_time_til_1445()
     payload = _lagret(forrige)
@@ -149,34 +162,41 @@ async def test_timen_kan_ikke_telles_to_ganger_i_daily_max():
     andre = _make_coordinator(datetime(2026, 5, 25, 15, 10), stored=payload)
     await _tick(andre, datetime(2026, 5, 25, 15, 10), _states(energy_kwh="103.4"))
 
-    assert andre._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5)
+    # 2,5 kWh pluss den delen av de 0,9 som lå før timeskiftet, ikke 5,0.
+    assert andre._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5 + 0.9 * 15 / 25)
 
     # Og en omstart etter at timen er låst inn rører den heller ikke.
     tredje = _make_coordinator(datetime(2026, 5, 25, 15, 20), stored=_lagret(forste))
     await _tick(tredje, datetime(2026, 5, 25, 15, 20), _states(energy_kwh="103.8"))
-    assert tredje._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5)
-    assert tredje._current_hour_kwh == pytest.approx(0.8)
+    assert tredje._daily_max_kw[date(2026, 5, 25)] == pytest.approx(2.5 + 0.5 * 15 / 20)
+    assert tredje._current_hour_kwh == pytest.approx(0.5 * 5 / 20 + 0.8)
 
 
 @pytest.mark.asyncio
 async def test_omstart_etter_lang_nedetid_forkaster_timen():
     """Tre døgn nede, og klokka er tilfeldigvis 14 igjen. Timen er ikke vår."""
-    stored = _lagret_time(hour_start="2026-05-22T14:00:00", kwh=2.5, energy_at_hour_start=100.0)
+    stored = _lagret_time(
+        hour_start="2026-05-22T14:00:00",
+        kwh=2.5,
+        siste_maaler_kwh=102.5,
+        siste_maaler_ts="2026-05-22T14:45:00",
+    )
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 10), stored=stored)
     data = await _tick(coord, datetime(2026, 5, 25, 14, 10), _states(energy_kwh="130.0"))
 
-    assert data["actual_kwh_this_hour"] == 0.0
-    assert coord._energy_at_hour_start == pytest.approx(130.0)
+    # 27,5 kWh over tre døgn skal ikke bli en topp i timen HA kom opp igjen.
+    assert data["actual_kwh_this_hour"] < 0.1
+    assert coord._siste_maaler_kwh == pytest.approx(130.0)
     # Timen som faktisk ble målt hører hjemme på sin egen dag, ikke på i dag.
-    assert coord._daily_max_kw[date(2026, 5, 22)] == pytest.approx(2.5)
+    assert coord._daily_max_kw[date(2026, 5, 22)] == pytest.approx(2.5, abs=0.1)
     assert date(2026, 5, 25) not in coord._daily_max_kw
 
 
 @pytest.mark.asyncio
 async def test_lagret_time_uten_tidspunkt_forkastes():
     """Store skrevet av en versjon som ikke lagret timen. Da vet vi ingenting."""
-    stored = _lagret_time(hour_start=None, kwh=2.5, energy_at_hour_start=100.0)
+    stored = _lagret_time(hour_start=None, kwh=2.5, siste_maaler_kwh=102.5)
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 10), stored=stored)
     data = await _tick(coord, datetime(2026, 5, 25, 14, 10), _states(energy_kwh="102.5"))
@@ -188,7 +208,7 @@ async def test_lagret_time_uten_tidspunkt_forkastes():
 @pytest.mark.asyncio
 async def test_maaler_nullstilt_under_nedetid_gir_ikke_negativ_kwh():
     """Måleren står på 0,4 kWh der den sto på 102,5. Den er byttet eller nullstilt."""
-    stored = _lagret_time(kwh=2.5, energy_at_hour_start=100.0)
+    stored = _lagret_time(kwh=2.5, siste_maaler_kwh=102.5)
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 50), stored=stored)
     data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh="0.4"))
@@ -203,7 +223,7 @@ async def test_maaler_nullstilt_under_nedetid_gir_ikke_negativ_kwh():
 @pytest.mark.asyncio
 async def test_absurd_hopp_i_maalerstand_teller_ikke_med():
     """En helt annen måler med høyere total skal ikke bli til 5900 kWh på én time."""
-    stored = _lagret_time(kwh=2.5, energy_at_hour_start=100.0)
+    stored = _lagret_time(kwh=2.5, siste_maaler_kwh=102.5)
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 50), stored=stored)
     data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh="6000.0"))
@@ -220,7 +240,7 @@ async def test_omstart_i_ny_maaned_ruller_over_maaneden():
     stored = _lagret_time(
         hour_start="2026-04-30T23:00:00",
         kwh=0.0,
-        energy_at_hour_start=None,
+        siste_maaler_kwh=None,
         daily_max={"2026-04-28": 6.0, "2026-04-29": 4.0},
         current_month="2026-04",
     )
@@ -237,14 +257,15 @@ async def test_omstart_i_ny_maaned_ruller_over_maaneden():
 @pytest.mark.asyncio
 async def test_omstart_uten_energisensor_starter_timen_paa_nytt():
     """Uten energy-sensor finnes ingen akkumulator å redde, og den skal ikke late som."""
-    stored = _lagret_time(kwh=2.5, energy_at_hour_start=100.0)
+    stored = _lagret_time(kwh=2.5, siste_maaler_kwh=102.5)
 
     coord = _make_coordinator(datetime(2026, 5, 25, 14, 50), stored=stored)
     data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh=None))
 
-    # Timen består, men uten avlesning er det ingenting nytt å legge til.
+    # Timen består, og uten en effektavlesning fra forrige tick å integrere fra
+    # er det ingenting nytt å legge til på dette ticket heller.
     assert data["actual_kwh_this_hour"] == pytest.approx(2.5)
-    assert coord._energy_at_hour_start == pytest.approx(100.0)
+    assert coord._siste_maaler_kwh == pytest.approx(102.5)
 
 
 @pytest.mark.parametrize(
@@ -278,21 +299,18 @@ def test_hour_state_is_current_taaler_blanding_av_naiv_og_tidssone():
 
 
 @pytest.mark.parametrize(
-    "energy_now,start,kwh,ventet_kwh,ventet_start",
+    "energy_now,forrige,ventet",
     [
-        (100.0, None, 0.0, 0.0, 100.0),
-        (102.5, 100.0, 0.0, 2.5, 100.0),
-        (102.5, 100.0, 2.5, 2.5, 100.0),
-        (103.0, 100.0, 2.5, 3.0, 100.0),
-        (0.4, 100.0, 2.5, 2.5, -2.1),
-        (6000.0, 100.0, 2.5, 2.5, 5997.5),
+        (100.0, None, None),
+        (102.5, 102.5, 0.0),
+        (103.0, 102.5, 0.5),
+        (0.4, 102.5, None),
+        (6000.0, 102.5, None),
     ],
 )
-def test_apply_energy_reading(energy_now, start, kwh, ventet_kwh, ventet_start):
-    ny_kwh, ny_start = apply_energy_reading(
-        energy_now=energy_now,
-        energy_at_hour_start=start,
-        current_hour_kwh=kwh,
-    )
-    assert ny_kwh == pytest.approx(ventet_kwh)
-    assert ny_start == pytest.approx(ventet_start)
+def test_maalerdelta(energy_now, forrige, ventet):
+    delta = maalerdelta(energy_now=energy_now, forrige_avlesning=forrige)
+    if ventet is None:
+        assert delta is None
+    else:
+        assert delta == pytest.approx(ventet)
