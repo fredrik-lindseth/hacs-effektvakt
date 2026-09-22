@@ -1,4 +1,9 @@
-"""Tester for kutt_kilder: hva som faktisk utgjør tilgjengelig kutt."""
+"""Tester for kutt_kilder: kontrakten mot dashbordet og kortet.
+
+Reglene bak tallene står i test_laster.py. Her er det veien gjennom
+coordinatoren som prøves: at sensorene og bryterne leses fra tilstandsmaskinen,
+at attributtet tåler JSON, og at summen alltid kan forklares av lista.
+"""
 
 from __future__ import annotations
 
@@ -8,122 +13,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.effektvakt.const import (
-    EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
-    STRATEGI_BLIND,
-    STRATEGI_VVB_PLUSS_EKSTRA,
-    STRATEGI_VVB_STATUS,
-    VVB_ACTIVE_THRESHOLD_W,
-)
 from custom_components.effektvakt.coordinator import EffektvaktCoordinator
-from custom_components.effektvakt.laster import (
-    ROLLE_EKSTRA,
-    ROLLE_VVB,
-    KildeAvlesning,
-    build_kutt_kilder,
-)
 from custom_components.effektvakt.sensor import EffektvaktTilgjengeligKuttSensor
 from tests.conftest import make_entry, make_hass_with_states, make_state
 
-VVB_ENTITY = "sensor.vvb_power"
-EKSTRA_ENTITY = "sensor.varmekabler_bad"
+BEREDER = "sensor.bereder_effekt"
+BEREDER_BRYTER = "switch.bereder"
+KABLER = "sensor.varmekabler_bad"
+
+LASTER = [
+    {
+        "effekt_sensor": BEREDER,
+        "navn": "Bereder",
+        "bryter": BEREDER_BRYTER,
+        "terskel_w": 1000.0,
+    },
+    {"effekt_sensor": KABLER, "terskel_w": 100.0},
+]
 
 
-def _avlesninger(vvb_w: float | None, *ekstra_w: float | None) -> list[KildeAvlesning]:
-    kilder = [KildeAvlesning(VVB_ENTITY, "Varmtvannsbereder", vvb_w, ROLLE_VVB)]
-    for i, w in enumerate(ekstra_w):
-        kilder.append(KildeAvlesning(f"sensor.ekstra_{i}", f"Ekstra {i}", w, ROLLE_EKSTRA))
-    return kilder
-
-
-def test_kilde_over_terskel_teller_med():
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        avlesninger=_avlesninger(1800.0, 550.0),
-    )
-    assert [k.teller_med for k in kilder] == [True, True]
-    assert [k.effekt_w for k in kilder] == [1800.0, 550.0]
-    assert [k.rolle for k in kilder] == [ROLLE_VVB, ROLLE_EKSTRA]
-    assert [k.terskel_w for k in kilder] == [
-        VVB_ACTIVE_THRESHOLD_W,
-        EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
-    ]
-
-
-def test_kilde_under_terskel_er_med_men_teller_ikke():
-    """VVB i pause er fortsatt en kilde, den bidrar bare ikke akkurat nå."""
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        avlesninger=_avlesninger(40.0, 12.0),
-    )
-    assert [k.teller_med for k in kilder] == [False, False]
-    assert [k.effekt_w for k in kilder] == [40.0, 12.0]
-
-
-def test_terskel_er_streng():
-    """Nøyaktig på terskelen holder ikke, det må være over."""
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        avlesninger=_avlesninger(VVB_ACTIVE_THRESHOLD_W, EKSTRA_SENSOR_ACTIVE_THRESHOLD_W),
-    )
-    assert [k.teller_med for k in kilder] == [False, False]
-
-
-def test_utilgjengelig_sensor_gir_null_ikke_null_watt():
-    """Forskjellen mellom "bruker ingenting" og "vi vet ikke" betyr noe."""
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        avlesninger=_avlesninger(None, None),
-    )
-    assert [k.effekt_w for k in kilder] == [None, None]
-    assert [k.teller_med for k in kilder] == [False, False]
-
-
-def test_vvb_status_teller_ikke_ekstra_men_lister_den():
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_STATUS,
-        avlesninger=_avlesninger(1800.0, 3600.0),
-    )
-    assert [k.teller_med for k in kilder] == [True, False]
-    assert kilder[1].effekt_w == 3600.0
-
-
-def test_blind_teller_ingen_kilder():
-    """blind leser ingen sensorer, men konfigurerte kilder skal fortsatt vises."""
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_BLIND,
-        avlesninger=_avlesninger(1800.0, 3600.0),
-    )
-    assert [k.teller_med for k in kilder] == [False, False]
-    assert len(kilder) == 2
-
-
-def test_ukjent_strategi_teller_ingenting():
-    kilder = build_kutt_kilder(
-        strategi="tull",
-        avlesninger=_avlesninger(1800.0, 3600.0),
-    )
-    assert [k.teller_med for k in kilder] == [False, False]
-
-
-def test_navn_kan_mangle():
-    kilder = build_kutt_kilder(
-        strategi=STRATEGI_VVB_STATUS,
-        avlesninger=[KildeAvlesning(VVB_ENTITY, None, 1800.0, ROLLE_VVB)],
-    )
-    assert kilder[0].navn is None
-    assert kilder[0].entity_id == VVB_ENTITY
-
-
-def _make_coordinator(states, *, strategi, vvb=VVB_ENTITY, ekstra=None):
+def _make_coordinator(states, *, laster=None):
     entry = make_entry(safety_buffer_kw=0.5)
-    entry.data.update(
-        {
-            "kutt_strategi": strategi,
-            "vvb_power_sensor": vvb,
-            "ekstra_power_sensors": ekstra or [],
-        }
-    )
+    entry.data["laster"] = LASTER if laster is None else laster
     hass = make_hass_with_states(states)
     with patch("custom_components.effektvakt.coordinator.Store"):
         coord = EffektvaktCoordinator(hass, entry)
@@ -133,138 +44,140 @@ def _make_coordinator(states, *, strategi, vvb=VVB_ENTITY, ekstra=None):
     return coord
 
 
-async def _tick(coord):
-    with patch(
-        "custom_components.effektvakt.coordinator.dt_util_now",
-        return_value=datetime(2026, 5, 25, 14, 30, 0),
-    ):
+async def _tick(coord, *, now=datetime(2026, 5, 25, 14, 30, 0)):
+    with patch("custom_components.effektvakt.coordinator.dt_util_now", return_value=now):
         return await coord._async_update_data()
 
 
-def _base_states(vvb="1800", ekstra="550"):
+def _base_states(bereder="1800", kabler="550", bryter="on"):
     return {
         "sensor.power": make_state("500", unit="W"),
         "sensor.energy": make_state("100.0", unit="kWh"),
-        VVB_ENTITY: make_state(vvb, unit="W", friendly_name="Varmtvannsbereder"),
-        EKSTRA_ENTITY: make_state(ekstra, unit="W", friendly_name="Varmekabler bad"),
+        BEREDER: make_state(bereder, unit="W", friendly_name="Bereder effekt"),
+        KABLER: make_state(kabler, unit="W", friendly_name="Varmekabler bad"),
+        BEREDER_BRYTER: make_state(bryter),
     }
 
 
 @pytest.mark.asyncio
-async def test_coordinator_eksponerer_kilder_med_navn():
-    coord = _make_coordinator(
-        _base_states(),
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
+async def test_coordinator_eksponerer_lastene_med_navn_og_bryter():
+    data = await _tick(_make_coordinator(_base_states()))
     assert data["kutt_kilder"] == [
         {
-            "entity_id": VVB_ENTITY,
-            "navn": "Varmtvannsbereder",
+            "entity_id": BEREDER,
+            "navn": "Bereder",
             "effekt_w": 1800.0,
             "teller_med": True,
-            "rolle": ROLLE_VVB,
-            "terskel_w": VVB_ACTIVE_THRESHOLD_W,
+            "terskel_w": 1000.0,
+            "bryter": BEREDER_BRYTER,
+            "bryter_paa": True,
+            "kuttet": False,
+            "kuttet_siden": None,
         },
         {
-            "entity_id": EKSTRA_ENTITY,
+            "entity_id": KABLER,
             "navn": "Varmekabler bad",
             "effekt_w": 550.0,
             "teller_med": True,
-            "rolle": ROLLE_EKSTRA,
-            "terskel_w": EKSTRA_SENSOR_ACTIVE_THRESHOLD_W,
+            "terskel_w": 100.0,
+            "bryter": None,
+            "bryter_paa": None,
+            "kuttet": False,
+            "kuttet_siden": None,
         },
     ]
 
 
 @pytest.mark.asyncio
-async def test_coordinator_kilder_er_json_serialiserbare():
+async def test_kildene_er_json_serialiserbare():
     """Attributter går gjennom recorder og websocket, så de må tåle JSON."""
-    coord = _make_coordinator(
-        _base_states(),
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
+    data = await _tick(_make_coordinator(_base_states()))
     assert json.loads(json.dumps(data["kutt_kilder"])) == data["kutt_kilder"]
 
 
 @pytest.mark.asyncio
-async def test_coordinator_uten_konfigurerte_kilder_gir_tom_liste():
-    coord = _make_coordinator(_base_states(), strategi=STRATEGI_BLIND, vvb=None)
-    data = await _tick(coord)
+async def test_uten_konfigurerte_laster_er_det_ingen_kilder_og_intet_tall():
+    """Ingen laster: tom liste, og tilgjengelig kutt er None framfor 0,3."""
+    data = await _tick(_make_coordinator(_base_states(), laster=[]))
     assert data["kutt_kilder"] == []
+    assert data["tilgjengelig_kutt_kw"] is None
 
 
 @pytest.mark.asyncio
-async def test_unavailable_sensor_gir_null_effekt_i_coordinator():
+async def test_unavailable_sensor_gir_null_effekt_ikke_null_watt():
     states = _base_states()
-    states[VVB_ENTITY] = make_state("unavailable", unit="W", friendly_name="Varmtvannsbereder")
-    coord = _make_coordinator(
-        states,
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
-    vvb = data["kutt_kilder"][0]
-    assert vvb["effekt_w"] is None
-    assert vvb["teller_med"] is False
-    assert vvb["navn"] == "Varmtvannsbereder"
+    states[BEREDER] = make_state("unavailable", unit="W", friendly_name="Bereder effekt")
+    data = await _tick(_make_coordinator(states))
+    bereder = data["kutt_kilder"][0]
+    assert bereder["effekt_w"] is None
+    assert bereder["teller_med"] is False
+    assert bereder["navn"] == "Bereder"
+
+
+@pytest.mark.asyncio
+async def test_bryter_som_ikke_svarer_er_ikke_av():
+    states = _base_states(bryter="unavailable")
+    data = await _tick(_make_coordinator(states))
+    assert data["kutt_kilder"][0]["bryter_paa"] is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("strategi", "vvb", "ekstra"),
+    ("bereder", "kabler"),
     [
-        (STRATEGI_VVB_STATUS, "1800", "550"),
-        (STRATEGI_VVB_STATUS, "40", "550"),
-        (STRATEGI_VVB_PLUSS_EKSTRA, "1800", "550"),
-        (STRATEGI_VVB_PLUSS_EKSTRA, "1800", "12"),
-        (STRATEGI_VVB_PLUSS_EKSTRA, "40", "3600"),
-        (STRATEGI_VVB_PLUSS_EKSTRA, "unavailable", "3600"),
-        (STRATEGI_VVB_PLUSS_EKSTRA, "unknown", "unavailable"),
+        ("1800", "550"),
+        ("40", "550"),
+        ("1800", "12"),
+        ("unavailable", "3600"),
+        ("unknown", "unavailable"),
+        ("0", "0"),
     ],
 )
-async def test_summen_av_tellende_kilder_er_sensorens_tilstand(strategi, vvb, ekstra):
+async def test_summen_av_tellende_laster_er_sensorens_tilstand(bereder, kabler):
     """Hele poenget med attributtet: tallet skal kunne regnes ut av lista."""
-    coord = _make_coordinator(
-        _base_states(vvb=vvb, ekstra=ekstra),
-        strategi=strategi,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
+    data = await _tick(_make_coordinator(_base_states(bereder=bereder, kabler=kabler)))
     sum_kw = sum(k["effekt_w"] for k in data["kutt_kilder"] if k["teller_med"]) / 1000.0
     assert sum_kw == pytest.approx(data["tilgjengelig_kutt_kw"], abs=0.001)
 
 
 @pytest.mark.asyncio
-async def test_blind_tilstand_er_en_antagelse_ikke_en_sum():
-    """blind rapporterer duty cycle-estimatet, ikke noe kildene kan forklare."""
-    coord = _make_coordinator(
-        _base_states(),
-        strategi=STRATEGI_BLIND,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
-    assert data["tilgjengelig_kutt_kw"] == 0.3
-    assert not any(k["teller_med"] for k in data["kutt_kilder"])
+async def test_integrasjonen_ser_at_lasten_ble_kuttet():
+    """Bryteren gaar av mens kutt er anbefalt: da er det vaart kutt, med tidspunkt."""
+    coord = _make_coordinator(_base_states())
+    coord.min_risiko_for_kutt = "god_margin"  # alt er over terskelen, saa kutt er anbefalt
+    await _tick(coord)
+
+    coord.hass.states.get = _base_states(bereder="0", bryter="off").get
+    naa = datetime(2026, 5, 25, 14, 31, 0)
+    data = await _tick(coord, now=naa)
+
+    bereder = data["kutt_kilder"][0]
+    assert bereder["kuttet"] is True
+    assert bereder["kuttet_siden"] == naa.isoformat()
+    assert data["kuttet_naa_kw"] == pytest.approx(1.8)
 
 
 @pytest.mark.asyncio
-async def test_sensoren_eksponerer_kilder():
-    coord = _make_coordinator(
-        _base_states(),
-        strategi=STRATEGI_VVB_PLUSS_EKSTRA,
-        ekstra=[EKSTRA_ENTITY],
-    )
-    data = await _tick(coord)
-    coord.data = data
+async def test_kutt_uten_anbefaling_regnes_ikke_som_vaart():
+    coord = _make_coordinator(_base_states())
+    coord.min_risiko_for_kutt = "over_terskel"
+    await _tick(coord)
+
+    coord.hass.states.get = _base_states(bereder="0", bryter="off").get
+    data = await _tick(coord, now=datetime(2026, 5, 25, 14, 31, 0))
+
+    assert data["kutt_kilder"][0]["kuttet"] is False
+    assert data["kuttet_naa_kw"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_sensoren_eksponerer_kildene():
+    coord = _make_coordinator(_base_states())
+    coord.data = await _tick(coord)
     attrs = EffektvaktTilgjengeligKuttSensor(coord).extra_state_attributes
-    assert attrs["kutt_strategi"] == STRATEGI_VVB_PLUSS_EKSTRA
-    assert attrs["ekstra_power_w_total"] == pytest.approx(550.0)
-    assert [k["entity_id"] for k in attrs["kutt_kilder"]] == [VVB_ENTITY, EKSTRA_ENTITY]
-    assert attrs["current_kw"] == data["current_kw"]
+    assert [k["entity_id"] for k in attrs["kutt_kilder"]] == [BEREDER, KABLER]
+    assert attrs["kuttet_naa_kw"] == 0.0
+    assert attrs["current_kw"] == coord.data["current_kw"]
 
 
 def test_sensoren_uten_coordinator_data():

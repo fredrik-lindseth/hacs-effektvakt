@@ -4,12 +4,12 @@ Hva Effektvakt trenger fra Home Assistant for å fungere.
 
 ## TL;DR
 
-| Sensor                       | Krav     | Beste kilde                            |
-| ---------------------------- | -------- | -------------------------------------- |
-| Power-sensor (W/kW)          | Påkrevd  | AMS-leser via HAN-port                 |
-| Energy-sensor (kWh)          | Anbefalt | Samme AMS-leser, kumulativ teller      |
-| VVB-power-sensor (W/kW)      | Valgfri  | Smart plugg med energimåling           |
-| Ekstra power-sensorer (W/kW) | Valgfri  | Varmekabler, billader med effektmåling |
+| Sensor                             | Krav     | Beste kilde                                 |
+| ---------------------------------- | -------- | ------------------------------------------- |
+| Power-sensor (W/kW)                | Påkrevd  | AMS-leser via HAN-port                      |
+| Energy-sensor (kWh)                | Anbefalt | Samme AMS-leser, kumulativ teller           |
+| Effektsensor per kuttbar last      | Valgfri  | Smart plugg eller clamp-måler på kursen     |
+| Bryter per kuttbar last            | Valgfri  | Den samme smartpluggen, eller relé på kursen |
 
 ---
 
@@ -69,39 +69,33 @@ Med energy-sensor leses delta direkte fra den kumulative telleren. Eventuelle fe
 
 ---
 
-## VVB-power-sensor (valgfri)
+## Sensorer for kuttbare laster (valgfrie)
 
-**Hva**: Sensor som rapporterer varmtvannstankens effektforbruk i watt eller kilowatt.
+**Hva**: Én effektsensor per last du kan slå av en stund: bereder, varmepumpe, billader, varmekabler, panelovn. Effektvakt kjenner ingen apparattyper, så alle laster behandles likt og har hver sin terskel for når de regnes som på.
 
-**Krav**: Krevd for strategi `vvb_status` og `vvb_pluss_ekstra`. Med `blind`-strategi brukes den ikke.
+**Hva de gir deg**: `sensor.effektvakt_tilgjengelig_kutt` summerer lastene som trekker over terskelen sin akkurat nå. Uten laster opprettes ikke den sensoren.
 
-**Terskel**: Effektvakt anser VVB som aktiv hvis sensoren rapporterer over 1 000 W. Under denne grensen antas elementet å ikke varme. Norsk standard VVB (f.eks. OSO Saga 200L) har 2 000 W element.
+**Bryteren**: hver last kan også peke på bryteren som slår den av. Den er valgfri, men det er den som lar Effektvakt se at lasten faktisk ble kuttet, og hvor mye den trakk rett før. Har lasten en smartplugg med effektmåling, er sensoren og bryteren to entiteter fra den samme pluggen.
 
 **Kjente kilder**:
 
-- Smart plugg med energimåling (Shelly Plug S, Sonoff S31, Zaptec Pro med OCPP)
-- Clamp-on energimåler for VVB-krets
-
----
-
-## Ekstra power-sensorer (valgfri)
-
-**Hva**: En liste med sensorer for andre kuttbare laster: gulvvarme, panelovner, billader.
-
-**Krav**: Krevd for strategi `vvb_pluss_ekstra`. Inntil 10 sensorer kan legges til.
-
-**Terskel**: Bidrag under 100 W ignoreres (standby-forbruk telles ikke som kuttbar kapasitet).
+- Smart plugg med energimåling og bryter (Shelly Plug S, Sonoff S31)
+- Clamp-on energimåler på kursen, med et relé som bryter
+- Billadere med egen effektmåling og OCPP-styring
 
 **Eksempel-laster og typisk effekt**:
 
-| Last                   | Typisk effekt  |
-| ---------------------- | -------------- |
-| Gulvvarme, bad (5 m²)  | 400-600 W      |
-| Panelovn               | 600-1500 W     |
-| Billader (hjemmelader) | 3 600-22 000 W |
-| Elbil (Type 2, 16 A)   | 3 600 W        |
+| Last                   | Typisk effekt  | Fornuftig terskel |
+| ---------------------- | -------------- | ----------------- |
+| Varmtvannsbereder      | 2 000 W        | 1 000 W           |
+| Gulvvarme, bad (5 m²)  | 400-600 W      | 100 W             |
+| Panelovn               | 600-1500 W     | 100 W             |
+| Billader (hjemmelader) | 3 600-22 000 W | 1 000 W           |
+| Elbil (Type 2, 16 A)   | 3 600 W        | 1 000 W           |
 
 En billader er den klart største enkeltkilden for kutt-kapasitet. 30 minutter pause tilsvarer 1,8-11 kWh, avhengig av ladeeffekt.
+
+Hele forklaringen, inkludert hvorfor terskelen er per last, står i [laster.md](laster.md).
 
 ---
 

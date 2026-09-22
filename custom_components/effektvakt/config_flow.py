@@ -15,32 +15,35 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_CONFIRM_PEAK_SENSOR,
     CONF_DSO,
-    CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
-    CONF_KUTT_STRATEGI,
+    CONF_LAST_BRYTER,
+    CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_NAVN,
+    CONF_LAST_TERSKEL_W,
+    CONF_LASTER,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
-    CONF_VVB_POWER_SENSOR,
     DEFAULT_DSO,
-    DEFAULT_KUTT_STRATEGI,
+    DEFAULT_LAST_TERSKEL_W,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
+    ENTRY_VERSION,
     LEGACY_RISIKO_MAPPING,
-    LEGACY_STRATEGI_MAPPING,
+    MAX_LAST_TERSKEL_W,
     PEAK_SENSOR_FRIENDLY_NAME_KEYWORDS,
     PEAK_SENSOR_NAME_PATTERNS,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
-    STRATEGI_OPTIONS,
     VALID_ENERGY_UNITS,
     VALID_POWER_UNITS,
 )
 from .dso import KAPASITETSTRINN_PER_DSO
+from .laster import LastOppsett, last_til_lagring, les_laster
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -49,9 +52,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Felt uten default: er de borte fra svaret, har brukeren tømt dem, og da skal
-# den lagrede verdien vekk i stedet for å overleve som et spøkelse.
-TOEMBARE_FELT: tuple[str, ...] = (CONF_VVB_POWER_SENSOR,)
+# Feltet i skjemaet for en last som betyr «fjern denne». Det ligger ikke i
+# const.py fordi det aldri lagres: det er et svar i en dialog, ikke et
+# konfigurasjonsfelt.
+CONF_SLETT_LAST = "slett"
 
 
 def looks_like_peak_sensor(entity_id: str, *, friendly_name: str = "") -> bool:
@@ -79,20 +83,6 @@ def _lagret_risiko(verdi: str | None) -> str:
     if verdi is None:
         return DEFAULT_MIN_RISIKO_FOR_KUTT
     return LEGACY_RISIKO_MAPPING.get(verdi, verdi)
-
-
-def _lagret_strategi(verdi: str | None) -> str:
-    """Strategien fra config entryen, oversatt fra de gamle navnene.
-
-    Samme grunn som `_lagret_risiko`: defaulten i dropdownen maa vaere et av
-    valgene, ellers avviser Home Assistant sitt eget skjema naar brukeren
-    trykker lagre. Coordinatoren oversetter alt gjennom
-    LEGACY_STRATEGI_MAPPING, saa uten dette var dialogen det eneste stedet
-    «vvb_billader» fortsatt var ugyldig.
-    """
-    if verdi is None:
-        return DEFAULT_KUTT_STRATEGI
-    return LEGACY_STRATEGI_MAPPING.get(verdi, verdi)
 
 
 def _dso_options() -> list[selector.SelectOptionDict]:
@@ -165,34 +155,96 @@ def innstillinger_skjema(data: Mapping[str, Any]) -> vol.Schema:
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=1, max=30, mode=selector.NumberSelectorMode.BOX),
             ),
-            vol.Required(
-                CONF_KUTT_STRATEGI,
-                default=_lagret_strategi(data.get(CONF_KUTT_STRATEGI)),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[selector.SelectOptionDict(value=s, label=s) for s in STRATEGI_OPTIONS],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="kutt_strategi",
-                ),
-            ),
-            vol.Optional(
-                CONF_VVB_POWER_SENSOR,
-                description={"suggested_value": data.get(CONF_VVB_POWER_SENSOR)},
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor", device_class="power"),
-            ),
-            vol.Optional(
-                CONF_EKSTRA_POWER_SENSORS,
-                default=list(data.get(CONF_EKSTRA_POWER_SENSORS) or []),
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    domain="sensor",
-                    device_class="power",
-                    multiple=True,
-                ),
-            ),
         }
     )
+
+
+def last_skjema(last: Mapping[str, Any] | None = None, *, kan_slettes: bool = False) -> vol.Schema:
+    """Skjemaet for en enkelt kuttbar last.
+
+    Navnet er valgfritt. Står det tomt, bruker integrasjonen sensorens eget
+    friendly_name, og da heter lasten det samme her som ellers i Home
+    Assistant. Terskelen er per last fordi lastene er ulike: et berederelement
+    er enten fullt på eller av og hører hjemme rundt 1000 W, mens varmekabler
+    på 550 W aldri ville kommet over den terskelen.
+    """
+    lagret = last or {}
+    felter: dict[Any, Any] = {
+        vol.Required(
+            CONF_LAST_EFFEKT_SENSOR,
+            description={"suggested_value": lagret.get(CONF_LAST_EFFEKT_SENSOR)},
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", device_class="power"),
+        ),
+        vol.Optional(
+            CONF_LAST_NAVN,
+            description={"suggested_value": lagret.get(CONF_LAST_NAVN)},
+        ): selector.TextSelector(),
+        vol.Optional(
+            CONF_LAST_BRYTER,
+            description={"suggested_value": lagret.get(CONF_LAST_BRYTER)},
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["switch", "input_boolean"]),
+        ),
+        vol.Required(
+            CONF_LAST_TERSKEL_W,
+            default=float(lagret.get(CONF_LAST_TERSKEL_W, DEFAULT_LAST_TERSKEL_W)),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=MAX_LAST_TERSKEL_W,
+                step=10,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="W",
+            ),
+        ),
+    }
+    if kan_slettes:
+        felter[vol.Optional(CONF_SLETT_LAST, default=False)] = selector.BooleanSelector()
+    return vol.Schema(felter)
+
+
+def valider_last(
+    svar: Mapping[str, Any],
+    *,
+    lagrede: list[LastOppsett],
+    erstatter: str | None = None,
+) -> tuple[LastOppsett | None, dict[str, str]]:
+    """Svaret fra lastskjemaet som `LastOppsett`, eller feilene som stoppet det.
+
+    Rent, uten `hass`: enhetsvalideringen av sensoren gjøres av kalleren, som
+    har tilstandsmaskinen. Her står bare det som kan avgjøres av svaret og de
+    lagrede lastene, altså at to laster ikke deler effektsensor. Delte de den,
+    ville `tilgjengelig_kutt` talt den samme effekten to ganger, og
+    kuttsporingen hatt to laster med samme nøkkel.
+    """
+    sensor = str(svar[CONF_LAST_EFFEKT_SENSOR])
+    opptatt = {last.effekt_sensor for last in lagrede if last.effekt_sensor != erstatter}
+    if sensor in opptatt:
+        return None, {CONF_LAST_EFFEKT_SENSOR: "last_finnes_allerede"}
+
+    navn = str(svar.get(CONF_LAST_NAVN) or "").strip()
+    bryter = str(svar.get(CONF_LAST_BRYTER) or "").strip()
+    return (
+        LastOppsett(
+            effekt_sensor=sensor,
+            navn=navn or None,
+            bryter=bryter or None,
+            terskel_w=float(svar.get(CONF_LAST_TERSKEL_W, DEFAULT_LAST_TERSKEL_W)),
+        ),
+        {},
+    )
+
+
+def _last_valg(laster: list[LastOppsett]) -> list[selector.SelectOptionDict]:
+    """Lastene som en dropdown, med effektsensoren som verdi.
+
+    Sensoren og ikke indeksen er verdien: en indeks ville pekt på feil last i
+    det noen fjernet en annen i et annet nettleservindu.
+    """
+    return [
+        selector.SelectOptionDict(value=last.effekt_sensor, label=last.navn or last.effekt_sensor) for last in laster
+    ]
 
 
 def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
@@ -229,15 +281,11 @@ def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
 
 def flettet_data(lagret: Mapping[str, Any], user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Lagret konfigurasjon med svarene fra Configure lagt over."""
-    ny = {**lagret, **user_input}
-    for noekkel in TOEMBARE_FELT:
-        if noekkel not in user_input:
-            ny.pop(noekkel, None)
-    return ny
+    return {**lagret, **user_input}
 
 
 class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
-    VERSION = 1
+    VERSION = ENTRY_VERSION
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -355,14 +403,116 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
 
 
 class EffektvaktOptionsFlow(config_entries.OptionsFlow):
-    """Configure-dialogen. `self.config_entry` kommer fra HA, se over."""
+    """Configure-dialogen. `self.config_entry` kommer fra HA, se over.
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    Dialogen aapner paa en meny framfor et skjema, fordi de kuttbare lastene er
+    en liste og en liste ikke kan redigeres i ett skjema. Hvert valg skriver
+    til config entryen med en gang og kommer tilbake til menyen, saa ingenting
+    gaar tapt om brukeren lukker dialogen uten aa gaa veien ut.
+    """
+
+    def __init__(self) -> None:
+        self._rediger: str | None = None
+
+    @property
+    def _laster(self) -> list[LastOppsett]:
+        return les_laster(self.config_entry.data.get(CONF_LASTER))
+
+    def _skriv(self, data: dict[str, Any]) -> None:
+        self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+
+    def _skriv_laster(self, laster: list[LastOppsett]) -> None:
+        ny = dict(self.config_entry.data)
+        if laster:
+            ny[CONF_LASTER] = [last_til_lagring(last) for last in laster]
+        else:
+            ny.pop(CONF_LASTER, None)
+        self._skriv(ny)
+
+    def _sensorfeil(self, entity_id: str) -> dict[str, str]:
+        """Effektsensoren for en last, maalt mot tilstandsmaskinen."""
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return {CONF_LAST_EFFEKT_SENSOR: "sensor_not_found"}
+        if (state.attributes or {}).get("unit_of_measurement") not in VALID_POWER_UNITS:
+            return {CONF_LAST_EFFEKT_SENSOR: "power_unit_invalid"}
+        return {}
+
+    async def async_step_init(self, _user_input: dict[str, Any] | None = None) -> FlowResult:
+        valg = ["innstillinger", "legg_til_last"]
+        if self._laster:
+            valg.append("velg_last")
+        valg.append("ferdig")
+        return self.async_show_menu(step_id="init", menu_options=valg)
+
+    async def async_step_innstillinger(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            new_data = flettet_data(self.config_entry.data, user_input)
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-            return self.async_create_entry(title="", data={})
+            self._skriv(flettet_data(self.config_entry.data, user_input))
+            return await self.async_step_init()
         return self.async_show_form(
-            step_id="init",
+            step_id="innstillinger",
             data_schema=innstillinger_skjema(self.config_entry.data),
         )
+
+    async def async_step_legg_til_last(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors = self._sensorfeil(user_input[CONF_LAST_EFFEKT_SENSOR])
+            if not errors:
+                last, errors = valider_last(user_input, lagrede=self._laster)
+                if last is not None:
+                    self._skriv_laster([*self._laster, last])
+                    return await self.async_step_init()
+        return self.async_show_form(
+            step_id="legg_til_last",
+            data_schema=last_skjema(user_input),
+            errors=errors,
+        )
+
+    async def async_step_velg_last(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        laster = self._laster
+        if user_input is not None:
+            self._rediger = str(user_input[CONF_LAST_EFFEKT_SENSOR])
+            return await self.async_step_rediger_last()
+        return self.async_show_form(
+            step_id="velg_last",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_LAST_EFFEKT_SENSOR): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=_last_valg(laster),
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        ),
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_rediger_last(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        laster = self._laster
+        valgt = next((last for last in laster if last.effekt_sensor == self._rediger), None)
+        if valgt is None:
+            return await self.async_step_init()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input.get(CONF_SLETT_LAST):
+                self._skriv_laster([last for last in laster if last.effekt_sensor != valgt.effekt_sensor])
+                return await self.async_step_init()
+            errors = self._sensorfeil(user_input[CONF_LAST_EFFEKT_SENSOR])
+            if not errors:
+                ny, errors = valider_last(user_input, lagrede=laster, erstatter=valgt.effekt_sensor)
+                if ny is not None:
+                    self._skriv_laster([ny if last is valgt else last for last in laster])
+                    return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="rediger_last",
+            data_schema=last_skjema(user_input or last_til_lagring(valgt), kan_slettes=True),
+            errors=errors,
+            description_placeholders={"navn": valgt.navn or valgt.effekt_sensor},
+        )
+
+    async def async_step_ferdig(self, _user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Lukk dialogen. Alt er alt skrevet, saa her lages bare en tom entry."""
+        return self.async_create_entry(title="", data={})

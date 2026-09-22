@@ -16,7 +16,7 @@ custom_components/effektvakt/
     faceplate.py        # SVG-kilde for GEHA-METER-skiven (kort og trykk)
     frontend.py         # Statisk servering, Lovelace-ressurs, websocket-kommandoen
     hysterese.py        # HystereseState og apply_hysteresis
-    laster.py           # Kuttbare laster per strategi, tilgjengelig kutt
+    laster.py           # Kuttbare laster, tilgjengelig kutt, observasjon av kutt
     manifest.json       # HA integration manifest
     modell.py           # Terskelmodell, projeksjon, risiko, kostnad (ren Python)
     oppsett.py          # Trinn-tabellen en config entry faar, og hullene i den
@@ -44,7 +44,7 @@ docs/
     input-sensorer.md
     oppsett.md
     sensorer.md
-    strategi.md
+    laster.md
 
 esphome/
     effektvakt-panel.yaml   # ESP32-panelet, se fysisk-panel.md (ikke bygget)

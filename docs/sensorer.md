@@ -15,6 +15,8 @@ Effektvakt oppretter ett device med 6 sensorer, 1 binary sensor og 1 switch. Sen
 | `binary_sensor.effektvakt_kutt_ned_anbefalt` | on/off | -           |
 | `switch.effektvakt_automatikk`               | on/off | -           |
 
+`sensor.effektvakt_tilgjengelig_kutt` er den eneste av dem som ikke alltid finnes: den opprettes først når minst én kuttbar last er konfigurert, se [laster.md](laster.md).
+
 ## Navn og entitets-id
 
 Navnene entitetene vises med kommer fra `strings.json` og `translations/`, og følger språket i Home Assistant. Entitets-id-ene gjør ikke det: de settes eksplisitt i `sensor.py`, `binary_sensor.py` og `switch.py`, slik at de står likt på alle språk. Lot vi HA utlede dem, ville en engelsk installasjon fått `sensor.effektvakt_projected_hourly_average`, og både tabellen over, blueprintene og kortet ville pekt på en id som ikke fantes.
@@ -128,63 +130,68 @@ Verdiene het `none`, `low`, `medium` og `high` fram til september 2026. Gamle ve
 
 ## `sensor.effektvakt_tilgjengelig_kutt`
 
-**Hva**: Estimert kutt-kapasitet i kW basert på valgt strategi og sensor-avlesninger.
+**Hva**: Summen av de konfigurerte kuttbare lastene som trekker over terskelen sin akkurat nå.
 
 **Enhet**: kW
 
-**Avhenger av strategi**:
+**Finnes bare med laster**: har du ikke konfigurert en eneste kuttbar last, opprettes ikke sensoren. Det er et ærligere svar enn et anslag ingen har gitt grunnlag for. Lastene legges inn under Configure, se [laster.md](laster.md).
 
-- `blind`: alltid 0,3 kW
-- `vvb_status`: faktisk VVB-effekt hvis VVB er aktiv (over 1000 W terskel), ellers 0,0 kW
-- `vvb_pluss_ekstra`: VVB-effekt pluss sum av ekstra-sensorer over 100 W terskel
-
-**Merk**: Denne sensoren sier ingenting om risiko. Den er en hjelpe-sensor for blueprints og dashboards som vil vise "vi kan kutte X kW nå".
+**Merk**: Denne sensoren sier ingenting om risiko. Den er en hjelpe-sensor for blueprints og dashboards som vil vise «vi kan kutte X kW nå».
 
 ### Attributter
 
 I tillegg til fellesattributtene lenger nede:
 
-| Attributt              | Enhet | Beskrivelse                                                    |
-| ---------------------- | ----- | -------------------------------------------------------------- |
-| `kutt_strategi`        | str   | Aktiv strategi: `blind`, `vvb_status` eller `vvb_pluss_ekstra` |
-| `vvb_power_w`          | W     | VVB-effekten slik den leses nå. `null` uten VVB-sensor         |
-| `ekstra_power_w_total` | W     | Sum av ekstra-sensorene. `null` når ingen av dem har en verdi  |
-| `kutt_kilder`          | liste | Én oppføring per konfigurert kilde, se under                   |
+| Attributt       | Enhet | Beskrivelse                                             |
+| --------------- | ----- | ------------------------------------------------------- |
+| `kutt_kilder`   | liste | Én oppføring per konfigurert last, se under             |
+| `kuttet_naa_kw` | kW    | Hvor mye last som står kuttet av Effektvakt akkurat nå  |
 
 ### `kutt_kilder`
 
-Tilstanden er en sum, og `kutt_kilder` er postene den er summen av. Hver konfigurert kilde har én oppføring:
+Tilstanden er en sum, og `kutt_kilder` er postene den er summen av. Hver konfigurert last har én oppføring:
 
-| Nøkkel       | Beskrivelse                                                                        |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `entity_id`  | Sensoren kilden leses fra                                                          |
-| `navn`       | HA sitt `friendly_name`. `null` hvis entiteten ikke finnes ennå                    |
-| `effekt_w`   | Effekten akkurat nå. `null` når sensoren er `unavailable`, `unknown` eller ulesbar |
-| `teller_med` | Om kilden faktisk bidrar til tilstanden akkurat nå                                 |
-| `rolle`      | `vvb` eller `ekstra`. Rollen bestemmer terskelen                                   |
-| `terskel_w`  | Terskelen som gjelder for rollen: 1000 W for `vvb`, 100 W for `ekstra`             |
+| Nøkkel         | Beskrivelse                                                                         |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `entity_id`    | Effektsensoren lasten leses fra                                                     |
+| `navn`         | Navnet du gav lasten, ellers sensorens `friendly_name`. `null` hvis ingen av delene  |
+| `effekt_w`     | Effekten akkurat nå. `null` når sensoren er `unavailable`, `unknown` eller ulesbar   |
+| `teller_med`   | Om lasten faktisk bidrar til tilstanden akkurat nå                                  |
+| `terskel_w`    | Lastens egen terskel for «på». Standard 100 W                                       |
+| `bryter`       | Bryteren som slår lasten av, eller `null` når lasten ikke har en kjent bryter        |
+| `bryter_paa`   | Om bryteren står på. `null` uten bryter, og når bryteren ikke svarer                |
+| `kuttet`       | Om lasten står kuttet av Effektvakt akkurat nå                                      |
+| `kuttet_siden` | ISO 8601-tidspunktet kuttet begynte, eller `null`                                   |
 
 ```yaml
 kutt_kilder:
-  - entity_id: sensor.vvb_power
+  - entity_id: sensor.bereder_effekt
     navn: Varmtvannsbereder
     effekt_w: 1800.0
     teller_med: true
-    rolle: vvb
     terskel_w: 1000.0
+    bryter: switch.bereder
+    bryter_paa: true
+    kuttet: false
+    kuttet_siden: null
   - entity_id: sensor.varmekabler_badet_electric_consumption_w
     navn: Varmekabler badet
     effekt_w: 12.0
     teller_med: false
-    rolle: ekstra
     terskel_w: 100.0
+    bryter: null
+    bryter_paa: null
+    kuttet: false
+    kuttet_siden: null
 ```
 
-Alle konfigurerte kilder er med, også de som ikke teller nå. Forskjellen mellom "finnes ikke" og "teller ikke nå" er nettopp det som er verdt å se på et dashboard. En kilde får `teller_med: false` når strategien ikke bruker rollen, når sensoren er utilgjengelig, eller når effekten ligger på eller under terskelen.
+Alle konfigurerte laster er med, også de som ikke teller nå. Forskjellen mellom «finnes ikke» og «teller ikke nå» er nettopp det som er verdt å se på et dashboard. En last får `teller_med: false` når sensoren er utilgjengelig, eller når effekten ligger på eller under terskelen.
 
-`effekt_w: null` er ikke det samme som `0`. Null watt betyr at lasten står stille, `null` betyr at vi ikke vet.
+`effekt_w: null` er ikke det samme som `0`. Null watt betyr at lasten står stille, `null` betyr at vi ikke vet. Det samme skillet gjelder `bryter_paa`.
 
-Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til sensoren, i W mot kW. Unntaket er `blind`, der tilstanden er duty cycle-antagelsen på 0,3 kW og ingen kilder teller med.
+`kuttet` settes bare når bryteren gikk fra på til av mens kutt var anbefalt. Slår du av lasten selv, er det ikke Effektvakt sitt kutt, og da skal det heller ikke telle som en innsparing senere.
+
+Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til sensoren, i W mot kW.
 
 ---
 
@@ -293,7 +300,7 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 
 Radene fra `maal_terskel_kw` til `topp_2_andre_dager_kw` er terskelmodellen, i den rekkefølgen den regnes. `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw` og `kan_legge_paa_kw` er `null` når det ikke finnes noe dyrere trinn å unngå, altså ved ukjent nettselskap eller på øverste trinn. Se [beregninger.md](beregninger.md#terskelmodellen).
 
-Strategi- og kilde-attributtene ligger bare på `sensor.effektvakt_tilgjengelig_kutt`, og kostnadsattributtene bare på `sensor.effektvakt_kostnad_neste_trinn`.
+Last-attributtene ligger bare på `sensor.effektvakt_tilgjengelig_kutt`, og kostnadsattributtene bare på `sensor.effektvakt_kostnad_neste_trinn`.
 
 ### Eksempel
 

@@ -12,16 +12,11 @@ Mitigering: Tick-frekvensen øker til 30s ved `like_under_terskel` og 15s ved `o
 
 ---
 
-## Blind-strategi: duty cycle-problem
+## Et kutt uten effektmåling er et sjansespill
 
-Med `blind`-strategi antar Effektvakt 0,3 kW tilgjengelig kutt. Dette er gjennomsnittet over tid, ikke øyeblikksverdi. I praksis:
+Slår du av en varmtvannsbereder på slump, er det 85-90 % sjanse for at elementet uansett var av i det øyeblikket. Forventet kutt blir da rundt 0,3 kW mot de 2 kW du trodde du kuttet, og det er et gjennomsnitt over tid, ikke noe du kan regne med i timen du står i. Replay-tester på BKK-måneder viser at et slikt blindkutt gir meningsfull forbedring i bare 2 av 5 måneder.
 
-- 85% av tiden: VVB er allerede av, kuttet gir 0 kW
-- 15% av tiden: VVB varmer, kuttet gir 2 kW
-
-Replay-tester på BKK-måneder viser at `blind`-strategi gir meningsfull forbedring i bare 2 av 5 måneder med VVB-shed alene. De tre månedene der det ikke hjelper er måneder der VVB tilfeldigvis ikke varmer i de kritiske minutt-vinduene.
-
-Løsning: Bruk `vvb_status`-strategi med en smart plugg på VVB.
+Løsning: legg lasten inn som en kuttbar last med effektsensor, se [laster.md](laster.md). Da kutter automasjonen bare når elementet faktisk varmer, og `sensor.effektvakt_tilgjengelig_kutt` sier hvor mye som er å hente akkurat nå. Uten konfigurerte laster finnes ikke den sensoren, og da har Effektvakt ingen mening om hva du har å kutte. Det er med vilje: fram til september 2026 stod den på 0,3 kW for alle, og tallet var en antagelse om en bereder ingen visste om brukeren hadde.
 
 ---
 

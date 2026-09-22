@@ -12,13 +12,15 @@ from pathlib import Path
 import pytest
 
 from custom_components.effektvakt.binary_sensor import BINARY_SENSOR_KEY
+from custom_components.effektvakt.config_flow import CONF_SLETT_LAST
 from custom_components.effektvakt.const import (
-    CONF_EKSTRA_POWER_SENSORS,
-    CONF_KUTT_STRATEGI,
+    CONF_LAST_BRYTER,
+    CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_NAVN,
+    CONF_LAST_TERSKEL_W,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
-    CONF_VVB_POWER_SENSOR,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
     SWITCH_KEY_AUTOMATIKK,
@@ -117,16 +119,40 @@ def test_oppsettet_har_bare_stegene_flyten_viser(navn):
 
 @pytest.mark.parametrize("navn", sorted(SPRAAK))
 def test_configure_har_etikett_for_hver_innstilling(navn):
-    felt = _last(SPRAAK[navn])["options"]["step"]["init"]["data"]
+    felt = _last(SPRAAK[navn])["options"]["step"]["innstillinger"]["data"]
     assert set(felt) == {
         CONF_SAFETY_BUFFER_KW,
         CONF_MIN_RISIKO_FOR_KUTT,
         CONF_RISIKO_HOLDETID_MINUTTER,
-        CONF_KUTT_STRATEGI,
-        CONF_VVB_POWER_SENSOR,
-        CONF_EKSTRA_POWER_SENSORS,
     }
     assert all(felt.values())
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+def test_menyen_i_configure_har_etikett_for_hvert_valg(navn):
+    """Meny-valgene er step-id-er i config_flow.py, og uten etikett vises de raa."""
+    valg = _last(SPRAAK[navn])["options"]["step"]["init"]["menu_options"]
+    assert set(valg) == {"innstillinger", "legg_til_last", "velg_last", "ferdig"}
+    assert all(valg.values())
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+@pytest.mark.parametrize("steg", ["legg_til_last", "rediger_last"])
+def test_lastskjemaet_har_etikett_for_hvert_felt(navn, steg):
+    felt = _last(SPRAAK[navn])["options"]["step"][steg]["data"]
+    forventet = {CONF_LAST_EFFEKT_SENSOR, CONF_LAST_NAVN, CONF_LAST_BRYTER, CONF_LAST_TERSKEL_W}
+    if steg == "rediger_last":
+        forventet.add(CONF_SLETT_LAST)
+    assert set(felt) == forventet
+    assert all(felt.values())
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+def test_strategi_begrepet_er_borte_fra_oversettelsene(navn):
+    """Ingen «strategi» og ingen VVB: lasten kan vaere hva som helst."""
+    tekst = SPRAAK[navn].read_text(encoding="utf-8").lower()
+    assert "strategi" not in tekst
+    assert "vvb" not in tekst
 
 
 def test_binaersensoren_heter_kutt_anbefalt_paa_norsk():

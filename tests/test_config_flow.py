@@ -13,26 +13,33 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from custom_components.effektvakt.config_flow import (
+    CONF_SLETT_LAST,
     flettet_data,
     innstillinger_skjema,
+    last_skjema,
     looks_like_peak_sensor,
     parse_kapasitetstrinn,
     sensor_skjema,
+    valider_last,
 )
 from custom_components.effektvakt.const import (
     CONF_CONFIRM_PEAK_SENSOR,
     CONF_DSO,
-    CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
-    CONF_KUTT_STRATEGI,
+    CONF_LAST_BRYTER,
+    CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_NAVN,
+    CONF_LAST_TERSKEL_W,
+    CONF_LASTER,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
-    CONF_VVB_POWER_SENSOR,
+    DEFAULT_LAST_TERSKEL_W,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     RISIKO_LIKE_UNDER,
 )
+from custom_components.effektvakt.laster import LastOppsett
 
 if TYPE_CHECKING:
     import voluptuous as vol
@@ -44,9 +51,10 @@ LAGRET: dict[str, Any] = {
     CONF_SAFETY_BUFFER_KW: 2.5,
     CONF_MIN_RISIKO_FOR_KUTT: "over_terskel",
     CONF_RISIKO_HOLDETID_MINUTTER: 12,
-    CONF_KUTT_STRATEGI: "vvb_pluss_ekstra",
-    CONF_VVB_POWER_SENSOR: "sensor.vvb_effekt",
-    CONF_EKSTRA_POWER_SENSORS: ["sensor.billader", "sensor.varmekabler"],
+    CONF_LASTER: [
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.bereder", CONF_LAST_TERSKEL_W: 1000.0},
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.varmekabler", CONF_LAST_TERSKEL_W: 100.0},
+    ],
 }
 
 
@@ -88,12 +96,6 @@ def test_looks_like_peak_sensor(entity_id: str, friendly: str, expected: bool):
     assert looks_like_peak_sensor(entity_id, friendly_name=friendly) is expected
 
 
-def test_strategi_options_includes_alle_3():
-    from custom_components.effektvakt.const import STRATEGI_OPTIONS
-
-    assert STRATEGI_OPTIONS == ["blind", "vvb_status", "vvb_pluss_ekstra"]
-
-
 def test_configure_beholder_alt_naar_ingenting_endres():
     """Regresjonen: en tur innom Configure skal ikke roere konfigurasjonen.
 
@@ -106,8 +108,7 @@ def test_configure_beholder_alt_naar_ingenting_endres():
 def test_configure_viser_de_lagrede_verdiene():
     svar = _svar_uten_endringer(innstillinger_skjema(LAGRET))
     assert svar[CONF_SAFETY_BUFFER_KW] == 2.5
-    assert svar[CONF_EKSTRA_POWER_SENSORS] == ["sensor.billader", "sensor.varmekabler"]
-    assert svar[CONF_VVB_POWER_SENSOR] == "sensor.vvb_effekt"
+    assert svar[CONF_RISIKO_HOLDETID_MINUTTER] == 12
 
 
 def test_configure_endrer_det_brukeren_faktisk_endret():
@@ -115,20 +116,12 @@ def test_configure_endrer_det_brukeren_faktisk_endret():
     svar[CONF_SAFETY_BUFFER_KW] = 0.8
     ny = flettet_data(LAGRET, svar)
     assert ny[CONF_SAFETY_BUFFER_KW] == 0.8
-    assert ny[CONF_EKSTRA_POWER_SENSORS] == LAGRET[CONF_EKSTRA_POWER_SENSORS]
+    assert ny[CONF_LASTER] == LAGRET[CONF_LASTER]
 
 
-def test_configure_kan_toemme_listen_med_ekstra_sensorer():
-    svar = _svar_uten_endringer(innstillinger_skjema(LAGRET))
-    svar[CONF_EKSTRA_POWER_SENSORS] = []
-    assert flettet_data(LAGRET, svar)[CONF_EKSTRA_POWER_SENSORS] == []
-
-
-def test_configure_kan_fjerne_vvb_sensoren():
-    """Et tomt valgfritt felt sendes ikke, og da skal den lagrede verdien vekk."""
-    svar = _svar_uten_endringer(innstillinger_skjema(LAGRET))
-    del svar[CONF_VVB_POWER_SENSOR]
-    assert CONF_VVB_POWER_SENSOR not in flettet_data(LAGRET, svar)
+def test_innstillingsskjemaet_roerer_ikke_lastene():
+    """Lastene redigeres i sine egne steg, saa de skal ikke staa i dette skjemaet."""
+    assert CONF_LASTER not in _felt(innstillinger_skjema(LAGRET))
 
 
 def test_configure_tar_defaults_naar_ingenting_er_lagret():
@@ -136,8 +129,6 @@ def test_configure_tar_defaults_naar_ingenting_er_lagret():
     tomt = {CONF_DSO: "bkk", CONF_POWER_SENSOR: "sensor.ams_effekt"}
     svar = _svar_uten_endringer(innstillinger_skjema(tomt))
     assert svar[CONF_MIN_RISIKO_FOR_KUTT] == DEFAULT_MIN_RISIKO_FOR_KUTT
-    assert svar[CONF_EKSTRA_POWER_SENSORS] == []
-    assert CONF_VVB_POWER_SENSOR not in svar
 
 
 def test_configure_oversetter_gammelt_risikonivaa():
@@ -146,14 +137,79 @@ def test_configure_oversetter_gammelt_risikonivaa():
     assert svar[CONF_MIN_RISIKO_FOR_KUTT] == RISIKO_LIKE_UNDER
 
 
-def test_configure_oversetter_gammel_strategi():
-    """Coordinatoren oversetter «vvb_billader», og dialogen maa gjoere det samme.
+# --- kuttbare laster --------------------------------------------------------
 
-    Sto den gamle verdien som default i dropdownen, avviste Home Assistant
-    sitt eget skjema i det brukeren trykket lagre.
-    """
-    svar = _svar_uten_endringer(innstillinger_skjema({CONF_KUTT_STRATEGI: "vvb_billader"}))
-    assert svar[CONF_KUTT_STRATEGI] == "vvb_pluss_ekstra"
+
+def test_lastskjemaet_spoer_om_sensor_navn_bryter_og_terskel():
+    assert _felt(last_skjema()) == {
+        CONF_LAST_EFFEKT_SENSOR,
+        CONF_LAST_NAVN,
+        CONF_LAST_BRYTER,
+        CONF_LAST_TERSKEL_W,
+    }
+
+
+def test_lastskjemaet_defaulter_terskelen():
+    assert _svar_uten_endringer(last_skjema())[CONF_LAST_TERSKEL_W] == DEFAULT_LAST_TERSKEL_W
+
+
+def test_lastskjemaet_viser_den_lagrede_lasten():
+    lagret = {
+        CONF_LAST_EFFEKT_SENSOR: "sensor.bereder",
+        CONF_LAST_NAVN: "Bereder",
+        CONF_LAST_BRYTER: "switch.bereder",
+        CONF_LAST_TERSKEL_W: 1000.0,
+    }
+    svar = _svar_uten_endringer(last_skjema(lagret))
+    assert svar == lagret
+
+
+def test_slettevalget_kommer_bare_naar_lasten_finnes_fra_foer():
+    assert CONF_SLETT_LAST not in _felt(last_skjema())
+    assert CONF_SLETT_LAST in _felt(last_skjema(kan_slettes=True))
+
+
+def test_lasten_leses_ut_av_svaret():
+    last, feil = valider_last(
+        {
+            CONF_LAST_EFFEKT_SENSOR: "sensor.bereder",
+            CONF_LAST_NAVN: "Bereder",
+            CONF_LAST_BRYTER: "switch.bereder",
+            CONF_LAST_TERSKEL_W: 1000.0,
+        },
+        lagrede=[],
+    )
+    assert feil == {}
+    assert last == LastOppsett("sensor.bereder", "Bereder", "switch.bereder", 1000.0)
+
+
+def test_tomt_navn_og_tom_bryter_blir_ingenting():
+    last, _ = valider_last(
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.kabler", CONF_LAST_NAVN: "  ", CONF_LAST_BRYTER: ""},
+        lagrede=[],
+    )
+    assert last.navn is None
+    assert last.bryter is None
+
+
+def test_to_laster_kan_ikke_dele_effektsensor():
+    """Delte de den, ville tilgjengelig_kutt talt den samme effekten to ganger."""
+    last, feil = valider_last(
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.bereder"},
+        lagrede=[LastOppsett("sensor.bereder")],
+    )
+    assert last is None
+    assert feil == {CONF_LAST_EFFEKT_SENSOR: "last_finnes_allerede"}
+
+
+def test_lasten_kan_beholde_sin_egen_sensor_naar_den_redigeres():
+    last, feil = valider_last(
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.bereder", CONF_LAST_NAVN: "Nytt navn"},
+        lagrede=[LastOppsett("sensor.bereder")],
+        erstatter="sensor.bereder",
+    )
+    assert feil == {}
+    assert last.navn == "Nytt navn"
 
 
 def test_bekreftelsesboksen_vises_foerst_etter_advarselen():

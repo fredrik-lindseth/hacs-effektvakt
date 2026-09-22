@@ -335,7 +335,7 @@ Ventingen koster noe. Et varsel som kommer for sent er like ubrukelig som et som
 
 At begge sidene skalerer med `1 − elapsed_h` er det som holder avveiningen på plass. Fradraget slipper taket når overskridelsen passerer `KORTVARIG_LAST_KW × (1 − elapsed_h)`, og et kutt som står igjen på samme tidspunkt henter inn `kuttet × (1 − elapsed_h)`. **Er den kuttbare lasten minst like stor som `KORTVARIG_LAST_KW`, rekker kuttet alltid å hente inn hele overskridelsen**, uansett når i timen den dukker opp. Derfor er 1,5 kW satt under de 2 kW en varmtvannsbereder trekker.
 
-Prisen er at små overskridelser varsles sent. En vedvarende time på 6,0 kW mot et tak på 5,0 meldes rundt minutt tjue, ikke ved minutt null, og en på 5,2 kW først rundt minutt femti. Har du bare 0,3 kW kuttbar last, altså `blind`-strategien uten sensorer, kommer varselet i praksis for sent til at kuttet berger timen; men 0,3 kW hadde uansett ikke berget den. Tallet hører hjemme i `const.py` som `KORTVARIG_LAST_KW`, og skal kalibreres mot ekte drift framfor mot følelsen av at det er for tregt.
+Prisen er at små overskridelser varsles sent. En vedvarende time på 6,0 kW mot et tak på 5,0 meldes rundt minutt tjue, ikke ved minutt null, og en på 5,2 kW først rundt minutt femti. Har du bare 0,3 kW kuttbar last, kommer varselet i praksis for sent til at kuttet berger timen; men 0,3 kW hadde uansett ikke berget den. Tallet hører hjemme i `const.py` som `KORTVARIG_LAST_KW`, og skal kalibreres mot ekte drift framfor mot følelsen av at det er for tregt.
 
 ---
 
@@ -389,17 +389,17 @@ Er terskelen passert, leses sensorer og projeksjon oppdateres hvert 15 sekund fo
 
 ---
 
-## Tilgjengelig kutt per strategi
+## Tilgjengelig kutt
 
-`compute_tilgjengelig_kutt_kw` i `laster.py`:
+`compute_tilgjengelig_kutt_kw` i `laster.py` summerer effekten til de konfigurerte lastene som trekker over sin egen terskel, og deler på 1000:
 
-| Strategi           | Logikk                                                                  |
-| ------------------ | ----------------------------------------------------------------------- |
-| `blind`            | Returnerer `BLIND_ASSUMED_KUTT_KW` = 0,3 kW (2 kW VVB × 15% duty cycle) |
-| `vvb_status`       | VVB-effekt / 1000 hvis VVB > 1000 W, ellers 0,0 kW                      |
-| `vvb_pluss_ekstra` | VVB-bidrag + sum av ekstra-sensorer > 100 W terskel                     |
+```
+tilgjengelig_kutt_kw = sum(effekt_w for last in laster if effekt_w > last.terskel_w) / 1000
+```
 
-Terskelen på 1000 W for VVB er satt fordi elementet er enten fullt på (~2 kW) eller av. Verdier mellom 0 og 1000 W antas å være standby-forbruk, ikke aktiv oppvarming.
+Terskelen er per last, ikke felles. Et berederelement er enten fullt på (~2 kW) eller av, så der hører den hjemme rundt 1000 W og alt under regnes som standby. Varmekabler på 550 W ville falt utenfor en slik terskel, og har derfor sin egen på 100 W, som er defaulten.
+
+Uten konfigurerte laster er svaret `None` og ikke et tall, og da opprettes ikke sensoren i det hele tatt. Se [laster.md](laster.md).
 
 ---
 

@@ -33,17 +33,28 @@ Etter dette steget er Effektvakt i gang.
 
 Under **Settings > Devices & Services > Effektvakt > Configure** ligger resten. Feltene viser alltid det som gjelder nå, så du kan endre én ting uten å røre de andre.
 
+Configure åpner på en meny: **Innstillinger**, **Legg til en kuttbar last**, **Endre eller fjern en kuttbar last** og **Ferdig**. Alt lagres med en gang du svarer, så du kan lukke dialogen når du er ferdig.
+
+Under Innstillinger:
+
 | Innstilling           | Standard             | Beskrivelse                                                |
 | --------------------- | -------------------- | ---------------------------------------------------------- |
 | Sikkerhetsbuffer (kW) | 1,0                  | Margin under terskelen som gir `like_under_terskel`         |
 | Min risiko for kutt   | Like under terskelen | Under dette nivået er `binary_sensor` av                    |
 | Risiko-holdetid (min) | 5                    | Hvor lenge nedgang i risiko må holde seg før det bekreftes  |
-| Kutt-strategi         | blind                | Se [strategi.md](strategi.md)                               |
-| VVB-effektsensor      | (ingen)              | Krevd for strategi `vvb_status` og `vvb_pluss_ekstra`       |
-| Ekstra effektsensorer | (ingen)              | Krevd for strategi `vvb_pluss_ekstra`                       |
 
 Sikkerhetsbufferen er hovedknappen. En stor buffer gir tidligere varsel og flere kutt, en liten gir færre kutt og mindre margin når du bommer. Holdetiden finnes for at risikoen ikke skal falle tilbake i samme sekund som effekten dipper, så lasten ikke blir slått av og på gjentatte ganger i samme time.
 
 Standardverdiene duger den første uken. Vent til du har sett noen dager med ekte forbruk før du skrur på dem.
 
 Hvordan risikonivåene regnes ut fra margin og buffer står i [sensorer.md](sensorer.md), og formlene i [beregninger.md](beregninger.md).
+
+---
+
+## Kuttbare laster
+
+En kuttbar last er noe du kan slå av en halvtime uten at noen merker det: en bereder, en varmepumpe, en billader, varmekabler. Hver last er en effektsensor, en valgfri bryter og en terskel for når lasten regnes som på.
+
+Lastene er det `sensor.effektvakt_tilgjengelig_kutt` summerer, og uten dem opprettes ikke den sensoren i det hele tatt. Legger du inn bryteren også, ser Effektvakt når lasten faktisk ble kuttet, og det er grunnlaget for hendelsesloggen.
+
+Legg dem inn under **Configure > Legg til en kuttbar last**. Full forklaring med fornuftige terskler per lasttype står i [laster.md](laster.md).

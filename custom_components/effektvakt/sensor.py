@@ -11,10 +11,14 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, RISIKO_LEVELS
+
+# Inngaar i unique_id, saa den er laast av entitetsregisteret.
+TILGJENGELIG_KUTT_KEY = "tilgjengelig_kutt"
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -29,18 +33,41 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensors from config entry."""
+    """Set up sensors from config entry.
+
+    Sensoren for tilgjengelig kutt opprettes bare naar brukeren faktisk har
+    konfigurert kuttbare laster. Uten laster finnes det ikke noe svar aa gi,
+    og en sensor som viser et anslag ingen har gitt grunnlag for er verre enn
+    ingen sensor: den stod paa 0,3 kW hele doegnet fram til september 2026, og
+    tallet var en antagelse om en varmtvannsbereder vi ikke visste om fantes.
+    """
     coordinator: EffektvaktCoordinator = entry.runtime_data
-    async_add_entities(
-        [
-            EffektvaktProjisertSensor(coordinator),
-            EffektvaktMarginSensor(coordinator),
-            EffektvaktTopp3Sensor(coordinator),
-            EffektvaktRisikoSensor(coordinator),
-            EffektvaktTilgjengeligKuttSensor(coordinator),
-            EffektvaktKostnadNesteTrinnSensor(coordinator),
-        ]
-    )
+    sensorer: list[SensorEntity] = [
+        EffektvaktProjisertSensor(coordinator),
+        EffektvaktMarginSensor(coordinator),
+        EffektvaktTopp3Sensor(coordinator),
+        EffektvaktRisikoSensor(coordinator),
+        EffektvaktKostnadNesteTrinnSensor(coordinator),
+    ]
+    if coordinator.laster:
+        sensorer.append(EffektvaktTilgjengeligKuttSensor(coordinator))
+    else:
+        _glem_tilgjengelig_kutt(hass, entry)
+    async_add_entities(sensorer)
+
+
+def _glem_tilgjengelig_kutt(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Ta sensoren ut av entitetsregisteret naar siste last er fjernet.
+
+    Uten dette blir den staaende som `unavailable` i det uendelige: registeret
+    husker entiteter plattformen slutter aa opprette, og brukeren maa slette
+    den for haand. Kommer en last tilbake, opprettes sensoren paa nytt med den
+    samme unique_id-en, saa historikken henger med.
+    """
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{TILGJENGELIG_KUTT_KEY}")
+    if entity_id:
+        registry.async_remove(entity_id)
 
 
 def _kapasitetstrinn_json(trinn: list[tuple[float, int]]) -> list[list[float | int | None]]:
@@ -190,11 +217,18 @@ class EffektvaktRisikoSensor(_EffektvaktBaseSensor):
 
 
 class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
+    """Summen av de konfigurerte lastene som trekker over terskelen sin akkurat nå.
+
+    Finnes bare når minst én last er konfigurert, se `async_setup_entry`.
+    Tilstanden er summen av `effekt_w` for kildene med `teller_med: true` i
+    attributtet `kutt_kilder`, så tallet kan alltid forklares av lista.
+    """
+
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = "kW"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    _sensor_key = "tilgjengelig_kutt"
+    _sensor_key = TILGJENGELIG_KUTT_KEY
 
     @property
     def native_value(self) -> float | None:
@@ -208,10 +242,8 @@ class EffektvaktTilgjengeligKuttSensor(_EffektvaktBaseSensor):
         felles = super().extra_state_attributes or {}
         return {
             **felles,
-            "kutt_strategi": d.get("kutt_strategi"),
-            "vvb_power_w": d.get("vvb_power_w"),
-            "ekstra_power_w_total": d.get("ekstra_power_w_total"),
             "kutt_kilder": d.get("kutt_kilder"),
+            "kuttet_naa_kw": d.get("kuttet_naa_kw"),
         }
 
 

@@ -41,17 +41,57 @@
   "options": {
     "step": {
       "init": {
+        "title": "Effektvakt",
+        "description": "Velg hva du vil endre. Alt lagres med en gang, så du kan lukke dialogen når du er ferdig.",
+        "menu_options": {
+          "innstillinger": "Innstillinger",
+          "legg_til_last": "Legg til en kuttbar last",
+          "velg_last": "Endre eller fjern en kuttbar last",
+          "ferdig": "Ferdig"
+        }
+      },
+      "innstillinger": {
         "title": "Effektvakt-innstillinger",
         "description": "Endre disse når du har sett hvordan Effektvakt oppfører seg hos deg. Feltene viser det som gjelder nå.",
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
           "min_risiko_for_kutt": "Kutt fra og med dette nivået",
-          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
-          "kutt_strategi": "Kutt-strategi",
-          "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_pluss_ekstra)",
-          "ekstra_power_sensors": "Ekstra effektsensorer (varmekabler, billader, osv)"
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+        }
+      },
+      "legg_til_last": {
+        "title": "Ny kuttbar last",
+        "description": "En last er en effektsensor, en valgfri bryter og en terskel. Terskelen er hvor mye lasten må trekke før den regnes som på: rundt 1000 W for et berederelement, lavere for varmekabler. Legger du inn bryteren, ser Effektvakt når lasten faktisk ble kuttet.",
+        "data": {
+          "effekt_sensor": "Effektsensor",
+          "navn": "Navn (valgfritt, ellers brukes sensorens eget navn)",
+          "bryter": "Bryter som slår lasten av (valgfri)",
+          "terskel_w": "Terskel for «på» (W)"
+        }
+      },
+      "velg_last": {
+        "title": "Velg last",
+        "description": "Hvilken av de kuttbare lastene vil du endre?",
+        "data": {
+          "effekt_sensor": "Last"
+        }
+      },
+      "rediger_last": {
+        "title": "Endre {navn}",
+        "description": "Endre lasten, eller kryss av for å fjerne den.",
+        "data": {
+          "effekt_sensor": "Effektsensor",
+          "navn": "Navn (valgfritt, ellers brukes sensorens eget navn)",
+          "bryter": "Bryter som slår lasten av (valgfri)",
+          "terskel_w": "Terskel for «på» (W)",
+          "slett": "Fjern denne lasten"
         }
       }
+    },
+    "error": {
+      "sensor_not_found": "Sensoren finnes ikke",
+      "power_unit_invalid": "Effektsensoren må ha enhet W eller kW",
+      "last_finnes_allerede": "Den effektsensoren er allerede i bruk av en annen last"
     }
   },
   "entity": {
@@ -107,13 +147,6 @@
     }
   },
   "selector": {
-    "kutt_strategi": {
-      "options": {
-        "blind": "Blind (antar 0,3 kW VVB-kutt)",
-        "vvb_status": "VVB med statussensor (faktisk effekt)",
-        "vvb_pluss_ekstra": "VVB + ekstra last (full fleksibilitet)"
-      }
-    },
     "min_risiko_for_kutt": {
       "options": {
         "naermer_seg_terskel": "Nærmer seg terskelen",

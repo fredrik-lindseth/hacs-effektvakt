@@ -11,9 +11,10 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import DOMAIN, WATCHDOG_INTERVAL_SECONDS
+from .const import DOMAIN, ENTRY_VERSION, WATCHDOG_INTERVAL_SECONDS
 from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stale
 from .frontend import async_register_frontend, async_unregister_frontend
+from .laster import migrer_til_laster
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -107,6 +108,28 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     ogsaa naar HA starter uten at noen entry er satt opp enda.
     """
     await async_register_frontend(hass)
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Loeft en config entry til gjeldende format.
+
+    Kroken maa ligge her og ikke i config_flow.py: Home Assistant slaar den opp
+    paa integrasjonsmodulen. Selve oversettelsen er ren og bor i `laster.py`.
+
+    1 -> 2: kutt_strategi, vvb_power_sensor og ekstra_power_sensors blir en
+    liste over kuttbare laster. Strategien hadde ingen virkning utover hva
+    `tilgjengelig_kutt` viste, saa den forsvinner uten erstatning, mens begge
+    sensorfeltene blir laster med den terskelen rollen deres hadde.
+
+    En entry fra framtiden avvises framfor aa lastes. Nedgradering er ikke noe
+    vi kan gjoere noe fornuftig med, og HA melder det som en feil brukeren ser.
+    """
+    if entry.version > ENTRY_VERSION:
+        return False
+    if entry.version < 2:
+        hass.config_entries.async_update_entry(entry, data=migrer_til_laster(entry.data), version=2)
+        _LOGGER.info("Effektvakt-oppsettet er migrert til lasteliste (entry-versjon 2)")
     return True
 
 

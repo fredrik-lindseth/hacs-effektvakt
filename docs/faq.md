@@ -55,11 +55,11 @@ Mindre enn folk tror, hvis du ikke har en VVB-effekt-sensor.
 
 Norsk standard VVB (OSO Saga f.eks.) har 2 kW element. MEN: tanken bruker bare 10-15% av tiden på aktiv oppvarming i normal drift. Resten av tiden ligger elementet i pause mens vannet holder temperatur.
 
-Hvis Effektvakt blindt slår av VVB i et tilfeldig 30-min-vindu, er det 85-90 % sjanse for at elementet uansett var av på det tidspunktet. Forventet effekt-kutt: 0,1-0,2 kWh.
+Slår en automasjon av berederen i et tilfeldig 30-minutters vindu, uten å vite om elementet varmer, er det 85-90 % sjanse for at det uansett var av på det tidspunktet. Forventet effekt-kutt: 0,1-0,2 kWh.
 
 For å garantere kutt trenger du en sensor som rapporterer VVB-effekten i sanntid. Da kan Effektvakt slå av kun når elementet faktisk varmer. Det gir ca. 1 kWh kutt per 30-min event.
 
-Effektvakt støtter en valgfri `vvb_power_sensor`-konfig for nettopp dette, se [strategi.md](strategi.md).
+Effektvakt lar deg legge berederen inn som en kuttbar last med sin egen effektsensor, se [laster.md](laster.md). Legger du bryteren inn også, ser vakten når kuttet faktisk skjedde.
 
 ## Hva med elbil-lader?
 
@@ -92,7 +92,7 @@ For gulvvarme er det effekt per kvadratmeter × areal:
 
 Tallene over kommer fra produktkataloger (Nexans, Elko, Mill, Bauhaus). Ditt eget anlegg kan ligge utenfor området, sjekk faktura eller monteringspapirer hvis du vil ha eksakt tall.
 
-For å vite **når** lastene faktisk drar effekt (duty cycle), trenger du en sensor. Shelly Plus Plug S, Aeotec Smart Switch eller andre power-sensorer på 230V-uttaket gir deg sanntidsverdi. Da kan Effektvakt bruke den (se [strategi.md](strategi.md)).
+For å vite **når** lastene faktisk drar effekt (duty cycle), trenger du en sensor. Shelly Plus Plug S, Aeotec Smart Switch eller andre power-sensorer på 230V-uttaket gir deg sanntidsverdi. Da kan Effektvakt bruke den, se [laster.md](laster.md).
 
 Den ENESTE målte verdien jeg har fra eget hus er bad-gulvvarme: 557 W max, 183 W snitt. Det matcher ca 4-5 m² bad × 130 W/m². Bekrefter formelen, men én datapunkt er ikke "data".
 

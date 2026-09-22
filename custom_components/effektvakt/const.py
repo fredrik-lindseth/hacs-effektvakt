@@ -6,6 +6,12 @@ from typing import Final
 
 DOMAIN: Final[str] = "effektvakt"
 
+# Versjonen av formatet i config entryen. 2 er lastelisten; 1 hadde
+# kutt_strategi, vvb_power_sensor og ekstra_power_sensors.
+# `async_migrate_entry` i __init__.py loefter 1 til 2. Bump denne og
+# migreringen i samme commit, aldri hver for seg.
+ENTRY_VERSION: Final[int] = 2
+
 # Config keys
 CONF_DSO: Final[str] = "dso"
 CONF_POWER_SENSOR: Final[str] = "power_sensor"
@@ -15,28 +21,24 @@ CONF_SAFETY_BUFFER_KW: Final[str] = "safety_buffer_kw"
 CONF_MIN_RISIKO_FOR_KUTT: Final[str] = "min_risiko_for_kutt"
 CONF_RISIKO_HOLDETID_MINUTTER: Final[str] = "risiko_holdetid_minutter"
 CONF_CONFIRM_PEAK_SENSOR: Final[str] = "confirm_peak_sensor"
-CONF_VVB_POWER_SENSOR: Final[str] = "vvb_power_sensor"
-CONF_EKSTRA_POWER_SENSORS: Final[str] = "ekstra_power_sensors"
-CONF_KUTT_STRATEGI: Final[str] = "kutt_strategi"
 
-# Kutt-strategier
-STRATEGI_BLIND: Final[str] = "blind"
-STRATEGI_VVB_STATUS: Final[str] = "vvb_status"
-STRATEGI_VVB_PLUSS_EKSTRA: Final[str] = "vvb_pluss_ekstra"
+# Kuttbare laster. Lista ligger under CONF_LASTER i config entryen, og hver
+# oppføring er en dict med de fire nøklene under. Integrasjonen kjenner ingen
+# apparattyper: en bereder, en varmepumpe og en billader er den samme saken,
+# de har bare ulike terskler. `laster.py` eier tolkningen av formatet.
+CONF_LASTER: Final[str] = "laster"
+CONF_LAST_NAVN: Final[str] = "navn"
+CONF_LAST_EFFEKT_SENSOR: Final[str] = "effekt_sensor"
+CONF_LAST_BRYTER: Final[str] = "bryter"
+CONF_LAST_TERSKEL_W: Final[str] = "terskel_w"
 
-STRATEGI_OPTIONS: Final[list[str]] = [STRATEGI_BLIND, STRATEGI_VVB_STATUS, STRATEGI_VVB_PLUSS_EKSTRA]
-
-DEFAULT_KUTT_STRATEGI: Final[str] = STRATEGI_BLIND
-
-# Bakoverkompatibilitet for strategi-navn
-LEGACY_STRATEGI_MAPPING: Final[dict[str, str]] = {
-    "vvb_billader": STRATEGI_VVB_PLUSS_EKSTRA,
-}
-
-# Antagelser per strategi
-BLIND_ASSUMED_KUTT_KW: Final[float] = 0.3  # 2 kW VVB x 15% duty cycle
-VVB_ACTIVE_THRESHOLD_W: Final[float] = 1000.0  # under denne: element antas å ikke varme
-EKSTRA_SENSOR_ACTIVE_THRESHOLD_W: Final[float] = 100.0  # under denne: bidrar ikke
+# Over denne regnes lasten som «varmer nå», og teller med i tilgjengelig kutt.
+# Hver last har sin egen: et berederelement er enten fullt på (~2 kW) eller av,
+# så der hører terskelen hjemme rundt 1000 W, mens et sett varmekabler på 550 W
+# aldri ville kommet over den. Defaulten er lav nok til å skille «på» fra
+# standby uten å måtte stilles for de fleste laster.
+DEFAULT_LAST_TERSKEL_W: Final[float] = 100.0
+MAX_LAST_TERSKEL_W: Final[float] = 20_000.0
 
 # Risiko-nivåer (sortert: lavest til høyest)
 #

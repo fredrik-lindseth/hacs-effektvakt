@@ -1,7 +1,7 @@
 """Avlesning av Home Assistant-entiteter, normalisert til enhetene vi regner i.
 
-Ansvar i en setning: les en HA-entitet og gi den som kW, kWh, navn eller
-tidsstempel, eller None hvis den ikke svarer.
+Ansvar i en setning: les en HA-entitet og gi den som kW, kWh, navn,
+bryterstilling eller tidsstempel, eller None hvis den ikke svarer.
 
 Dette er de eneste funksjonene i pakken som rører `hass.states`, og de ligger
 samlet nettopp derfor: da er HA-flaten synlig på ett sted, og resten av koden
@@ -16,6 +16,7 @@ import math
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.util import dt as dt_util_module
 
 from .const import MAX_POWER_CLAMP_W, VALID_ENERGY_UNITS, VALID_POWER_UNITS
@@ -61,6 +62,27 @@ def read_friendly_name(hass: HomeAssistant, entity_id: str) -> str | None:
         return None
     navn = (state.attributes or {}).get("friendly_name")
     return navn if isinstance(navn, str) else None
+
+
+def read_switch_on(hass: HomeAssistant, entity_id: str | None) -> bool | None:
+    """Om en bryter staar paa. None naar den ikke finnes eller ikke svarer.
+
+    Skillet mellom None og False betyr noe her: «bryteren er av» og «vi vet
+    ikke hvor bryteren staar» gir ulike svar paa om lasten nettopp ble kuttet.
+    Gjettet ville blitt til et kutt i hendelsesloggen som aldri fant sted.
+
+    Alt annet enn on og off er «vet ikke», ogsaa unavailable og unknown.
+    """
+    if not entity_id:
+        return None
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    if state.state == STATE_ON:
+        return True
+    if state.state == STATE_OFF:
+        return False
+    return None
 
 
 def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:

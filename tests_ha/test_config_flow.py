@@ -22,16 +22,47 @@ from custom_components.effektvakt.const import (
     CONF_DSO,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
+    CONF_LAST_BRYTER,
+    CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_NAVN,
+    CONF_LAST_TERSKEL_W,
+    CONF_LASTER,
+    CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
+    CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
     DOMAIN,
+    ENTRY_VERSION,
 )
 
-from .conftest import ALLE_ENTITETER, ENERGY_SENSOR, POWER_SENSOR, lag_entry
+from .conftest import (
+    ALLE_ENTITETER,
+    ENERGY_SENSOR,
+    LAST_BRYTER,
+    LAST_SENSOR,
+    POWER_SENSOR,
+    lag_entry,
+)
+
+TILGJENGELIG_KUTT = "sensor.effektvakt_tilgjengelig_kutt"
+INNSTILLINGER = {
+    CONF_SAFETY_BUFFER_KW: 2.0,
+    CONF_MIN_RISIKO_FOR_KUTT: "over_terskel",
+    CONF_RISIKO_HOLDETID_MINUTTER: 10,
+}
+
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+
+async def _meny(hass: HomeAssistant, entry: MockConfigEntry, steg: str) -> dict:
+    """Aapne Configure og velg ett av menyvalgene."""
+    resultat = await hass.config_entries.options.async_init(entry.entry_id)
+    assert resultat["type"] is FlowResultType.MENU
+    assert resultat["step_id"] == "init"
+    return await hass.config_entries.options.async_configure(resultat["flow_id"], {"next_step_id": steg})
 
 
 async def _start_flyt(hass: HomeAssistant, dso: str = "bkk") -> dict:
@@ -77,9 +108,11 @@ async def test_hele_flyten_gir_en_entry_home_assistant_kan_laste(hass: HomeAssis
 
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     assert entry.state is ConfigEntryState.LOADED
-    assert entry.version == 1
-    for entity_id in ALLE_ENTITETER:
+    assert entry.version == ENTRY_VERSION
+    # Oppsettet spoer ikke om kuttbare laster, saa den sensoren finnes ikke enda.
+    for entity_id in [e for e in ALLE_ENTITETER if e != TILGJENGELIG_KUTT]:
         assert hass.states.get(entity_id) is not None, entity_id
+    assert hass.states.get(TILGJENGELIG_KUTT) is None
 
 
 async def test_tittelen_blir_nettselskapet(hass: HomeAssistant, maalere: None) -> None:
@@ -215,59 +248,34 @@ async def test_innstillingene_lagres_og_laster_oppsettet_paa_nytt(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
     """Configure skriver til entry.data, og oppdateringslytteren tar resten."""
-    resultat = await hass.config_entries.options.async_init(oppsett.entry_id)
-    assert resultat["type"] is FlowResultType.FORM
-    assert resultat["step_id"] == "init"
+    resultat = await _meny(hass, oppsett, "innstillinger")
+    assert resultat["step_id"] == "innstillinger"
 
-    svar = {
-        CONF_SAFETY_BUFFER_KW: 2.0,
-        "min_risiko_for_kutt": "over_terskel",
-        "risiko_holdetid_minutter": 10,
-        "kutt_strategi": "vvb_status",
-        "ekstra_power_sensors": [],
-    }
-    resultat = await hass.config_entries.options.async_configure(resultat["flow_id"], svar)
+    resultat = await hass.config_entries.options.async_configure(resultat["flow_id"], INNSTILLINGER)
     await hass.async_block_till_done()
 
-    assert resultat["type"] is FlowResultType.CREATE_ENTRY
+    # Lagringen foerer tilbake til menyen: dialogen lukkes foerst paa «Ferdig».
+    assert resultat["type"] is FlowResultType.MENU
     assert oppsett.data[CONF_SAFETY_BUFFER_KW] == 2.0
     assert oppsett.state is ConfigEntryState.LOADED
     assert oppsett.runtime_data.safety_buffer_kw == 2.0
+
+
+async def test_ferdig_lukker_dialogen(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    resultat = await _meny(hass, oppsett, "ferdig")
+    assert resultat["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_innstillingsskjemaet_avviser_en_margin_utenfor_skalaen(
     hass: HomeAssistant, oppsett: MockConfigEntry
 ) -> None:
     """NumberSelector holder 0,1 til 5 kW, og det er HA som haandhever det."""
-    resultat = await hass.config_entries.options.async_init(oppsett.entry_id)
+    resultat = await _meny(hass, oppsett, "innstillinger")
 
     with pytest.raises((InvalidData, vol.Invalid)):
         await hass.config_entries.options.async_configure(
-            resultat["flow_id"],
-            {
-                CONF_SAFETY_BUFFER_KW: 50,
-                "min_risiko_for_kutt": "over_terskel",
-                "risiko_holdetid_minutter": 10,
-                "kutt_strategi": "vvb_status",
-                "ekstra_power_sensors": [],
-            },
+            resultat["flow_id"], {**INNSTILLINGER, CONF_SAFETY_BUFFER_KW: 50}
         )
-
-
-async def test_gammel_lagret_strategi_holder_skjemaet_gyldig(hass: HomeAssistant, maalere: None) -> None:
-    """Coordinatoren oversetter «vvb_billader», og dialogen maa gjoere det samme.
-
-    Sto den gamle verdien som default i dropdownen, avviste Home Assistant
-    sitt eget skjema i det brukeren trykket lagre.
-    """
-    entry = lag_entry(kutt_strategi="vvb_billader")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    resultat = await hass.config_entries.options.async_init(entry.entry_id)
-
-    assert resultat["data_schema"]({})["kutt_strategi"] == "vvb_pluss_ekstra"
 
 
 async def test_en_tur_innom_configure_uten_endringer_lar_alt_staa(hass: HomeAssistant, maalere: None) -> None:
@@ -281,22 +289,19 @@ async def test_en_tur_innom_configure_uten_endringer_lar_alt_staa(hass: HomeAssi
         safety_buffer_kw=2.5,
         min_risiko_for_kutt="over_terskel",
         risiko_holdetid_minutter=12,
-        kutt_strategi="vvb_pluss_ekstra",
-        vvb_power_sensor="sensor.vvb_effekt",
-        ekstra_power_sensors=["sensor.billader", "sensor.varmekabler"],
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     foer = dict(entry.data)
 
-    resultat = await hass.config_entries.options.async_init(entry.entry_id)
+    resultat = await _meny(hass, entry, "innstillinger")
     resultat = await hass.config_entries.options.async_configure(
         resultat["flow_id"], _svaret_dialogen_viser(resultat["data_schema"])
     )
     await hass.async_block_till_done()
 
-    assert resultat["type"] is FlowResultType.CREATE_ENTRY
+    assert resultat["type"] is FlowResultType.MENU
     assert dict(entry.data) == foer
 
 
@@ -311,7 +316,204 @@ async def test_gammelt_lagret_risikonivaa_holder_skjemaet_gyldig(hass: HomeAssis
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    resultat = await hass.config_entries.options.async_init(entry.entry_id)
-    skjema = resultat["data_schema"]
+    resultat = await _meny(hass, entry, "innstillinger")
 
-    assert skjema({})["min_risiko_for_kutt"] == "like_under_terskel"
+    assert resultat["data_schema"]({})[CONF_MIN_RISIKO_FOR_KUTT] == "like_under_terskel"
+
+
+# --- kuttbare laster --------------------------------------------------------
+
+
+async def test_en_ny_last_lagres_og_gir_sensoren_for_tilgjengelig_kutt(hass: HomeAssistant, maalere: None) -> None:
+    """Uten laster finnes ikke sensoren. Legger du inn en, dukker den opp."""
+    entry = lag_entry(laster=None)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(TILGJENGELIG_KUTT) is None
+
+    resultat = await _meny(hass, entry, "legg_til_last")
+    assert resultat["step_id"] == "legg_til_last"
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"],
+        {
+            CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR,
+            CONF_LAST_NAVN: "Bereder",
+            CONF_LAST_BRYTER: LAST_BRYTER,
+            CONF_LAST_TERSKEL_W: 1000,
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert resultat["type"] is FlowResultType.MENU
+    assert entry.data[CONF_LASTER] == [
+        {
+            CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR,
+            CONF_LAST_TERSKEL_W: 1000.0,
+            CONF_LAST_NAVN: "Bereder",
+            CONF_LAST_BRYTER: LAST_BRYTER,
+        }
+    ]
+    tilstand = hass.states.get(TILGJENGELIG_KUTT)
+    assert tilstand is not None
+    assert float(tilstand.state) == pytest.approx(1.8)
+    assert tilstand.attributes["kutt_kilder"][0]["bryter"] == LAST_BRYTER
+
+
+async def test_menyen_tilbyr_ikke_redigering_foer_det_finnes_en_last(hass: HomeAssistant, maalere: None) -> None:
+    entry = lag_entry(laster=None)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    resultat = await hass.config_entries.options.async_init(entry.entry_id)
+    assert set(resultat["menu_options"]) == {"innstillinger", "legg_til_last", "ferdig"}
+
+
+async def test_menyen_tilbyr_redigering_naar_en_last_finnes(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    resultat = await hass.config_entries.options.async_init(oppsett.entry_id)
+    assert set(resultat["menu_options"]) == {"innstillinger", "legg_til_last", "velg_last", "ferdig"}
+
+
+async def test_lasten_kan_endres(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    resultat = await _meny(hass, oppsett, "velg_last")
+    assert resultat["step_id"] == "velg_last"
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR}
+    )
+    assert resultat["step_id"] == "rediger_last"
+
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"],
+        {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR, CONF_LAST_NAVN: "Varmtvannsbereder", CONF_LAST_TERSKEL_W: 1500},
+    )
+    await hass.async_block_till_done()
+
+    assert resultat["type"] is FlowResultType.MENU
+    (last,) = oppsett.data[CONF_LASTER]
+    assert last[CONF_LAST_NAVN] == "Varmtvannsbereder"
+    assert last[CONF_LAST_TERSKEL_W] == 1500.0
+    # Bryteren ble toemt i svaret, og da skal den vekk framfor aa overleve.
+    assert CONF_LAST_BRYTER not in last
+
+
+async def test_lasten_kan_fjernes_og_sensoren_forsvinner_med_den(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    assert hass.states.get(TILGJENGELIG_KUTT) is not None
+
+    resultat = await _meny(hass, oppsett, "velg_last")
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR}
+    )
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"],
+        {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR, CONF_LAST_TERSKEL_W: 1000, "slett": True},
+    )
+    await hass.async_block_till_done()
+
+    assert resultat["type"] is FlowResultType.MENU
+    assert CONF_LASTER not in oppsett.data
+    assert hass.states.get(TILGJENGELIG_KUTT) is None
+
+
+async def test_en_last_som_peker_paa_en_sensor_som_ikke_finnes_avvises(
+    hass: HomeAssistant, oppsett: MockConfigEntry
+) -> None:
+    resultat = await _meny(hass, oppsett, "legg_til_last")
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: "sensor.finnes_ikke", CONF_LAST_TERSKEL_W: 100}
+    )
+    assert resultat["type"] is FlowResultType.FORM
+    assert resultat["errors"] == {CONF_LAST_EFFEKT_SENSOR: "sensor_not_found"}
+
+
+async def test_en_last_med_feil_enhet_avvises(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    hass.states.async_set("sensor.rar_last", "5", {"unit_of_measurement": "A"})
+
+    resultat = await _meny(hass, oppsett, "legg_til_last")
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: "sensor.rar_last", CONF_LAST_TERSKEL_W: 100}
+    )
+    assert resultat["errors"] == {CONF_LAST_EFFEKT_SENSOR: "power_unit_invalid"}
+
+
+async def test_to_laster_kan_ikke_dele_effektsensor(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
+    resultat = await _meny(hass, oppsett, "legg_til_last")
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR, CONF_LAST_TERSKEL_W: 100}
+    )
+    assert resultat["errors"] == {CONF_LAST_EFFEKT_SENSOR: "last_finnes_allerede"}
+
+
+# --- migrering fra entry-versjon 1 ------------------------------------------
+
+
+async def test_fredriks_oppsett_migreres_til_to_laster(hass: HomeAssistant, maalere: None) -> None:
+    """Det ekte tilfellet: vvb_pluss_ekstra med bereder og varmekabler.
+
+    Dette er testen som maa staa i en ekte Home Assistant. En stubbet
+    migrering beviser bare at funksjonen regner riktig; her gaar entryen
+    faktisk gjennom HA sin `async_migrate_entry` og lastes etterpaa.
+    """
+    hass.states.async_set(
+        "sensor.varmekabler_bad_effekt",
+        "550",
+        {"unit_of_measurement": "W", "device_class": "power", "friendly_name": "Varmekabler bad"},
+    )
+    entry = lag_entry(
+        version=1,
+        laster=None,
+        kutt_strategi="vvb_pluss_ekstra",
+        vvb_power_sensor=LAST_SENSOR,
+        ekstra_power_sensors=["sensor.varmekabler_bad_effekt"],
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.version == ENTRY_VERSION
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data[CONF_LASTER] == [
+        {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR, CONF_LAST_TERSKEL_W: 1000.0},
+        {CONF_LAST_EFFEKT_SENSOR: "sensor.varmekabler_bad_effekt", CONF_LAST_TERSKEL_W: 100.0},
+    ]
+    for noekkel in ("kutt_strategi", "vvb_power_sensor", "ekstra_power_sensors"):
+        assert noekkel not in entry.data
+
+    # 1800 W over 1000 W-terskelen pluss 550 W over 100 W-terskelen.
+    assert float(hass.states.get(TILGJENGELIG_KUTT).state) == pytest.approx(2.35)
+
+
+async def test_migrert_oppsett_kan_redigeres_i_configure(hass: HomeAssistant, maalere: None) -> None:
+    """Migreringen setter ingen bryter. Den legges til her, og da ser vakten kuttene."""
+    entry = lag_entry(version=1, laster=None, kutt_strategi="vvb_status", vvb_power_sensor=LAST_SENSOR)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    resultat = await _meny(hass, entry, "velg_last")
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"], {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR}
+    )
+    resultat = await hass.config_entries.options.async_configure(
+        resultat["flow_id"],
+        {CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR, CONF_LAST_BRYTER: LAST_BRYTER, CONF_LAST_TERSKEL_W: 1000},
+    )
+    await hass.async_block_till_done()
+
+    assert entry.data[CONF_LASTER][0][CONF_LAST_BRYTER] == LAST_BRYTER
+    kilder = hass.states.get(TILGJENGELIG_KUTT).attributes["kutt_kilder"]
+    assert kilder[0]["bryter_paa"] is True
+
+
+async def test_et_oppsett_uten_sensorer_migreres_uten_laster(hass: HomeAssistant, maalere: None) -> None:
+    """blind uten sensorer: ingen laster, og ingen sensor for tilgjengelig kutt."""
+    entry = lag_entry(version=1, laster=None, kutt_strategi="blind")
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.version == ENTRY_VERSION
+    assert CONF_LASTER not in entry.data
+    assert hass.states.get(TILGJENGELIG_KUTT) is None

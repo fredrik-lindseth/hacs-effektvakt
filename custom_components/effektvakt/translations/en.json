@@ -41,17 +41,57 @@
   "options": {
     "step": {
       "init": {
+        "title": "Effektvakt",
+        "description": "Pick what you want to change. Everything is saved right away, so you can close the dialog when you are done.",
+        "menu_options": {
+          "innstillinger": "Settings",
+          "legg_til_last": "Add a cuttable load",
+          "velg_last": "Edit or remove a cuttable load",
+          "ferdig": "Done"
+        }
+      },
+      "innstillinger": {
         "title": "Effektvakt settings",
         "description": "Change these once you have seen how Effektvakt behaves in your home. The fields show what is in effect now.",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
           "min_risiko_for_kutt": "Cut from this level and up",
-          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
-          "kutt_strategi": "Cut strategy",
-          "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_pluss_ekstra)",
-          "ekstra_power_sensors": "Extra power sensors (heating cables, EV charger, etc)"
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+        }
+      },
+      "legg_til_last": {
+        "title": "New cuttable load",
+        "description": "A load is a power sensor, an optional switch and a threshold. The threshold is how much the load must draw to count as on: around 1000 W for a water heater element, lower for heating cables. Add the switch and Effektvakt can see when the load was actually cut.",
+        "data": {
+          "effekt_sensor": "Power sensor",
+          "navn": "Name (optional, the sensor's own name is used otherwise)",
+          "bryter": "Switch that turns the load off (optional)",
+          "terskel_w": "Threshold for “on” (W)"
+        }
+      },
+      "velg_last": {
+        "title": "Pick a load",
+        "description": "Which of the cuttable loads do you want to change?",
+        "data": {
+          "effekt_sensor": "Load"
+        }
+      },
+      "rediger_last": {
+        "title": "Edit {navn}",
+        "description": "Change the load, or tick the box to remove it.",
+        "data": {
+          "effekt_sensor": "Power sensor",
+          "navn": "Name (optional, the sensor's own name is used otherwise)",
+          "bryter": "Switch that turns the load off (optional)",
+          "terskel_w": "Threshold for “on” (W)",
+          "slett": "Remove this load"
         }
       }
+    },
+    "error": {
+      "sensor_not_found": "Sensor not found",
+      "power_unit_invalid": "Power sensor must have unit W or kW",
+      "last_finnes_allerede": "That power sensor is already used by another load"
     }
   },
   "entity": {
@@ -107,13 +147,6 @@
     }
   },
   "selector": {
-    "kutt_strategi": {
-      "options": {
-        "blind": "Blind (assumes 0.3 kW water heater cut)",
-        "vvb_status": "Water heater with status sensor (actual power)",
-        "vvb_pluss_ekstra": "Water heater + extra loads (full flexibility)"
-      }
-    },
     "min_risiko_for_kutt": {
       "options": {
         "naermer_seg_terskel": "Approaching the threshold",

@@ -11,39 +11,43 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util_module
 
-from .avlesning import read_energy_kwh, read_friendly_name, read_power_kw, read_state_timestamp
+from .avlesning import (
+    read_energy_kwh,
+    read_friendly_name,
+    read_power_kw,
+    read_state_timestamp,
+    read_switch_on,
+)
 from .const import (
     CONF_DSO,
-    CONF_EKSTRA_POWER_SENSORS,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
-    CONF_KUTT_STRATEGI,
+    CONF_LASTER,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
-    CONF_VVB_POWER_SENSOR,
     DEFAULT_AUTOMATIKK_AKTIV,
-    DEFAULT_KUTT_STRATEGI,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
     DEFAULT_SAFETY_BUFFER_KW,
     DOMAIN,
     LEGACY_RISIKO_MAPPING,
-    LEGACY_STRATEGI_MAPPING,
     RISIKO_GOD_MARGIN,
     RISIKO_LEVELS,
+    RISIKO_RANK,
     STORAGE_VERSION,
     TICK_INTERVAL_BY_RISIKO,
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
 from .hysterese import HystereseState, apply_hysteresis
 from .laster import (
-    ROLLE_EKSTRA,
-    ROLLE_VVB,
-    KildeAvlesning,
+    KuttSporing,
+    LastAvlesning,
     build_kutt_kilder,
     compute_tilgjengelig_kutt_kw,
+    les_laster,
+    oppdater_kuttsporing,
 )
 from .modell import (
     KOSTNAD_FELT_NAVN,
@@ -132,12 +136,10 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self.risiko_holdetid: timedelta = timedelta(
             minutes=int(entry.data.get(CONF_RISIKO_HOLDETID_MINUTTER, DEFAULT_RISIKO_HOLDETID_MINUTTER))
         )
-        self.vvb_power_sensor: str | None = entry.data.get(CONF_VVB_POWER_SENSOR)
-        self.ekstra_power_sensors: list[str] = list(entry.data.get(CONF_EKSTRA_POWER_SENSORS) or [])
-
-        # Bakoverkompatibilitet for strategi-navn
-        strategi_raw = entry.data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI)
-        self.kutt_strategi: str = LEGACY_STRATEGI_MAPPING.get(strategi_raw, strategi_raw)
+        # Kuttbare laster. Tom liste er et gyldig oppsett: da opprettes ikke
+        # sensoren for tilgjengelig kutt i det hele tatt, framfor aa vise et
+        # anslag ingen har gitt integrasjonen grunnlag for.
+        self.laster = les_laster(entry.data.get(CONF_LASTER))
 
         self.trinn_oppsett = les_trinn(
             dso_id=entry.data.get(CONF_DSO),
@@ -154,6 +156,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self._regnskap = Timeregnskap(current_month=dt_util_now().strftime("%Y-%m"))
         self._hysterese_state = HystereseState(nivå=RISIKO_GOD_MARGIN)
         self._last_successful_update: datetime | None = None
+        # Per last, noeklet paa effektsensoren: hvor bryteren stod forrige
+        # tick, og om lasten staar kuttet av oss naa. Se `laster.py`.
+        self._kuttsporing: dict[str, KuttSporing] = {}
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
         self._store_loaded = False
 
@@ -232,16 +237,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         # arkiveres, ikke lande i den ferske måneden.
         self._regnskap.handle_month_rollover(now=now)
 
-        avlesninger = self._les_kutt_kilder()
-        vvb_power_w = next((a.effekt_w for a in avlesninger if a.rolle == ROLLE_VVB), None)
-        ekstra_power_w_list = [a.effekt_w for a in avlesninger if a.rolle == ROLLE_EKSTRA]
-
-        tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(
-            strategi=self.kutt_strategi,
-            vvb_power_w=vvb_power_w,
-            ekstra_power_w=ekstra_power_w_list,
-        )
-        kutt_kilder = build_kutt_kilder(strategi=self.kutt_strategi, avlesninger=avlesninger)
+        avlesninger = self._les_laster()
+        tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(avlesninger)
 
         elapsed_h = compute_elapsed_h(now)
         projected_avg = compute_projected_avg(
@@ -272,6 +269,18 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             timen_flytter_trinnet=kriterium.oppfylt,
         )
         apply_hysteresis(self._hysterese_state, rå_nivå=rå, now=now, holdetid=self.risiko_holdetid)
+
+        # Kuttsporingen kommer etter hysteresen med vilje: et kutt regnes som
+        # vaart bare naar bryteren gikk av mens vi faktisk ba om kutt, og det
+        # er den hysteresefulle risikoen binaersensoren melder, ikke den raa.
+        kutt_anbefalt = RISIKO_RANK.get(self._hysterese_state.nivå, -1) >= RISIKO_RANK.get(self.min_risiko_for_kutt, 99)
+        oppdater_kuttsporing(
+            sporing=self._kuttsporing,
+            avlesninger=avlesninger,
+            kutt_anbefalt=kutt_anbefalt,
+            now=now,
+        )
+        kutt_kilder = build_kutt_kilder(avlesninger=avlesninger, sporing=self._kuttsporing)
 
         new_interval = timedelta(seconds=TICK_INTERVAL_BY_RISIKO[self._hysterese_state.nivå])
         if self.update_interval != new_interval:
@@ -320,34 +329,29 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "varig_projeksjon_kw": round(kriterium.varig_projeksjon_kw, 3),
             "kortvarig_paaslag_kw": round(kriterium.kortvarig_paaslag_kw, 3),
             "last_update": now.isoformat(),
-            "tilgjengelig_kutt_kw": round(tilgjengelig_kutt_kw, 3),
-            "vvb_power_w": vvb_power_w,
-            "ekstra_power_w_total": sum(p for p in ekstra_power_w_list if p is not None) or None,
-            "kutt_strategi": self.kutt_strategi,
+            "tilgjengelig_kutt_kw": rund(tilgjengelig_kutt_kw),
             "kutt_kilder": [asdict(k) for k in kutt_kilder],
+            "kuttet_naa_kw": rund(
+                sum(s.kuttet_effekt_w or 0.0 for s in self._kuttsporing.values()) / 1000.0,
+            ),
             **kostnad_felter,
         }
 
-    def _les_kutt_kilder(self) -> list[KildeAvlesning]:
-        """Les effekten til hver konfigurerte kuttkilde, VVB først.
+    def _les_laster(self) -> list[LastAvlesning]:
+        """Les effekt, navn og bryterstilling for hver konfigurerte last.
 
-        Kilden er med i lista uansett strategi. Om den teller med er et eget
-        spørsmål som build_kutt_kilder svarer på.
+        Lasten er med i lista uansett hva sensoren sier. Om den teller med er
+        et eget spoersmaal `build_kutt_kilder` svarer paa.
         """
-        konfigurert: list[tuple[str, str]] = []
-        if self.vvb_power_sensor:
-            konfigurert.append((self.vvb_power_sensor, ROLLE_VVB))
-        konfigurert.extend((sensor, ROLLE_EKSTRA) for sensor in self.ekstra_power_sensors)
-
         avlesninger = []
-        for entity_id, rolle in konfigurert:
-            kw = read_power_kw(self.hass, entity_id)
+        for last in self.laster:
+            kw = read_power_kw(self.hass, last.effekt_sensor)
             avlesninger.append(
-                KildeAvlesning(
-                    entity_id=entity_id,
-                    navn=read_friendly_name(self.hass, entity_id),
+                LastAvlesning(
+                    oppsett=last,
                     effekt_w=None if kw is None else kw * 1000.0,
-                    rolle=rolle,
+                    bryter_paa=read_switch_on(self.hass, last.bryter),
+                    friendly_name=read_friendly_name(self.hass, last.effekt_sensor),
                 )
             )
         return avlesninger

@@ -79,13 +79,16 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: strategi
+    id: laster
     attributes:
-      label: Kutt-strategi
+      label: Kuttbare laster
+      description: Hvor mange laster ligger under Configure, og har de bryter?
       options:
-        - "Blind"
-        - "VVB med statussensor"
-        - "VVB + ekstra last"
+        - "Ingen"
+        - "Én, uten bryter"
+        - "Én, med bryter"
+        - "Flere, uten bryter"
+        - "Flere, med bryter"
     validations:
       required: true
   - type: textarea

@@ -43,8 +43,14 @@ if str(_REPO_ROOT) not in sys.path:
 from custom_components.effektvakt.const import (  # noqa: E402  (etter sys.path)
     CONF_DSO,
     CONF_ENERGY_SENSOR,
+    CONF_LAST_BRYTER,
+    CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_NAVN,
+    CONF_LAST_TERSKEL_W,
+    CONF_LASTER,
     CONF_POWER_SENSOR,
     DOMAIN,
+    ENTRY_VERSION,
 )
 
 # --- hass_frontend ---------------------------------------------------------
@@ -120,6 +126,18 @@ _start_pycares_avslutningstraad()
 POWER_SENSOR = "sensor.hus_effekt"
 ENERGY_SENSOR = "sensor.hus_energi"
 
+# En kuttbar last, slik Fredriks bereder ser ut: effektsensor paa en smartplugg
+# og bryteren i den samme pluggen. Standardoppsettet har den, fordi
+# sensor.effektvakt_tilgjengelig_kutt bare opprettes naar minst en last finnes.
+LAST_SENSOR = "sensor.bereder_effekt"
+LAST_BRYTER = "switch.bereder"
+LAST = {
+    CONF_LAST_EFFEKT_SENSOR: LAST_SENSOR,
+    CONF_LAST_NAVN: "Bereder",
+    CONF_LAST_BRYTER: LAST_BRYTER,
+    CONF_LAST_TERSKEL_W: 1000.0,
+}
+
 # Entitetene integrasjonen skal legge i tilstandsmaskinen. Id-ene er kontrakt:
 # de staar i docs, i blueprintene og i kortet, og de er laast av
 # entitetsregisteret gjennom unique_id.
@@ -189,20 +207,32 @@ def maalere(hass: HomeAssistant) -> None:
             "friendly_name": "Hus energi",
         },
     )
+    hass.states.async_set(
+        LAST_SENSOR,
+        "1800",
+        {"unit_of_measurement": "W", "device_class": "power", "friendly_name": "Bereder effekt"},
+    )
+    hass.states.async_set(LAST_BRYTER, "on", {"friendly_name": "Bereder"})
 
 
-def lag_entry(**overstyr: Any) -> MockConfigEntry:
+def lag_entry(*, version: int = ENTRY_VERSION, **overstyr: Any) -> MockConfigEntry:
     """En config entry slik config flowen ville skrevet den."""
     data: dict[str, Any] = {
         CONF_DSO: "bkk",
         CONF_POWER_SENSOR: POWER_SENSOR,
         CONF_ENERGY_SENSOR: ENERGY_SENSOR,
+        CONF_LASTER: [dict(LAST)],
     }
     data.update(overstyr)
+    # `laster=None` betyr «uten lasteliste i det hele tatt», slik en entry fra
+    # versjon 1 ser ut foer migreringen.
+    if data.get(CONF_LASTER) is None:
+        data.pop(CONF_LASTER, None)
     return MockConfigEntry(
         domain=DOMAIN,
         title="BKK",
         data=data,
+        version=version,
         unique_id=f"{DOMAIN}_{data[CONF_POWER_SENSOR]}",
     )
 

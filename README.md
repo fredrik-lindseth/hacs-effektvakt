@@ -25,7 +25,7 @@ Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund og projiserer 
 
 - Projisert time-snitt, margin til neste trinn og topp-3-snitt for måneden, som sensorer
 - Risiko for neste trinn (god margin, nærmer seg, like under, over terskelen) og en binary sensor som automations kan trigge på
-- Anslag på hvor mye du faktisk har å kutte, etter valgt strategi
+- Anslag på hvor mye du faktisk har å kutte, summert fra lastene du har lagt inn
 - Fire blueprints for varmtvannsbereder, panelovner og varsler
 - Et Lovelace-kort som tegner skiven fra dine egne kapasitetstrinn
 - Watchdog som setter sensorene til `unknown` hvis coordinatoren henger
@@ -68,7 +68,7 @@ Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full 
 | [docs/sensorer.md](docs/sensorer.md)               | Alle sensorer og attributter       |
 | [docs/beregninger.md](docs/beregninger.md)         | Formler og beregningslogikk        |
 | [docs/input-sensorer.md](docs/input-sensorer.md)   | Sensorkrav og kjente kilder        |
-| [docs/strategi.md](docs/strategi.md)               | Kutt-strategier sammenlignet       |
+| [docs/laster.md](docs/laster.md)                   | Kuttbare laster og terskler        |
 | [docs/blueprints.md](docs/blueprints.md)           | Import, input og eksempler         |
 | [docs/dashboard-kort.md](docs/dashboard-kort.md)   | Lovelace-kortet                    |
 | [docs/fysisk-panel.md](docs/fysisk-panel.md)       | ESP32-panel, skisse (ikke bygget)  |
