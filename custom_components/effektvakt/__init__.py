@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, WATCHDOG_INTERVAL_SECONDS
@@ -21,9 +22,16 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, ServiceCall
     from homeassistant.helpers.typing import ConfigType
 
+    from .oppsett import TrinnOppsett
+
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+# Repair-meldinger. Noekkelen er ogsaa translation_key i strings.json, og
+# issue_id-en henger paa entry_id saa to oppsett kan ha hver sin.
+ISSUE_UKJENT_DSO = "ukjent_dso"
+ISSUE_MANGLER_TOPPTRINN = "mangler_topptrinn"
 
 SERVICE_SET_SAFETY_BUFFER = "set_safety_buffer"
 SERVICE_RESET_TOPP_3 = "reset_topp_3"
@@ -32,6 +40,64 @@ SERVICES: tuple[str, ...] = (SERVICE_SET_SAFETY_BUFFER, SERVICE_RESET_TOPP_3)
 # Effektvakt settes bare opp gjennom config entries, ingen YAML. Uten denne
 # sier hassfest fra om at en integrasjon med async_setup maa ha et skjema.
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _sett_repair(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    noekkel: str,
+    aktiv: bool,
+    severity: object,
+    placeholders: dict[str, str],
+) -> None:
+    """Opprett eller rydd bort en repair-melding, avhengig av om problemet finnes."""
+    issue_id = f"{noekkel}_{entry.entry_id}"
+    if not aktiv:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=severity,
+        translation_key=noekkel,
+        translation_placeholders=placeholders,
+    )
+
+
+def _meld_oppsettsproblemer(hass: HomeAssistant, entry: ConfigEntry, oppsett: TrinnOppsett) -> None:
+    """Gjoer hullene i trinn-tabellen om til noe brukeren faktisk ser.
+
+    Loggen alene naar ingen. Begge tilfellene gjoer vakten taus, saa de hoerer
+    hjemme i Reparasjoner der HA viser dem uoppfordret. Ingen av dem lar seg
+    fikse med en knapp: trinnene velges i oppsettsflyten, saa meldingen sier
+    hva brukeren skal gjoere.
+    """
+    _sett_repair(
+        hass,
+        entry,
+        noekkel=ISSUE_UKJENT_DSO,
+        aktiv=oppsett.dso_ukjent,
+        severity=ir.IssueSeverity.ERROR,
+        placeholders={"dso": oppsett.dso_noekkel},
+    )
+    _sett_repair(
+        hass,
+        entry,
+        noekkel=ISSUE_MANGLER_TOPPTRINN,
+        aktiv=oppsett.mangler_topptrinn,
+        severity=ir.IssueSeverity.WARNING,
+        placeholders={"hoyeste_kw": _kw_tekst(oppsett.hoyeste_terskel_kw)},
+    )
+
+
+def _kw_tekst(kw: float | None) -> str:
+    """kW-verdien slik den skal staa i en melding: uten desimaler naar den er hel."""
+    if kw is None:
+        return "-"
+    return str(int(kw)) if kw == int(kw) else str(kw)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -92,6 +158,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_register_frontend(hass)
 
     coordinator = EffektvaktCoordinator(hass, entry)
+    _meld_oppsettsproblemer(hass, entry, coordinator.trinn_oppsett)
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator

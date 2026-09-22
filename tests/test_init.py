@@ -14,6 +14,7 @@ from custom_components.effektvakt import (
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.effektvakt.oppsett import les_trinn
 from tests.conftest import make_entry
 
 
@@ -21,6 +22,9 @@ class _FakeCoordinator:
     """Nok coordinator til at __init__.py kan settes opp og tjenestene kalles."""
 
     def __init__(self) -> None:
+        # Et oppsett uten problemer aa melde. Repair-meldingene har egne tester
+        # i test_oppsett.py.
+        self.trinn_oppsett = les_trinn(dso_id="bkk", custom=None)
         self.safety_buffer_kw = 1.0
         self._daily_max_kw = {"2026-06-15": 5.0}
         self._last_successful_update = None

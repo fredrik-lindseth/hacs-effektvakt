@@ -31,14 +31,19 @@ _helpers_mod = MagicMock()
 sys.modules["homeassistant.helpers"] = _helpers_mod
 sys.modules["homeassistant.helpers.device_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
-sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.storage"] = MagicMock()
 
-# entity_registry hentes som `from homeassistant.helpers import entity_registry`,
-# saa stubben maa ligge som attributt paa helpers-pakken og ikke bare i sys.modules.
+# entity_registry og issue_registry hentes som `from homeassistant.helpers import
+# ...`, saa stubbene maa ligge som attributter paa helpers-pakken og ikke bare i
+# sys.modules. Ellers gir MagicMock-pakken fra seg et nytt objekt per oppslag, og
+# testene kan ikke se hva koden kalte.
 _entity_registry_mod = MagicMock()
 _helpers_mod.entity_registry = _entity_registry_mod
 sys.modules["homeassistant.helpers.entity_registry"] = _entity_registry_mod
+
+_issue_registry_mod = MagicMock()
+_helpers_mod.issue_registry = _issue_registry_mod
+sys.modules["homeassistant.helpers.issue_registry"] = _issue_registry_mod
 
 
 # DataUpdateCoordinator must be a real class so subclasses work with normal

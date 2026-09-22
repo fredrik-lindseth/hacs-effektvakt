@@ -37,7 +37,6 @@ from .const import (
     TICK_INTERVAL_BY_RISIKO,
     WATCHDOG_STALE_THRESHOLD_SECONDS,
 )
-from .dso import KAPASITETSTRINN_PER_DSO
 from .hysterese import HystereseState, apply_hysteresis
 from .laster import (
     ROLLE_EKSTRA,
@@ -57,6 +56,7 @@ from .modell import (
     compute_projected_avg,
     vurder_kuttkriterium,
 )
+from .oppsett import TrinnOppsett, les_trinn
 from .timeregnskap import Timeregnskap
 
 if TYPE_CHECKING:
@@ -72,6 +72,29 @@ def dt_util_now() -> datetime:
     """Wrapper for monkeypatch-vennlig now()."""
     na: datetime = dt_util_module.now()
     return na
+
+
+def _logg_trinnproblemer(oppsett: TrinnOppsett) -> None:
+    """Si fra i loggen naar trinn-tabellen ikke er hel.
+
+    Begge tilfellene feilet stille foer september 2026: sensorene gikk tomme
+    eller meldte god margin uansett, og ingenting pekte paa hvorfor.
+    `__init__.py` gjoer de samme to tilstandene om til repair-meldinger.
+    """
+    if oppsett.dso_ukjent:
+        _LOGGER.error(
+            "Effektvakt kjenner ikke nettselskapet «%s». Det er fjernet eller doept om siden "
+            "oppsettet ble laget, og uten kapasitetstrinn kan verken risiko eller kostnad regnes. "
+            "Velg nettselskap paa nytt.",
+            oppsett.dso_noekkel,
+        )
+    if oppsett.mangler_topptrinn:
+        _LOGGER.warning(
+            "Egendefinerte kapasitetstrinn slutter paa %s kW. Effektvakt vet ikke hva et forbruk "
+            "over det koster, og melder god margin uansett hvor hoeyt det gaar. Skriv oeverste "
+            "trinn med null som terskel for aa gi det uendelig oevre grense.",
+            oppsett.hoyeste_terskel_kw,
+        )
 
 
 def rund(verdi: float | None, *, desimaler: int = 3) -> float | None:
@@ -116,13 +139,12 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         strategi_raw = entry.data.get(CONF_KUTT_STRATEGI, DEFAULT_KUTT_STRATEGI)
         self.kutt_strategi: str = LEGACY_STRATEGI_MAPPING.get(strategi_raw, strategi_raw)
 
-        dso_id = entry.data.get(CONF_DSO)
-        custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
-        if custom:
-            self.kapasitetstrinn: list[tuple[float, int]] = [(float(t[0]), int(t[1])) for t in custom]
-        else:
-            dso_info = KAPASITETSTRINN_PER_DSO.get(dso_id)
-            self.kapasitetstrinn = list(dso_info["kapasitetstrinn"]) if dso_info else []
+        self.trinn_oppsett = les_trinn(
+            dso_id=entry.data.get(CONF_DSO),
+            custom=entry.data.get(CONF_KAPASITETSTRINN_CUSTOM),
+        )
+        self.kapasitetstrinn: list[tuple[float, int]] = self.trinn_oppsett.trinn
+        _logg_trinnproblemer(self.trinn_oppsett)
 
         # Mutable state
         # Hovedbryteren eier denne, ikke beregningen. Den styrer bare om

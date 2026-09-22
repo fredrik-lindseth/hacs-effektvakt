@@ -95,11 +95,21 @@ inn i tabellen; ingen av nettselskapene våre bruker dem i dag.
 ## Egendefinert DSO
 
 Velger du **Egendefinert** i config flow, legger du inn trinnene selv. Formatet
-er en liste med par: `[[2.0, 230], [5.0, 415], ...]`. De lagres i
+er en liste med par: `[[2, 155], [5, 250], [null, 415]]`. De lagres i
 `entry.data["kapasitetstrinn_custom"]` og overstyrer oppslaget i `dso.py`.
+
+**Øverste trinn skrives med `null` som terskel.** Da gjelder det uten øvre
+grense, slik de innebygde tabellene slutter på `(inf, pris)`. Uendelig lagres
+som `null` fordi entry-data skal være gyldig JSON; `oppsett.les_trinn`
+oversetter tilbake. Sløyfer du det, vet ikke Effektvakt hva et forbruk over det
+høyeste tallet ditt koster, og melder god margin uansett hvor høyt det går.
+Integrasjonen reiser en repair-sak når tabellen mangler et åpent topptrinn.
 
 Det er nyttig hvis nettselskapet ditt mangler i lista, bruker andre trinn enn vi
 har registrert, eller du vil teste med avvikende trinn.
+
+Trinnene kan bare settes i oppsettsflyten, ikke under Configure. Skal de endres,
+må oppsettet fjernes og legges inn på nytt.
 
 ---
 

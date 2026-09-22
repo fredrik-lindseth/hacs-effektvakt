@@ -20,9 +20,9 @@
       },
       "pricing": {
         "title": "Egendefinerte kapasitetstrinn",
-        "description": "Skriv inn dine egne kW-terskler og priser per måned. Én linje per trinn, sortert lavest først.",
+        "description": "Skriv inn dine egne kW-terskler og priser per måned, sortert lavest først. Øverste trinn skrives med null som terskel, for da gjelder det uten øvre grense: [[2, 155], [5, 250], [null, 415]]. Sløyfer du det, vet ikke Effektvakt hva et forbruk over det høyeste tallet koster.",
         "data": {
-          "kapasitetstrinn_custom": "Kapasitetstrinn (JSON, f.eks. [[2, 130], [5, 230]])"
+          "kapasitetstrinn_custom": "Kapasitetstrinn (JSON, f.eks. [[2, 130], [5, 230], [null, 400]])"
         }
       }
     },
@@ -94,6 +94,16 @@
       "automatikk": {
         "name": "Automatikk"
       }
+    }
+  },
+  "issues": {
+    "mangler_topptrinn": {
+      "title": "Egendefinerte kapasitetstrinn mangler et øverste trinn",
+      "description": "Det høyeste trinnet ditt slutter på {hoyeste_kw} kW. Effektvakt vet ikke hva et forbruk over det koster, og melder god margin uansett hvor høyt det går. Skriv øverste trinn med null som terskel, for eksempel [[2, 155], [5, 250], [null, 415]], så gjelder det uten øvre grense. Trinnene endres ved å fjerne oppsettet og legge det inn på nytt."
+    },
+    "ukjent_dso": {
+      "title": "Effektvakt kjenner ikke nettselskapet lenger",
+      "description": "Oppsettet peker på nettselskapet «{dso}», som ikke finnes i kapasitetstrinn-tabellen. Det er enten fjernet eller døpt om siden du satte opp Effektvakt. Uten kapasitetstrinn kan verken risiko eller kostnad regnes, og sensorene står tomme. Fjern oppsettet og legg det inn på nytt med riktig nettselskap."
     }
   },
   "selector": {

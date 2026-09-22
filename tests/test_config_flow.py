@@ -7,6 +7,7 @@ defaults som ikke hentet lagret verdi, og som dermed slettet den.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -15,6 +16,7 @@ from custom_components.effektvakt.config_flow import (
     flettet_data,
     innstillinger_skjema,
     looks_like_peak_sensor,
+    parse_kapasitetstrinn,
     sensor_skjema,
 )
 from custom_components.effektvakt.const import (
@@ -158,3 +160,42 @@ def test_sensorsteget_husker_det_brukeren_skrev():
     assert svar[CONF_POWER_SENSOR] == "sensor.tibber_max_power"
     assert svar[CONF_ENERGY_SENSOR] == "sensor.ams_energi"
     assert svar[CONF_CONFIRM_PEAK_SENSOR] is False
+
+
+# --- egendefinerte kapasitetstrinn ------------------------------------------
+
+
+def test_trinnene_leses_som_kw_og_kr_par():
+    assert parse_kapasitetstrinn("[[2, 155], [5, 250]]") == [(2.0, 155), (5.0, 250)]
+
+
+def test_oeverste_trinn_kan_skrives_uten_oevre_grense():
+    """null er trinnet uten tak. Uten det melder vakten god margin over hoeyeste tall."""
+    assert parse_kapasitetstrinn("[[2, 155], [5, 250], [null, 415]]") == [
+        (2.0, 155),
+        (5.0, 250),
+        (None, 415),
+    ]
+
+
+def test_null_lagres_som_null_og_ikke_som_uendelig():
+    """Entry-data skal vaere gyldig JSON. oppsett.les_trinn gjoer null om til inf."""
+    json.dumps(parse_kapasitetstrinn("[[2, 155], [null, 415]]"))
+
+
+@pytest.mark.parametrize(
+    "tekst",
+    [
+        "[[null, 155], [5, 250]]",  # det aapne trinnet maa staa sist
+        "[[2, 155], [null, 250], [null, 415]]",  # bare ett aapent trinn
+        "[[5, 250], [2, 155]]",  # ikke stigende
+        "[[2, 155], [2, 250]]",  # like terskler
+        "[]",
+        "[[2]]",
+        "ikke json",
+        '{"2": 155}',
+    ],
+)
+def test_ugyldige_trinn_avvises(tekst: str):
+    with pytest.raises((ValueError, TypeError)):
+        parse_kapasitetstrinn(tekst)

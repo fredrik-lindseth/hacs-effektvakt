@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -179,6 +180,38 @@ def innstillinger_skjema(data: Mapping[str, Any]) -> vol.Schema:
     )
 
 
+def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
+    """Egendefinerte trinn fra tekstfeltet, som `[kW, kr]`-par sortert stigende.
+
+    `null` som terskel er det oeverste trinnet, det uten oevre grense, slik de
+    innebygde tabellene slutter paa `(inf, pris)`. Uten den muligheten var alt
+    over det hoeyeste tallet brukeren skrev prisfritt land: terskelen ble
+    uendelig og risikoen `god_margin` for alltid, uten at noe sa fra.
+
+    Uendelig lagres som `null` og ikke som `float("inf")`, fordi entry-data
+    skal vaere gyldig JSON. `oppsett.les_trinn` oversetter tilbake.
+    Sorteringskravet holder det aapne trinnet der det hoerer hjemme, sist.
+
+    Kaster `ValueError` paa alt som ikke er en stigende liste av par.
+    """
+    raw = json.loads(raa)
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("kapasitetstrinn maa vaere en ikke-tom liste")
+
+    trinn: list[tuple[float | None, int]] = []
+    forrige_kw = -1.0
+    for rad in raw:
+        if not (isinstance(rad, list | tuple) and len(rad) == 2):
+            raise ValueError("hvert trinn maa vaere et [kW, kr]-par")
+        terskel = None if rad[0] is None else float(rad[0])
+        kw = math.inf if terskel is None else terskel
+        if kw <= forrige_kw:
+            raise ValueError("trinnene maa sorteres stigende, og bare det siste kan vaere null")
+        trinn.append((terskel, int(rad[1])))
+        forrige_kw = kw
+    return trinn
+
+
 def flettet_data(lagret: Mapping[str, Any], user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Lagret konfigurasjon med svarene fra Configure lagt over."""
     ny = {**lagret, **user_input}
@@ -263,20 +296,7 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                raw = json.loads(user_input[CONF_KAPASITETSTRINN_CUSTOM])
-                if not isinstance(raw, list) or not raw:
-                    raise ValueError
-                normalized = []
-                prev_kw = -1.0
-                for entry in raw:
-                    if not (isinstance(entry, list | tuple) and len(entry) == 2):
-                        raise ValueError
-                    kw, pris = float(entry[0]), int(entry[1])
-                    if kw <= prev_kw:
-                        raise ValueError
-                    normalized.append((kw, pris))
-                    prev_kw = kw
-                self._data[CONF_KAPASITETSTRINN_CUSTOM] = normalized
+                self._data[CONF_KAPASITETSTRINN_CUSTOM] = parse_kapasitetstrinn(user_input[CONF_KAPASITETSTRINN_CUSTOM])
                 return self._opprett_entry()
             except (ValueError, TypeError, json.JSONDecodeError):
                 errors[CONF_KAPASITETSTRINN_CUSTOM] = "kapasitetstrinn_invalid"

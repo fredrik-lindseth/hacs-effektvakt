@@ -20,7 +20,7 @@
       },
       "pricing": {
         "title": "Custom capacity tiers",
-        "description": "Enter your own kW thresholds and monthly prices. Sorted lowest first.",
+        "description": "Enter your own kW thresholds and monthly prices, lowest first. Write the top tier with null as the threshold to make it unbounded: [[2, 155], [5, 250], [null, 415]]. Leave it out and Effektvakt has no idea what consumption above the highest number costs.",
         "data": {
           "kapasitetstrinn_custom": "Capacity tiers (JSON, e.g. [[2, 130], [5, 230]])"
         }
@@ -94,6 +94,16 @@
       "automatikk": {
         "name": "Automatic load cutting"
       }
+    }
+  },
+  "issues": {
+    "mangler_topptrinn": {
+      "title": "Custom capacity tiers have no top tier",
+      "description": "Your highest tier ends at {hoyeste_kw} kW. Effektvakt has no idea what consumption above that costs, and reports good margin no matter how high it goes. Write the top tier with null as the threshold, for example [[2, 155], [5, 250], [null, 415]], to make it unbounded. Tiers are changed by removing the configuration and adding it again."
+    },
+    "ukjent_dso": {
+      "title": "Effektvakt no longer knows this grid company",
+      "description": "The configuration points at the grid company «{dso}», which is not in the capacity tier table. It has been removed or renamed since you set up Effektvakt. Without capacity tiers neither risk nor cost can be computed, and the sensors stay empty. Remove the configuration and add it again with the correct grid company."
     }
   },
   "selector": {

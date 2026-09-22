@@ -19,6 +19,7 @@ custom_components/effektvakt/
     laster.py           # Kuttbare laster per strategi, tilgjengelig kutt
     manifest.json       # HA integration manifest
     modell.py           # Terskelmodell, projeksjon, risiko, kostnad (ren Python)
+    oppsett.py          # Trinn-tabellen en config entry faar, og hullene i den
     sensor.py           # De seks sensor-entitetene
     services.yaml       # Service-definisjoner
     strings.json        # Kildeteksten til oversettelsene

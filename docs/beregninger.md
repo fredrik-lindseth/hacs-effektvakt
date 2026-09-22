@@ -304,9 +304,13 @@ Den andre veien er tillatt: marginen kan være negativ mens timen ennå ikke kos
 
 Øverste kapasitetstrinn har `float("inf")` som terskel i `dso.py`. `inf` er ugyldig JSON og knekker både recorder og websocket, så både `trinn_na_ovre_grense_kw` og øverste par i `kapasitetstrinn`-attributtet sendes som `null`.
 
+Egendefinerte trinn skriver det samme trinnet med `null` som terskel: `[[2, 155], [5, 250], [null, 415]]`. Uendelig lagres ikke som tall i config entryen, for entry-data skal være gyldig JSON; `oppsett.les_trinn` oversetter tilbake til `inf` ved innlesing. Sløyfer du det åpne trinnet, er alt over det høyeste tallet ditt prisfritt land: terskelen blir uendelig og risikoen `god_margin` uansett hvor høyt forbruket går. Det skjer ikke lenger i stillhet, for `__init__.py` melder en repair-sak om tabellen mangler et åpent topptrinn.
+
 ### Ukjent nettselskap
 
-Tomt trinn-sett gir `None` på alle ti kostnadsfeltene, og sensoren står som `unknown`.
+Tomt trinn-sett gir `None` på alle kostnadsfeltene, og sensoren står som `unknown`.
+
+Det skjer når config entryen peker på en nøkkel som ikke finnes i `dso.py`. Synken mot fri-nettleie fjerner og døper om nettselskap, men nøklene ligger i folks config entries og kan ikke slettes derfra. `coordinator.py` logger nøkkelen som feil, og `__init__.py` reiser en repair-sak som ber brukeren velge nettselskap på nytt. Uten den gikk sensorene bare tomme.
 
 ---
 
