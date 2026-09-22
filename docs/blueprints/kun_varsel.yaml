@@ -2,13 +2,33 @@ blueprint:
   name: Effektvakt - Kun varsel
   description: >
     Send notifikasjon når timen nærmer seg neste kapasitetstrinn. Ingen styring.
-    For brukere som vil ta beslutningen selv basert på en push.
+    Varselet sier hva timen koster og hva du kan slå av, og det kommer
+    uansett hvordan automatikk-bryteren står: er automatikken av, er det du
+    som må kutte, og da trenger du varselet mer, ikke mindre.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/kun_varsel.yaml
+  source_url: https://raw.githubusercontent.com/fredrik-lindseth/hacs-effektvakt/main/docs/blueprints/kun_varsel.yaml
   input:
     risiko_sensor:
       name: Risiko-sensor
       default: sensor.effektvakt_risiko_niva
+      selector:
+        entity:
+          domain: sensor
+    kostnad_sensor:
+      name: Kostnad-sensor
+      description: >
+        Kronene i varselet hentes herfra, fra attributtet
+        kostnad_denne_timen_kr.
+      default: sensor.effektvakt_kostnad_neste_trinn
+      selector:
+        entity:
+          domain: sensor
+    tilgjengelig_kutt_sensor:
+      name: Tilgjengelig kutt-sensor
+      description: >
+        Brukes til å foreslå hvilken last du skal slå av, fra attributtet
+        kutt_kilder. Uten konfigurerte kutt-kilder blir forslaget generelt.
+      default: sensor.effektvakt_tilgjengelig_kutt
       selector:
         entity:
           domain: sensor
@@ -22,9 +42,8 @@ blueprint:
       name: Effektvakt automatikk-bryter (valgfri)
       description: >
         Bryteren fra Effektvakt-integrasjonen, typisk
-        switch.effektvakt_automatikk. Er den av, kutter ikke denne
-        automasjonen. Lar du feltet stå tomt, kutter den alltid, slik den
-        gjorde før bryteren fantes.
+        switch.effektvakt_automatikk. Den stopper ikke varselet. Er den av,
+        sier varselet i tillegg at ingenting kuttes av seg selv.
       default: ""
       selector:
         entity:
@@ -36,8 +55,14 @@ blueprint:
       selector:
         text:
 
+# Inputs er ikke synlige for maler av seg selv, bare der !input står. Derfor
+# må alt som brukes i en {{ }} stå her.
 variables:
   automatikk_switch: !input automatikk_switch
+  kostnad_sensor: !input kostnad_sensor
+  tilgjengelig_kutt_sensor: !input tilgjengelig_kutt_sensor
+  notify_service: !input notify_service
+  dashboard_url: !input dashboard_url
 
 trigger:
   - platform: state
@@ -51,22 +76,43 @@ trigger:
 
 mode: queued
 
-# Har du skrudd av automatikken, har du alt tatt beslutningen. Da er varselet
-# bare mas. Denne automasjonen har ingen restore-gren, så det er trygt å
-# stoppe hele kjøringen her.
-condition:
-  - condition: template
-    value_template: >
-      {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
+# Ingen condition her med vilje. Varselet skal ikke gates på hovedbryteren:
+# har du skrudd av automatikken, er det du som må kutte.
 
 action:
+  - variables:
+      kr_denne_timen: "{{ state_attr(kostnad_sensor, 'kostnad_denne_timen_kr') | int(0) }}"
+      kr_neste_trinn: "{{ states(kostnad_sensor) | int(0) }}"
+      aktive_kilder: >
+        {{ (state_attr(tilgjengelig_kutt_sensor, 'kutt_kilder') or [])
+           | selectattr('teller_med') | list }}
+      storste_kilde: >
+        {{ (aktive_kilder | sort(attribute='effekt_w') | last)
+           if aktive_kilder | count > 0 else none }}
+      storste_navn: >-
+        {{ (storste_kilde.navn or storste_kilde.entity_id)
+           if storste_kilde is not none else '' }}
+      # Enheten står med i verdien med vilje. Uten den ville HA tolket "1,8"
+      # som tuppelen (1, 8) når malen rendres med native typer.
+      storste_kw: >-
+        {{ ((storste_kilde.effekt_w / 1000) | round(1) | replace('.', ',') ~ ' kW')
+           if storste_kilde is not none else '' }}
   - service: "notify.{{ notify_service }}"
     data:
-      title: >
+      title: >-
         Effektvakt:
         {% if trigger.id == 'over' %}over terskelen{% else %}like under terskelen{% endif %}
-      message: >
-        Projisert time-snitt: {{ states('sensor.effektvakt_projisert_time_snitt') }} kW.
-        Margin: {{ states('sensor.effektvakt_margin_til_neste_trinn') }} kW.
+      message: >-
+        {% if kr_denne_timen > 0 -%}
+          Denne timen låser inn {{ kr_denne_timen }} kr ekstra på nettleien denne måneden.
+        {%- elif kr_neste_trinn > 0 -%}
+          Fortsetter timen slik, koster trinnet over {{ kr_neste_trinn }} kr mer i måneden.
+        {%- else -%}
+          Timen er på vei mot neste kapasitetstrinn.
+        {%- endif %} {% if storste_navn != '' -%}
+          Slå av {{ storste_navn }}, den drar {{ storste_kw }} nå.
+        {%- else -%}
+          Slå av det som varmer: bereder, panelovn eller billader.
+        {%- endif %}{% if automatikk_switch != '' and not is_state(automatikk_switch, 'on') %} Automatikken er av, så ingenting kuttes av seg selv.{% endif %}
       data:
         url: "{{ dashboard_url }}"

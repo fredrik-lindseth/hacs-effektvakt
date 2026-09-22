@@ -4,9 +4,12 @@ blueprint:
     Sett climate-entitet (panelovn) til min-temp ved kutt anbefalt, og
     restore til lagret verdi når risiko er borte. Bruker en input_number-hjelper
     for å persistere temperatur over HA-restart.
-    Failsafe: etter max_off_minutes restoreres temperatur uavhengig av sensor.
+    Setpunktet settes tilbake ved neste hele time, eller når sensoren går av,
+    det som kommer først. Nettleien måles per time, så et kutt som varer inn i
+    neste time flytter bare oppvarmingen dit. max_off_minutes er nødbremsen
+    hvis Effektvakt henger.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/climate_min_temp.yaml
+  source_url: https://raw.githubusercontent.com/fredrik-lindseth/hacs-effektvakt/main/docs/blueprints/climate_min_temp.yaml
   input:
     binary_sensor_entity:
       name: Effektvakt binary sensor
@@ -46,19 +49,34 @@ blueprint:
           domain: switch
           integration: effektvakt
     max_off_minutes:
-      name: Maks minutter med min-temp før tving-restore
-      default: 30
+      name: Absolutt tak for hvor lenge min-temp kan stå (minutter)
+      description: >
+        Nødbrems hvis Effektvakt henger. Normalt settes temperaturen tilbake
+        ved timeskiftet lenge før taket nås.
+      default: 60
       selector:
         number:
           min: 5
           max: 240
           step: 5
+    min_on_minutes:
+      name: Minste tid på normal temperatur før ny senking (minutter)
+      description: >
+        Etter et slipp ved timeskiftet får rommet varme opp igjen minst så
+        lenge før setpunktet kan senkes på nytt.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
 
 variables:
   climate_entity: !input climate_entity
   restore_helper: !input restore_helper
   min_temp: !input min_temp
   max_off_minutes: !input max_off_minutes
+  min_on_minutes: !input min_on_minutes
   automatikk_switch: !input automatikk_switch
 
 trigger:
@@ -87,23 +105,46 @@ action:
             value_template: >
               {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
+          # Lagres utenfor løkken, ellers ville runde to lagret setpunktet
+          # rommet nettopp fikk tilbake og ikke det brukeren hadde satt.
           - service: input_number.set_value
             target:
               entity_id: "{{ restore_helper }}"
             data:
               value: "{{ state_attr(climate_entity, 'temperature') | float(20) }}"
-          - service: climate.set_temperature
-            target:
-              entity_id: "{{ climate_entity }}"
-            data:
-              temperature: "{{ min_temp }}"
-          - delay:
-              minutes: "{{ max_off_minutes }}"
-          - service: climate.set_temperature
-            target:
-              entity_id: "{{ climate_entity }}"
-            data:
-              temperature: "{{ states(restore_helper) | float(20) }}"
+          - repeat:
+              sequence:
+                - service: climate.set_temperature
+                  target:
+                    entity_id: "{{ climate_entity }}"
+                  data:
+                    temperature: "{{ min_temp }}"
+                # Verdien av senkingen slutter ved timeskiftet. Timene måles
+                # hver for seg, så minuttene etter xx:00 sparer ingenting.
+                - wait_for_trigger:
+                    - platform: time_pattern
+                      hours: "*"
+                      minutes: 0
+                      seconds: 0
+                  timeout:
+                    minutes: "{{ max_off_minutes }}"
+                  continue_on_timeout: true
+                - service: climate.set_temperature
+                  target:
+                    entity_id: "{{ climate_entity }}"
+                  data:
+                    temperature: "{{ states(restore_helper) | float(20) }}"
+                - delay:
+                    minutes: "{{ min_on_minutes }}"
+              while:
+                # Henger Effektvakt, står sensoren unknown og ikke on, og da
+                # stopper løkken med normal temperatur.
+                - condition: state
+                  entity_id: !input binary_sensor_entity
+                  state: "on"
+                - condition: template
+                  value_template: >
+                    {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
       - conditions:
           - condition: trigger
             id: restore

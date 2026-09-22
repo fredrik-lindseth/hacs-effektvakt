@@ -3,10 +3,12 @@ blueprint:
   description: >
     Slå av switches i prioritert rekkefølge etter hvor nær neste
     kapasitetstrinn timen ligger. Like under terskelen: første switch av.
-    Over terskelen: alle switches av. Slår på igjen i revers rekkefølge
-    når marginen kommer tilbake.
+    Over terskelen: alle switches av. Lastene kommer tilbake ved neste hele
+    time, eller så snart marginen er tilbake, det som kommer først.
+    Nettleien måles per time, så et kutt som varer inn i neste time flytter
+    bare forbruket dit. max_off_minutes er nødbremsen hvis Effektvakt henger.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/prioritert_lastkutt.yaml
+  source_url: https://raw.githubusercontent.com/fredrik-lindseth/hacs-effektvakt/main/docs/blueprints/prioritert_lastkutt.yaml
   input:
     risiko_sensor:
       name: Risiko-sensor
@@ -37,69 +39,113 @@ blueprint:
           domain: switch
           integration: effektvakt
     max_off_minutes:
-      name: Maks minutter slått av før tving-on
-      default: 30
+      name: Absolutt tak for hvor lenge lastene kan stå av (minutter)
+      description: >
+        Nødbrems hvis Effektvakt henger. Normalt slippes lastene ved
+        timeskiftet lenge før taket nås. Setter du det under 60, kapper du
+        kutt som ellers hadde vart ut timen.
+      default: 60
       selector:
         number:
           min: 5
           max: 240
           step: 5
+    min_on_minutes:
+      name: Minste påtid før nytt kutt (minutter)
+      description: >
+        Etter et slipp ved timeskiftet får lastene stå på minst så lenge før
+        de kan kuttes igjen, selv om risikoen fortsatt er høy.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
 
 variables:
+  risiko_sensor_id: !input risiko_sensor
   switch_high: !input switch_high_priority
   switch_medium: !input switch_medium_priority
   max_off_minutes: !input max_off_minutes
+  min_on_minutes: !input min_on_minutes
   automatikk_switch: !input automatikk_switch
 
+# Tilstandene er listet opp med vilje. Uten to: ville triggeren fyrt av hver
+# gang koordinatoren skrev et attributt, og mode: restart hadde startet kuttet
+# på nytt hvert sekund, slik at hverken timeskiftet eller min_on_minutes kom
+# til orde.
 trigger:
   - platform: state
     entity_id: !input risiko_sensor
+    to:
+      - god_margin
+      - naermer_seg_terskel
+      - like_under_terskel
+      - over_terskel
 
 mode: restart
 
 action:
   - choose:
       - conditions:
-          # Begge kutt-grenene er gatet. Faller vi gjennom fordi bryteren er
-          # av, tar default-grenen under over og slår alt på igjen.
+          # Kuttingen er gatet. Faller vi gjennom fordi bryteren er av, tar
+          # default-grenen under over og slår alt på igjen.
           - condition: state
             entity_id: !input risiko_sensor
-            state: "over_terskel"
+            state:
+              - like_under_terskel
+              - over_terskel
           - condition: template
             value_template: >
               {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
-          - service: switch.turn_off
-            target:
-              entity_id:
-                - "{{ switch_high }}"
-                - "{{ switch_medium }}"
-          - delay:
-              minutes: "{{ max_off_minutes }}"
-          - service: switch.turn_on
-            target:
-              entity_id:
-                - "{{ switch_high }}"
-                - "{{ switch_medium }}"
-      - conditions:
-          - condition: state
-            entity_id: !input risiko_sensor
-            state: "like_under_terskel"
-          - condition: template
-            value_template: >
-              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: "{{ switch_high }}"
-          - service: switch.turn_on
-            target:
-              entity_id: "{{ switch_medium }}"
-          - delay:
-              minutes: "{{ max_off_minutes }}"
-          - service: switch.turn_on
-            target:
-              entity_id: "{{ switch_high }}"
+          - variables:
+              kutt_liste: >
+                {{ [switch_high, switch_medium]
+                   if is_state(risiko_sensor_id, 'over_terskel')
+                   else [switch_high] }}
+              behold_liste: >
+                {{ []
+                   if is_state(risiko_sensor_id, 'over_terskel')
+                   else [switch_medium] }}
+          - repeat:
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ kutt_liste }}"
+                - if:
+                    - condition: template
+                      value_template: "{{ behold_liste | count > 0 }}"
+                  then:
+                    - service: switch.turn_on
+                      target:
+                        entity_id: "{{ behold_liste }}"
+                # Verdien av kuttet slutter ved timeskiftet. Timene måles hver
+                # for seg, så minuttene etter xx:00 sparer ingenting.
+                - wait_for_trigger:
+                    - platform: time_pattern
+                      hours: "*"
+                      minutes: 0
+                      seconds: 0
+                  timeout:
+                    minutes: "{{ max_off_minutes }}"
+                  continue_on_timeout: true
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ kutt_liste }}"
+                - delay:
+                    minutes: "{{ min_on_minutes }}"
+              while:
+                # Henger Effektvakt, står risiko-sensoren unknown og løkken
+                # stopper med lastene på.
+                - condition: state
+                  entity_id: !input risiko_sensor
+                  state:
+                    - like_under_terskel
+                    - over_terskel
+                - condition: template
+                  value_template: >
+                    {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
     default:
       - service: switch.turn_on
         target:

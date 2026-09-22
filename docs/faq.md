@@ -8,7 +8,7 @@ Ja, for av-perioder på 15-60 minutter. En 200-liters bereder mister typisk 0,5-
 
 Nei. Legionella er en bakterie som trenger 25-50 °C og tid for å vokse. Over 55 °C er det ingen vekst. Over 60 °C dør den aktivt. En riktig innstilt bereder står på 65-75 °C i drift.
 
-Regn på det: hvis tanken står på 70 °C og mister 2 °C/time, er den fortsatt 68 °C etter en time. Det er langt over risiko-sonen. For å nå 50 °C måtte du la den stå av i ti timer. Effektvakt slår av i maks 30 minutter (failsafe) før den uansett tvinges på igjen.
+Regn på det: hvis tanken står på 70 °C og mister 2 °C/time, er den fortsatt 68 °C etter en time. Det er langt over risiko-sonen. For å nå 50 °C måtte du la den stå av i ti timer. Effektvakt slipper lasten ved neste hele time, og uansett når taket på 60 minutter løper ut, så et kutt varer under en time.
 
 Praktiske tommelfingerregler:
 
@@ -30,7 +30,7 @@ Faktisk: hvis tanken får stå litt kaldere mens den er av, blir varmetapet litt
 
 ## Hvor lenge kan tanken stå av før jeg merker det?
 
-For en 200-liters bereder med termostatinnstilling 70 °C: 4-6 timer ved typisk bruk, før vannet du tapper blir merkbart kjøligere. Effektvakt sine standard 15-30 minutters kuttvinduer er usynlig for brukeren.
+For en 200-liters bereder med termostatinnstilling 70 °C: 4-6 timer ved typisk bruk, før vannet du tapper blir merkbart kjøligere. Effektvakt sine kuttvinduer slutter ved timeskiftet og varer under en time. Det er usynlig for brukeren.
 
 Hvis du dusjer rett etter et lastkutt, vil du ikke merke noe så lenge tanken var varm før kuttet begynte.
 

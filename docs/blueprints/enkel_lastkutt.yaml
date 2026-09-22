@@ -2,10 +2,12 @@ blueprint:
   name: Effektvakt - Enkel lastkutt
   description: >
     Slå av én switch når Effektvakt signaliserer kutt anbefalt.
-    Slår på igjen automatisk når risikoen er borte, eller etter max_off_minutes
-    som failsafe mot at coordinator henger.
+    Lasten kommer tilbake når sensoren går av, eller ved neste hele time,
+    det som kommer først. Nettleien måles per time, så et kutt som varer
+    inn i neste time flytter bare oppvarmingen dit og drar den timen opp.
+    max_off_minutes er nødbremsen hvis Effektvakt henger.
   domain: automation
-  source_url: https://github.com/fredrik-lindseth/hacs-effektvakt/raw/main/docs/blueprints/enkel_lastkutt.yaml
+  source_url: https://raw.githubusercontent.com/fredrik-lindseth/hacs-effektvakt/main/docs/blueprints/enkel_lastkutt.yaml
   input:
     binary_sensor_entity:
       name: Effektvakt binary sensor
@@ -32,19 +34,35 @@ blueprint:
           domain: switch
           integration: effektvakt
     max_off_minutes:
-      name: Maks minutter slått av før tving-on (failsafe)
-      description: Hvis Effektvakt henger, slås switchen på etter denne tiden.
-      default: 30
+      name: Absolutt tak for hvor lenge lasten kan stå av (minutter)
+      description: >
+        Nødbrems hvis Effektvakt henger. Normalt slippes lasten ved
+        timeskiftet lenge før taket nås. Setter du det under 60, kapper du
+        kutt som ellers hadde vart ut timen.
+      default: 60
       selector:
         number:
           min: 5
           max: 240
           step: 5
+    min_on_minutes:
+      name: Minste påtid før nytt kutt (minutter)
+      description: >
+        Etter et slipp ved timeskiftet får lasten stå på minst så lenge før
+        den kan kuttes igjen, selv om Effektvakt fortsatt anbefaler kutt.
+        Uten den ville berederen stått av gjennom to timer på rad.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
 
 variables:
   switch_entity: !input switch_entity
   binary_sensor_entity: !input binary_sensor_entity
   max_off_minutes: !input max_off_minutes
+  min_on_minutes: !input min_on_minutes
   automatikk_switch: !input automatikk_switch
 
 trigger:
@@ -70,14 +88,39 @@ action:
             value_template: >
               {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
         sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: "{{ switch_entity }}"
-          - delay:
-              minutes: "{{ max_off_minutes }}"
-          - service: switch.turn_on
-            target:
-              entity_id: "{{ switch_entity }}"
+          # Løkken kjører én runde per time risikoen varer. Går sensoren av
+          # underveis, avbryter mode: restart hele greia og trigger_on-grenen
+          # slår lasten på.
+          - repeat:
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ switch_entity }}"
+                # Verdien av kuttet slutter ved timeskiftet. Timene måles hver
+                # for seg, så minuttene etter xx:00 sparer ingenting, de
+                # flytter bare forbruket inn i den nye timen.
+                - wait_for_trigger:
+                    - platform: time_pattern
+                      hours: "*"
+                      minutes: 0
+                      seconds: 0
+                  timeout:
+                    minutes: "{{ max_off_minutes }}"
+                  continue_on_timeout: true
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ switch_entity }}"
+                - delay:
+                    minutes: "{{ min_on_minutes }}"
+              while:
+                # Henger Effektvakt, står sensoren unknown og ikke on, og da
+                # stopper løkken med lasten på.
+                - condition: state
+                  entity_id: !input binary_sensor_entity
+                  state: "on"
+                - condition: template
+                  value_template: >
+                    {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
       - conditions:
           - condition: trigger
             id: trigger_on
