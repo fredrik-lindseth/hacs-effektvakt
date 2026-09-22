@@ -1,3 +1,13 @@
+# Installer: pre-commit install && pre-commit install --hook-type pre-push
+#
+# Verktøyversjonene her er de samme som kvalitet-gruppa i pyproject.toml. Ulike
+# versjoner lokalt og i hooken er et sprik som viser seg som «formateringen
+# endret seg av seg selv».
+
+# Alt utenom testsuiten hører hjemme på commit. Uten dette kjører hele settet
+# på nytt ved push.
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.8
@@ -29,23 +39,32 @@ repos:
         exclude: ^(docs/blueprints/|esphome/)
       - id: check-json
       - id: check-added-large-files
+        # Grensen er der for at binaere blobber ikke skal snike seg inn.
+        # uv.lock er generert, tekst, og legitimt stor: 237 pakker over fire
+        # grupper og to HA-grener.
         args: ['--maxkb=500']
+        exclude: ^uv\.lock$
 
-  - repo: local
+  # Mypy. Blokkerende, som i `just check` og i CI. Den var rådgivende med
+  # `|| true` fram til september 2026, og samlet opp 26 feil ingen så. Samme
+  # versjon som kvalitet-gruppa i pyproject.toml.
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
     hooks:
       - id: mypy
-        name: mypy (warnings only)
-        # HA-stubs mangler, mypy er informativ og blokkerer ikke commit
-        entry: bash -c 'mypy --ignore-missing-imports --no-error-summary custom_components/effektvakt/ || true'
-        language: system
-        pass_filenames: false
+        args: [--ignore-missing-imports, --no-error-summary]
         files: ^custom_components/effektvakt/
+        pass_filenames: false
+        additional_dependencies: []
 
   - repo: local
     hooks:
       - id: pytest
-        name: pytest
-        entry: python -m pytest tests/ -v --tb=short
+        name: pytest (just test-unit)
+        # Kaller nøyaktig samme oppskrift som AGENTS.md og CI. Hooken har ikke
+        # sitt eget miljø og sin egen kommandolinje: da kunne den gå grønn på
+        # noe annet enn det de to andre kjører.
+        entry: just test-unit
         language: system
         pass_filenames: false
         always_run: true

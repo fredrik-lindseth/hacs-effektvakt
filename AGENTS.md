@@ -141,19 +141,25 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 
 ## Porter
 
-Det finnes ikke noe justfile i dette repoet. Kommandoene kjøres rett:
+Portene kjøres med `just` og uv. Ingenting installeres i system-Python.
 
 ```bash
-pip install -e ".[dev]"      # engangs, dev-avhengighetene
-pytest tests/                # hele suiten
-ruff check custom_components/effektvakt/ tests/ scripts/
+just test-unit               # hele suiten, tests/ med stubbet Home Assistant
+just check                   # ruff check, ruff format --check, mypy, vulture
+just test                    # begge, det som kreves før commit
 pre-commit run --files <filene dine>
 ```
 
+Oppskriftene i `justfile` er de samme kommandolinjene CI og pre-commit kjører,
+så en rød port kan reproduseres lokalt. Avhengighetene står som
+`[dependency-groups]` i `pyproject.toml`, låst i `uv.lock`, med ett venv per
+gruppe. `docs/development.md` har tabellen over miljøene.
+
 Pre-commit kjører ruff (lint og format), vulture, mypy og de vanlige
 whitespace-/JSON-/YAML-sjekkene. `pytest` henger på `pre-push`, ikke på
-`pre-commit`. Mypy er informativ her og i CI (`|| true`), så en typefeil
-stopper ingenting; det betyr ikke at den er greit å legge igjen.
+`pre-commit`, og kaller `just test-unit`. **Mypy er blokkerende** her og i CI
+fra september 2026. Den var rådgivende med `|| true`, og det den samlet opp i
+mellomtiden var 26 feil ingen så.
 
 DSO-hooken «DSO-tabell mot fri-nettleie» er grønn og skal holdes grønn. Den er
 `files`-gatet på `dso.py`, generatoren og `dso_kilder.json`, så den kjører bare
@@ -164,12 +170,15 @@ fri-nettleie på commiten i `dso_kilder.json`.
 så `ruff format --check` og pre-commit brekker linjer likt. `line-length` er 120
 i `pyproject.toml`, og E501 er slått av i ruff-lint.
 
-CI (`.github/workflows/ci.yml`) sjekker ut fri-nettleie på pinnet commit, kjører
-ruff, mypy, DSO-sjekken, pytest med coverage, og verifiserer at manifestet er
-gyldig JSON med semver-versjon og at de påkrevde filene finnes. Et eget steg
-feller hvis replay-fixturene mangler, siden de lå som symlink og skippet seg
-selv i CI fram til september 2026.
-`validate.yml` kjører HACS-validering og hassfest.
+CI (`.github/workflows/ci.yml`) har fire jobber og en port: `test-unit`
+(fixtur-vakt, `just coverage-unit`, `just coverage-gate`, Codecov),
+`check` (`just check`, DSO-sjekken mot fri-nettleie på pinnet commit,
+manifest-validering og versjonssynk mot `pyproject.toml`), `hacs` og
+`hassfest`. `release-gate` feller når en av dem ikke er `success`; `skipped`
+teller som feil. `validate.yml` kjører HACS og hassfest om igjen nattlig.
+
+`manifest.json` og `pyproject.toml` skal ha den samme versjonen.
+Check-jobben feller ved sprik, så bump begge i samme commit.
 
 ## Fallgruver
 

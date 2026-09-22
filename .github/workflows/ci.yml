@@ -5,9 +5,68 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Release-maskineriet (hacs-effektvakt-2xu0h57) kaller denne for
+  # kandidat-SHA-en sin og venter på hele grafen før det publiserer. Når
+  # release.yml finnes, skal push-triggeren over bort: da eier release.yml
+  # main, og to kjøringer av samme ting er to svar å velge mellom.
+  workflow_call:
+
+# CI kaller de samme just-oppskriftene som kjøres lokalt og av pre-commit.
+# Kommandolinjene står ett sted, i justfile, så en rød port kan reproduseres
+# med `just check` eller `just test-unit` uten å lese denne filen.
+#
+# HACS- og hassfest-valideringen hører hjemme her og ikke bare i validate.yml:
+# release-gaten kan ikke vente på noe den ikke ser. validate.yml kjører de to
+# om igjen om natten, fordi begge kan bli røde av endringer utenfor repoet.
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  test-unit:
+    name: Unit (stubbet HA)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        # Pinnet eksakt, ikke @v10: Astral sluttet å publisere major- og
+        # minortagger fra v8.0.0, så @v10 finnes ikke. Bumpes for hånd.
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      # Fixturene lå som symlink ut av repoet til september 2026, og da skippet
+      # replay-testene seg selv i CI. Feller vi her, ser vi det med en gang.
+      - name: Replay-fixturer finnes
+        run: |
+          n=$(ls tests/fixtures/bkk_*_hourly.json 2>/dev/null | wc -l)
+          [ "$n" -ge 9 ] || { echo "Fant bare $n replay-fixturer"; exit 1; }
+
+      - name: Unit tests with coverage
+        run: just coverage-unit
+
+      - name: Coverage-terskel
+        run: just coverage-gate
+
+      # Coverage-tallet er nyttig, men det er ikke en test, og dekning skal
+      # ikke avgjøre om CI er grønn: terskelen står i coverage-gate over.
+      # `fail_ci_if_error: false` dekker feil Codecov selv rapporterer,
+      # continue-on-error dekker resten, som at actionen ikke svarer.
+      - name: Upload coverage to Codecov
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-unit.xml
+          fail_ci_if_error: false
+
+  check:
+    name: Kvalitet (ruff, mypy, vulture)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout effektvakt
@@ -26,48 +85,37 @@ jobs:
           ref: ${{ steps.frinett.outputs.commit }}
           path: _fri-nettleie
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
         with:
-          python-version: '3.12'
+          enable-cache: true
 
-      - name: Install deps
-        run: pip install -e ".[dev]" pyyaml pytest-asyncio voluptuous
+      - name: Set up just
+        uses: extractions/setup-just@v4
 
-      - name: Lint (ruff)
-        run: ruff check custom_components/effektvakt/ tests/ scripts/
-
-      - name: Type check (mypy, warnings only)
-        run: mypy custom_components/effektvakt/ --ignore-missing-imports || true
+      - name: Lint, format, typer og død kode
+        run: just check
 
       - name: Verify DSO-tabell mot fri-nettleie
-        run: python scripts/generer_dso_fra_fri_nettleie.py --check --kilde _fri-nettleie
-
-      # Fixturene lå som symlink ut av repoet til september 2026, og da skippet
-      # replay-testene seg selv i CI. Feller vi her, ser vi det med en gang.
-      - name: Replay-fixturer finnes
-        run: |
-          n=$(ls tests/fixtures/bkk_*_hourly.json 2>/dev/null | wc -l)
-          [ "$n" -ge 9 ] || { echo "Fant bare $n replay-fixturer"; exit 1; }
-
-      - name: Tests with coverage
-        run: |
-          pytest tests/ -v --cov=custom_components/effektvakt \
-            --cov-report=term-missing --cov-report=xml
-
-      # Codecov rapporterer selv om opplastingen feiler, og dekningen skal ikke
-      # avgjøre om CI er grønn. continue-on-error dekker resten, som at actionen
-      # ikke svarer i det hele tatt.
-      - name: Upload coverage to Codecov
-        continue-on-error: true
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          fail_ci_if_error: false
+        run: just dso-sjekk _fri-nettleie
 
       - name: Manifest valid JSON
         run: jq empty custom_components/effektvakt/manifest.json
+
+      # manifest.json og pyproject.toml sto på 0.3.0 og 0.1.0 i september 2026
+      # uten at noe felte. Dette steget er det som gjør det umulig igjen.
+      - name: Versjonsformat og -synk
+        run: |
+          VERSION=$(jq -r '.version' custom_components/effektvakt/manifest.json)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Ugyldig versjonsformat i manifest.json: $VERSION"
+            exit 1
+          fi
+          PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [[ "$VERSION" != "$PYPROJECT_VERSION" ]]; then
+            echo "Versjonsdrift: manifest.json ($VERSION) != pyproject.toml ($PYPROJECT_VERSION)"
+            exit 1
+          fi
 
       - name: Required files present
         run: |
@@ -86,7 +134,57 @@ jobs:
             [ -f "$f" ] || { echo "Missing: $f"; exit 1; }
           done
 
-      - name: Version-format manifest
+  # De to validatorene kjører mot `@main` og `@master` hos andre, og de snakker
+  # med GitHubs API. Er de trege eller ustabile, blokkerer de framfor å slippe
+  # noe gjennom, og det er riktig vei å feile. Timeouten er der for at en
+  # hengende validator ikke skal holde en kjøring i timevis.
+  hacs:
+    name: HACS-validering
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: home-assistant/actions/hassfest@master
+
+  # Én jobb å kreve grønn i grenbeskyttelsen, og den release-maskineriet venter
+  # på. `if: always()` er nødvendig for at den skal kjøre når en av de andre
+  # feiler; da er hele poenget å rapportere hvem. skipped og cancelled teller
+  # som feil: en jobb som ikke kjørte har ikke sagt at noe er i orden.
+  release-gate:
+    name: Releaseport
+    if: always()
+    needs: [test-unit, check, hacs, hassfest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Krev grønt fra alle jobbene
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
         run: |
-          VERSION=$(jq -r '.version' custom_components/effektvakt/manifest.json)
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Bad version: $VERSION"; exit 1; }
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          results = json.loads(os.environ["JOB_RESULTS"])
+          required = ("test-unit", "check", "hacs", "hassfest")
+          blocked = []
+          for job in required:
+              result = results.get(job, {}).get("result", "missing")
+              print(f"{job}: {result}")
+              if result != "success":
+                  blocked.append(f"{job}: {result}")
+          if blocked:
+              print("::error::Release stoppet: " + ", ".join(blocked))
+              sys.exit(1)
+          PY

@@ -1,30 +1,75 @@
 [project]
 name = "effektvakt"
-version = "0.1.0"
+# Samme tall som custom_components/effektvakt/manifest.json. Sjekk-jobben i
+# ci.yml feller ved sprik, så de to kan ikke drifte fra hverandre igjen.
+version = "0.3.0"
 description = "Home Assistant integration for prediktiv kapasitetstrinn-styring"
 readme = "README.md"
-requires-python = ">=3.12"
+# Gulvet er kjøretiden, ikke verktøykjeden: integrasjonen kjører i brukerens
+# Home Assistant, og HA 2025.1 (minimumet hacs.json lover) trenger 3.13. Det
+# binder også hele uv.lock, så ha-minimum-grenen faller bort hvis det heves.
+requires-python = ">=3.13"
 license = "MIT"
 
-# Uten dette prøver setuptools å gjette hvilken toppnivåkatalog som er pakken,
-# og gir opp når det finnes flere. images/ og esphome/ er ikke Python i det hele
-# tatt, men flat-layout-oppdagelsen teller dem likevel.
-[tool.setuptools.packages.find]
-include = ["custom_components*"]
+# Ingen [build-system]: prosjektet bygges og installeres aldri. tests/conftest.py
+# legger custom_components/ på sys.path selv, så `pip install -e .` er
+# overflødig, og uten build-system lar uv prosjektet stå som et rent miljø.
 
-[project.optional-dependencies]
-dev = [
-    "pre-commit>=3.5.0",
-    "ruff>=0.8.0",
-    "vulture>=2.13",
+[dependency-groups]
+# Fire grupper, fire miljøer. `unit` og `kvalitet` kjenner ikke Home Assistant i
+# det hele tatt; tests/conftest.py stubber HA bort, og en ekte homeassistant i
+# samme miljø ville kollidert med stubbene. `ha-minimum` og `ha-current` er de
+# to ekte-HA-miljøene, låst til hver sin plugin-versjon som selv pinner HA
+# eksakt. De tas i bruk av tests_ha/ (hacs-effektvakt-1vfeemq); gruppene står
+# her nå så uv.lock har begge grenene ferdig løst.
+unit = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "hypothesis>=6.0.0",
-    "mypy>=1.8.0",
     "voluptuous>=0.14",
     "pyyaml>=6.0",
 ]
+# Verktøyene er pinnet eksakt til de samme versjonene som
+# .pre-commit-config.yaml bruker. Ulike ruff-versjoner lokalt og i hooken er et
+# sprik som viser seg som «formateringen endret seg av seg selv».
+kvalitet = [
+    "ruff==0.16.8",
+    "mypy==1.19.1",
+    "vulture==2.14",
+    "pre-commit>=3.5.0",
+]
+# Minimum = versjonen hacs.json lover brukerne, HA 2025.1.0. Plugin-versjonen
+# pinner den HA-en selv.
+ha-minimum = [
+    "pytest-homeassistant-custom-component==0.13.201",
+    # HA 2025.1 pinner denne prereleasen transitivt. uv regner bare prereleases
+    # som er skrevet ut her som tillatte, så den må stå eksplisitt for at
+    # minimum-grenen skal la seg løse.
+    "aiohasupervisor==0.2.2b5",
+]
+# Current = nyeste HA vi har sett på. Låst eksplisitt, aldri flytende:
+# 0.13.365 pinner homeassistant==2026.9.2 og krever Python 3.14.
+ha-current = [
+    "pytest-homeassistant-custom-component==0.13.365",
+]
+
+[tool.uv]
+# Se kommentaren ved aiohasupervisor over. `if-necessary-or-explicit` slipper
+# bare gjennom prereleases som er eksplisitt pinnet, ikke prereleases generelt.
+prerelease = "if-necessary-or-explicit"
+# Ingen gruppe er default. Hvert miljø ber om det det trenger, så et `uv run`
+# uten --group ikke stille drar inn noe som ikke hører hjemme der.
+default-groups = []
+# De to HA-gruppene kan aldri stå i samme miljø: de pinner hver sin
+# homeassistant. uv løser dem som atskilte grener i uv.lock.
+conflicts = [
+    [{ group = "ha-minimum" }, { group = "ha-current" }],
+]
+
+[tool.uv.dependency-groups]
+ha-minimum = { requires-python = ">=3.13,<3.14" }
+ha-current = { requires-python = ">=3.14.2" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,8 +78,13 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
 
+[tool.coverage.run]
+# Relative stier gjør at datafiler skrevet i ulike miljøer og CI-jobber kan
+# slås sammen til én rapport.
+relative_files = true
+
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
@@ -44,13 +94,20 @@ ignore = ["E501", "B008", "SIM108"]
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components.effektvakt"]
 
+[tool.ruff.lint.per-file-ignores]
+# vulture_whitelist.py er med vilje bare en liste med navn: det er formen
+# vulture leser whitelister i, og navnene er definert i Home Assistant eller i
+# integrasjonen, ikke her. Derfor er hver linje et «ubrukt uttrykk» (B018) med
+# et «udefinert navn» (F821) for ruff. Unntaket gjelder kun denne filen.
+"vulture_whitelist.py" = ["B018", "F821"]
+
 [tool.vulture]
 min_confidence = 80
 paths = ["custom_components/effektvakt"]
 exclude = ["*test*"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true

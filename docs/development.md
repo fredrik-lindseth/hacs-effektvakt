@@ -68,18 +68,47 @@ tests/
 
 ## Kjøre tester
 
+Portene kjøres med [`just`](https://github.com/casey/just) og
+[uv](https://docs.astral.sh/uv/). På macOS: `brew install just`, og uv fra
+installasjonsscriptet deres. Ingenting installeres i system-Python, og
+`pip install -e .` trengs ikke: `tests/conftest.py` legger
+`custom_components/` på `sys.path` selv.
+
 ```bash
-# Installer dev-avhengigheter
-pip install -e ".[dev]"
+just                       # list oppskriftene
+just test-unit             # hele suiten, tests/ med stubbet Home Assistant
+just test-unit -k terskel  # ekstra argumenter går videre til pytest
+just check                 # ruff check, ruff format --check, mypy, vulture
+just test                  # test-unit + check, det som kreves før commit
+just coverage              # coverage med terskel (feller under 90 %)
+just fmt                   # formater, den eneste oppskriften som skriver
+```
 
-# Kjør alle tester
-pytest tests/ -v
+Oppskriftene er de samme kommandolinjene CI og pre-commit kjører. Er `just
+check` grønn lokalt, er kvalitetsjobben i CI grønn på den samme commiten.
 
-# Kjør med coverage
-pytest tests/ --cov=custom_components/effektvakt --cov-report=term-missing
+### Miljøene
 
-# Kjør spesifikk testfil
-pytest tests/test_terskelmodell.py -v
+Avhengighetene står som `[dependency-groups]` i `pyproject.toml` og er låst i
+`uv.lock`. Hver gruppe får sitt eget venv, og ingen av dem deler `sys.modules`:
+
+| Gruppe       | Miljø              | Python | Innhold                                      |
+| ------------ | ------------------ | ------ | -------------------------------------------- |
+| `unit`       | `.venv-unit`       | 3.13   | `tests/` med stubbet Home Assistant          |
+| `kvalitet`   | `.venv-kvalitet`   | 3.13   | ruff, mypy, vulture, pre-commit              |
+| `ha-minimum` | `.venv-ha-minimum` | 3.13   | ekte HA 2025.1.0, det `hacs.json` lover      |
+| `ha-current` | `.venv-ha-current` | 3.14   | ekte HA 2026.9.2                             |
+
+De to HA-gruppene er løst i `uv.lock` og venter på `tests_ha/`. Verktøyene i
+`kvalitet` er pinnet eksakt til de samme versjonene `.pre-commit-config.yaml`
+bruker; sprik der viser seg som at formateringen endrer seg av seg selv.
+
+### DSO-tabellen
+
+```bash
+just dso-hent               # hent fri-nettleie på pinnet commit til _fri-nettleie/
+just dso-sjekk _fri-nettleie  # samme sjekk som CI, uten nett
+just dso-sjekk              # uten utsjekk: laster ned tariffene selv
 ```
 
 ---
@@ -88,10 +117,18 @@ pytest tests/test_terskelmodell.py -v
 
 ```bash
 pre-commit install
-pre-commit run --all-files
+pre-commit install --hook-type pre-push
+pre-commit run --files <filene dine>
 ```
 
-Hooks kjører ruff (lint + format), mypy og vulture. CI kjører de samme sjekkene.
+Hookene kjører ruff (lint og format), vulture, mypy og de vanlige
+whitespace-, JSON- og YAML-sjekkene. `mypy` er blokkerende, både her og i CI.
+DSO-hooken er `files`-gatet på `dso.py`, generatoren og `dso_kilder.json`, så
+den kjører bare når du rører dem. `pytest` henger på `pre-push` og kaller
+`just test-unit`, altså nøyaktig den samme kommandolinjen som CI.
+
+Flere agenter jobber i det samme treet, så kjør `pre-commit run --files` med
+dine egne filer framfor `--all-files`.
 
 ---
 
@@ -205,17 +242,32 @@ rsync -av custom_components/effektvakt/ homeassistant:/config/custom_components/
 
 ## CI-workflows
 
-`.github/workflows/ci.yml`:
+`.github/workflows/ci.yml` kjører på PR mot `main`, på push til `main`, og som
+`workflow_call` fra release-maskineriet. Fire jobber pluss en port:
 
-- ruff check + format
-- mypy
-- pytest med coverage
-- vulture (dead code)
+- **test-unit**: sjekker at replay-fixturene faktisk finnes (de lå som symlink
+  og skippet seg selv stille fram til september 2026), kjører `just
+  coverage-unit` og `just coverage-gate`, og laster opp til Codecov. Codecov
+  er `continue-on-error`: dekning skal ikke avgjøre om CI er grønn, terskelen
+  håndheves av `coverage-gate`.
+- **check**: `just check`, altså ruff check, `ruff format --check`, mypy og
+  vulture. Deretter DSO-tabellen mot en utsjekk av fri-nettleie på commiten i
+  `scripts/dso_kilder.json`, at `manifest.json` er gyldig JSON med
+  semver-versjon, at den versjonen er den samme som i `pyproject.toml`, og at
+  de påkrevde filene finnes.
+- **hacs** og **hassfest**: de to valideringene. De ligger her og ikke bare i
+  `validate.yml` fordi release-porten ikke kan vente på noe den ikke ser.
+- **release-gate**: feller når en av de fire ikke er `success`. `skipped` og
+  `cancelled` teller som feil, siden en jobb som ikke kjørte ikke har sagt at
+  noe er i orden. Det er denne jobben grenbeskyttelsen og release-flyten skal
+  kreve grønn.
 
-`.github/workflows/validate.yml`:
+Mypy er blokkerende. Den var rådgivende med `|| true` fram til september 2026,
+og det den samlet opp i mellomtiden var 26 feil ingen så.
 
-- HACS validation (hassfest)
-- manifest.json-sjekk
+`.github/workflows/validate.yml` kjører HACS-valideringen og hassfest om igjen
+hver natt, pluss på `workflow_dispatch`. Begge kan bli røde av endringer
+utenfor repoet, og det vil vi vite før neste release.
 
 ---
 

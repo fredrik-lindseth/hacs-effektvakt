@@ -1,0 +1,30 @@
+# Codecov-konfigurasjon
+# https://docs.codecov.com/docs/codecovyml-reference
+#
+# CI laster opp én rapport per commit, fra unit-suiten. Det harde gulvet ligger
+# ikke her: `just coverage-gate` håndhever det i test-unit-jobben, uten Codecov.
+# Tallet her er bare til sammenligning mot forrige commit, så et fall på mer
+# enn ett prosentpoeng blir synlig i PR-en.
+#
+# Flagg (unit/ha) legges inn når tests_ha/ finnes, sammen med after_n_builds: 2.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        if_ci_failed: error
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+        if_ci_failed: error
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default
+  require_changes: false
+
+github_checks:
+  annotations: true

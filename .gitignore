@@ -1,4 +1,6 @@
 .venv/
+# Ett venv per testmiljø, se justfile.
+.venv-*/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -6,7 +8,9 @@ __pycache__/
 .mypy_cache/
 .hypothesis/
 .coverage
+.coverage.*
 coverage.xml
+coverage*.xml
 *.egg-info/
 build/
 dist/
@@ -15,3 +19,9 @@ dist/
 .vscode/
 esphome/secrets.yaml
 esphome/.esphome/
+# Utsjekken `just dso-hent` legger igjen, kilden til `just dso-sjekk`.
+_fri-nettleie/
+# Artefakter fra E2E-kjøringer (hacs-effektvakt-3vcv78h).
+tests_e2e/artifacts/
+.claude/worktrees/
+_private/
