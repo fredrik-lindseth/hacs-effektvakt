@@ -28,15 +28,17 @@ være.
 ## Kritiske regler
 
 1. **`custom_components/effektvakt/dso.py` er autogenerert** fra
-   `hacs-strømkalkulator/custom_components/stromkalkulator/dso.py`. Rediger den
-   aldri for hånd. `python3 scripts/sync_dso_from_stromkalkulator.py`
-   regenererer, `--check` feiler på diff, og både pre-commit-hooken «Verify DSO
-   sync» og CI kjører `--check`. Scriptet forventer at strømkalkulator ligger
-   som søskenmappe (`../hacs-strømkalkulator`); i CI overstyres stien med
-   `STROMKALKULATOR_ROOT`.
-2. **Kapasitetstrinn gjettes aldri.** Trinnene kommer fra strømkalkulator, som
-   krever offisiell kilde per nettselskap. Mangler et nettselskap trinn, er det
-   der det skal rettes, ikke her.
+   [fri-nettleie](https://github.com/kraftsystemet/fri-nettleie). Rediger den
+   aldri for hånd. `python3 scripts/generer_dso_fra_fri_nettleie.py`
+   regenererer, `--check` feiler på diff, og CI kjører `--check`. Uten
+   `--kilde` lastes tarballen ned på commiten som er pinnet i
+   `scripts/dso_kilder.json`; `--kilde <sti>` eller `$FRI_NETTLEIE_ROOT` peker
+   på en utsjekk.
+2. **Nøklene eies av oss, prisene av fri-nettleie.** `scripts/dso_kilder.json`
+   bestemmer hvilke nettselskap som finnes, fordi nøklene ligger i folks
+   config entries og aldri kan slettes. `tests/test_dso_data.py` har et frosset
+   nøkkelsett som blokkerer sletting og tillater nye. Skal et nettselskap inn,
+   legges det der med slug og mva-sone, ikke i `dso.py`.
 3. **Topp-3-regelen er domenet.** Nettselskapet fakturerer snittet av de tre
    høyeste time-snittene fra tre ulike dager i måneden. En enkelt time over
    terskelen koster ikke trinnet i seg selv: den må dra snittet av de tre over.
@@ -104,7 +106,8 @@ er en skisse som ikke er bygget, se statusboksen i `docs/fysisk-panel.md`.
 | `custom_components/effektvakt/switch.py`     | `switch.effektvakt_automatikk`, hovedbryteren                                              |
 | `docs/blueprints/`                           | De fire blueprintene brukeren importerer for hånd                                          |
 | `docs/kort-harness/server.py`                | Prøvebenk for kortet, uten Home Assistant                                                  |
-| `scripts/sync_dso_from_stromkalkulator.py`   | Regenererer `dso.py`, `--check` i hook og CI                                               |
+| `scripts/generer_dso_fra_fri_nettleie.py`    | Regenererer `dso.py` fra fri-nettleie, `--check` i CI                                      |
+| `scripts/dso_kilder.json`                    | Nøkkel, navn, prisområde, fri-nettleie-slug og mva-sone per nettselskap                    |
 | `scripts/export_faceplate.py`                | Skiven til SVG for trykk og CAD                                                            |
 | `scripts/generate_brand_images.py`           | Rendrer `images/icon.svg` til `brand/`-PNG-ene, `--sjekk` feiler på utdaterte              |
 
@@ -133,9 +136,11 @@ om `line-length` er 120 i `pyproject.toml`. **Hold Python-linjer under 110 tegn
 til pinningen er bumpet**, så slipper du at hooken formaterer om linjer du ikke
 har rørt. E501 er slått av i ruff-lint, så ingenting advarer deg om det.
 
-CI (`.github/workflows/ci.yml`) sjekker ut strømkalkulator ved siden av, kjører
-ruff, mypy, DSO-synken, pytest med coverage, og verifiserer at manifestet er
-gyldig JSON med semver-versjon og at de påkrevde filene finnes.
+CI (`.github/workflows/ci.yml`) sjekker ut fri-nettleie på pinnet commit, kjører
+ruff, mypy, DSO-sjekken, pytest med coverage, og verifiserer at manifestet er
+gyldig JSON med semver-versjon og at de påkrevde filene finnes. Et eget steg
+feller hvis replay-fixturene mangler, siden de lå som symlink og skippet seg
+selv i CI fram til september 2026.
 `validate.yml` kjører HACS-validering og hassfest.
 
 ## Fallgruver
@@ -249,9 +254,9 @@ framfor å duplisere.
 
 ## Vanlige oppgaver
 
-- **Legge til et nettselskap**: gjøres i hacs-strømkalkulator med offisiell
-  kilde, ikke her. Deretter `python3 scripts/sync_dso_from_stromkalkulator.py`
-  og commit `dso.py`.
+- **Legge til et nettselskap**: legg nøkkel, navn, prisområde, fri-nettleie-slug
+  og mva-sone i `scripts/dso_kilder.json`. Deretter
+  `python3 scripts/generer_dso_fra_fri_nettleie.py` og commit `dso.py`.
 - **Endre en beregning**: legg den som en fri funksjon i `coordinator.py` med
   egen test i `tests/`, framfor å utvide `_async_update_data`.
 - **Endre skiven**: `faceplate.py` er eneste kilde. Prøv i

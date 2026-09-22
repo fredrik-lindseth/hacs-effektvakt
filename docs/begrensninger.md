@@ -35,7 +35,7 @@ Fra dag 2 tar Effektvakt hensyn til topp-2-snittet. Fra dag 4 (når alle tre top
 
 ## DSO-data er statisk
 
-`dso.py` er auto-generert fra `hacs-strømkalkulator` og oppdateres via `scripts/sync_dso_from_stromkalkulator.py`. Prisene for kapasitetstrinn endres typisk en gang i året (nyttår). Mellom oppdateringer kan Effektvakt bruke utdaterte trinnpriser.
+`dso.py` er auto-generert fra [fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) og oppdateres via `scripts/generer_dso_fra_fri_nettleie.py`. Prisene for kapasitetstrinn endres typisk en gang i året (nyttår). Mellom oppdateringer kan Effektvakt bruke utdaterte trinnpriser.
 
 Bruker du `Egendefinert` DSO i config, er du ansvarlig for å holde trinnene oppdatert selv.
 
