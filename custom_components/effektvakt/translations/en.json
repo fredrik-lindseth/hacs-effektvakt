@@ -18,18 +18,6 @@
           "confirm_peak_sensor": "I confirm the sensor reports instantaneous power"
         }
       },
-      "tuning": {
-        "title": "Settings",
-        "description": "These can be changed later via integration options.",
-        "data": {
-          "safety_buffer_kw": "Safety buffer (kW)",
-          "min_risiko_for_kutt": "Cut from this level and up",
-          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
-          "kutt_strategi": "Cut strategy",
-          "vvb_power_sensor": "Water heater power sensor (optional, for vvb_status and vvb_pluss_ekstra)",
-          "ekstra_power_sensors": "Extra power sensors (heating cables, EV charger, etc)"
-        }
-      },
       "pricing": {
         "title": "Custom capacity tiers",
         "description": "Enter your own kW thresholds and monthly prices. Sorted lowest first.",
@@ -54,6 +42,7 @@
     "step": {
       "init": {
         "title": "Effektvakt settings",
+        "description": "Change these once you have seen how Effektvakt behaves in your home. The fields show what is in effect now.",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
           "min_risiko_for_kutt": "Cut from this level and up",
@@ -68,7 +57,7 @@
   "entity": {
     "binary_sensor": {
       "kutt_ned_anbefalt": {
-        "name": "Load cut recommended",
+        "name": "Cut recommended",
         "state": {
           "off": "No action",
           "on": "Cut recommended"

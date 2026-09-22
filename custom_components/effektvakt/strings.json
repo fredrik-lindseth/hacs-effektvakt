@@ -18,18 +18,6 @@
           "confirm_peak_sensor": "Jeg bekrefter at sensoren rapporterer instant-effekt"
         }
       },
-      "tuning": {
-        "title": "Innstillinger",
-        "description": "Disse kan endres senere via integrasjonens innstillinger.",
-        "data": {
-          "safety_buffer_kw": "Sikkerhetsmargin (kW)",
-          "min_risiko_for_kutt": "Kutt fra og med dette nivået",
-          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
-          "kutt_strategi": "Kutt-strategi",
-          "vvb_power_sensor": "VVB-effektsensor (valgfri, for vvb_status og vvb_pluss_ekstra)",
-          "ekstra_power_sensors": "Ekstra effektsensorer (varmekabler, billader, osv)"
-        }
-      },
       "pricing": {
         "title": "Egendefinerte kapasitetstrinn",
         "description": "Skriv inn dine egne kW-terskler og priser per måned. Én linje per trinn, sortert lavest først.",
@@ -54,6 +42,7 @@
     "step": {
       "init": {
         "title": "Effektvakt-innstillinger",
+        "description": "Endre disse når du har sett hvordan Effektvakt oppfører seg hos deg. Feltene viser det som gjelder nå.",
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
           "min_risiko_for_kutt": "Kutt fra og med dette nivået",
@@ -68,7 +57,7 @@
   "entity": {
     "binary_sensor": {
       "kutt_ned_anbefalt": {
-        "name": "Kutt ned anbefalt",
+        "name": "Kutt anbefalt",
         "state": {
           "off": "Ingen handling",
           "on": "Kutt anbefalt"

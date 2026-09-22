@@ -12,7 +12,17 @@ from pathlib import Path
 import pytest
 
 from custom_components.effektvakt.binary_sensor import BINARY_SENSOR_KEY
-from custom_components.effektvakt.const import RISIKO_GOD_MARGIN, RISIKO_LEVELS, SWITCH_KEY_AUTOMATIKK
+from custom_components.effektvakt.const import (
+    CONF_EKSTRA_POWER_SENSORS,
+    CONF_KUTT_STRATEGI,
+    CONF_MIN_RISIKO_FOR_KUTT,
+    CONF_RISIKO_HOLDETID_MINUTTER,
+    CONF_SAFETY_BUFFER_KW,
+    CONF_VVB_POWER_SENSOR,
+    RISIKO_GOD_MARGIN,
+    RISIKO_LEVELS,
+    SWITCH_KEY_AUTOMATIKK,
+)
 
 PAKKE = Path(__file__).parent.parent / "custom_components" / "effektvakt"
 STRINGS = PAKKE / "strings.json"
@@ -96,3 +106,29 @@ def test_binary_sensoren_har_tekst_for_paa_og_av(navn):
 def test_nb_er_identisk_med_strings():
     """strings.json er den norske kilden. Spriker de, er en av dem glemt."""
     assert _last(SPRAAK["nb.json"]) == _last(STRINGS)
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+def test_oppsettet_har_bare_stegene_flyten_viser(navn):
+    """Innstillingene ble flyttet til Configure, og teksten deres foelger med."""
+    steg = _last(SPRAAK[navn])["config"]["step"]
+    assert set(steg) == {"user", "sensors", "pricing"}
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+def test_configure_har_etikett_for_hver_innstilling(navn):
+    felt = _last(SPRAAK[navn])["options"]["step"]["init"]["data"]
+    assert set(felt) == {
+        CONF_SAFETY_BUFFER_KW,
+        CONF_MIN_RISIKO_FOR_KUTT,
+        CONF_RISIKO_HOLDETID_MINUTTER,
+        CONF_KUTT_STRATEGI,
+        CONF_VVB_POWER_SENSOR,
+        CONF_EKSTRA_POWER_SENSORS,
+    }
+    assert all(felt.values())
+
+
+def test_binaersensoren_heter_kutt_anbefalt_paa_norsk():
+    """Entitets-id-en er laast i binary_sensor.py, navnet er det oversettelsen sier."""
+    assert _last(STRINGS)["entity"]["binary_sensor"][BINARY_SENSOR_KEY]["name"] == "Kutt anbefalt"
