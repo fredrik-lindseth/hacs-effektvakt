@@ -578,9 +578,14 @@ def tidsandeler(
     Uten et brukbart `fra` vet vi ikke hvilken tid avlesningen dekker, og da kan
     ingenting av den plasseres. Å legge alt på timen vi står i ville gjort tre
     døgn med nedetid om til en falsk topp i den timen HA kom opp igjen.
+
+    Et vindu uten varighet er noe annet: der vet vi når, det gikk bare ingen tid,
+    og da hører alt til timen `til` ligger i.
     """
-    if fra is None or (fra.tzinfo is None) != (til.tzinfo is None) or til <= fra:
+    if fra is None or (fra.tzinfo is None) != (til.tzinfo is None):
         return Tidsandeler(forrige_time=0.0, denne_timen=0.0)
+    if til <= fra:
+        return Tidsandeler(forrige_time=0.0, denne_timen=1.0)
     total = (til - fra).total_seconds()
     denne = max(0.0, (til - max(fra, time_start)).total_seconds())
     forrige = 0.0
@@ -760,6 +765,12 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self._estimert_siden_maaler_kwh = stored_float(data.get("estimert_siden_maaler_kwh"))
         self._siste_maaler_kwh = self._les_siste_maalerstand(data)
         self._siste_maaler_ts = parse_stored_datetime(data.get("siste_maaler_ts"))
+        if self._siste_maaler_ts is None and "siste_maaler_kwh" not in data:
+            # Lagring fra før avstemmingen har ingen tid å måle standen mot.
+            # Den hørte til timen som var i gang, så timestart er det nærmeste
+            # vi kommer, og bedre enn å kaste den første avlesningen etter
+            # oppgraderingen.
+            self._siste_maaler_ts = self._current_hour_start
         self._siste_effekt_kw = stored_float(data.get("siste_effekt_kw"))
         self._siste_effekt_ts = parse_stored_datetime(data.get("siste_effekt_ts"))
         self._dekket_fra = parse_stored_datetime(data.get("dekket_fra"))

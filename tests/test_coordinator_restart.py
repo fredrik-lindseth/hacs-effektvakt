@@ -298,6 +298,30 @@ def test_hour_state_is_current_taaler_blanding_av_naiv_og_tidssone():
     assert hour_state_is_current(hour_start=naiv, now=med_sone) is False
 
 
+@pytest.mark.asyncio
+async def test_oppgradering_midt_i_timen_mister_ikke_maalerstanden():
+    """Store fra før avstemmingen har bare energy_at_hour_start, uten tidspunkt.
+
+    Den standen hørte til timen som var i gang, så avlesningen som kommer rett
+    etter oppgraderingen skal telles på den timen, ikke kastes.
+    """
+    stored = {
+        "data": {
+            "current_month": "2026-05",
+            "daily_max_kw": {},
+            "current_hour_kwh": 2.5,
+            "current_hour_start": "2026-05-25T14:00:00",
+            "energy_at_hour_start": 100.0,
+        }
+    }
+
+    coord = _make_coordinator(datetime(2026, 5, 25, 14, 50), stored=stored)
+    data = await _tick(coord, datetime(2026, 5, 25, 14, 50), _states(energy_kwh="103.0"))
+
+    assert data["actual_kwh_this_hour"] == pytest.approx(3.0)
+    assert coord._siste_maaler_kwh == pytest.approx(103.0)
+
+
 @pytest.mark.parametrize(
     "energy_now,forrige,ventet",
     [

@@ -399,3 +399,27 @@ def test_fordel_maalerdelta_skalerer_ned_naar_vinduet_rekker_lenger_tilbake():
     )
     assert fordeling.forrige_time_kwh == pytest.approx(1.5)
     assert fordeling.denne_timen_kwh == pytest.approx(1.5)
+
+
+def test_tidsandeler_uten_vindu_plasserer_ingenting():
+    """Uten en tid å måle avlesningen mot kan ingenting av den plasseres."""
+    andeler = tidsandeler(
+        fra=None,
+        til=datetime(2026, 9, 22, 9, 0),
+        time_start=datetime(2026, 9, 22, 9, 0),
+        forrige_time_start=datetime(2026, 9, 22, 8, 0),
+    )
+    assert andeler.forrige_time == 0.0
+    assert andeler.denne_timen == 0.0
+
+
+def test_tidsandeler_uten_varighet_gaar_til_timen_na():
+    """Et vindu uten varighet er ikke et ukjent vindu. Da skal ingenting gå tapt."""
+    tid = datetime(2026, 9, 22, 9, 30)
+    andeler = tidsandeler(
+        fra=tid,
+        til=tid,
+        time_start=datetime(2026, 9, 22, 9, 0),
+        forrige_time_start=datetime(2026, 9, 22, 8, 0),
+    )
+    assert andeler.denne_timen == 1.0
