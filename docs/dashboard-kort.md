@@ -111,9 +111,11 @@ står i `:host` i kortet brukes bare hvis svaret mangler en rolle.
 
 ## Slepemerket er ekte max-hold
 
-Slepemerket speiler ikke sensoren. `top_n_average` deler på antall dager og ikke
-alltid på tre, så topp-3-snittet kan gå ned igjen tidlig i måneden: to dager på
-12 kW gir 12, og en rolig tredje dag drar snittet til 8,17. En slepeviser som
+Slepemerket speiler ikke sensoren. `sensor.effektvakt_topp_3_snitt_denne_maned`
+deler alltid på tre og kan bare stige gjennom måneden, men kortet leser den ikke
+alltid: finner det ingen topp-3-sensor på enheten, faller det tilbake på
+kostnadssensorens `topp_3_projisert_kw`. Den bytter dagens dagsmaks mot
+projeksjonen, så den går ned igjen så snart timen roer seg. En slepeviser som
 synker ser ødelagt ut.
 
 Kortet holder derfor høyeste verdi det har sett, og nullstiller ved månedsskifte.
@@ -192,10 +194,12 @@ gjenforsøkene prøves uten å restarte noe. Konsollen skriver ut aria-etiketten
 det skjulte tekstalternativet, alle ni fargerollene, hvilke trinn som ble merket
 og viservinklene.
 
-Testdataene, altså de oppdiktede sensorverdiene, ligger i `tilstander` og
-`oppsett` i `docs/kort-harness/index.html`. Skru på tallene der for å prøve
-andre avlesninger. Vil du ha andre kapasitetstrinn, bytt nettselskap med
-`--dso`; trinnene leses fra `dso.py` og er alltid de ekte.
+Testdataene, altså de oppdiktede sensorverdiene, ligger i `FELLES`, `tilstander`
+og `oppsett` i `docs/kort-harness/index.html`. Skru på tallene der for å prøve
+andre avlesninger. Tallene henger sammen: de er regnet av `modell.py` ut fra tre
+dagsmaks på 4,80, 3,35 og 3,08 kW, så en verdi som endres alene kan gi en
+kombinasjon Effektvakt aldri ville sendt. Vil du ha andre kapasitetstrinn, bytt
+nettselskap med `--dso`; trinnene leses fra `dso.py` og er alltid de ekte.
 
 Lys og mørk modus følger operativsystemet, siden benken bruker
 `prefers-color-scheme` slik Home Assistant gjør.

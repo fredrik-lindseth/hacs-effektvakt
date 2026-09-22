@@ -698,9 +698,12 @@ class EffektvaktCard extends HTMLElement {
   /**
    * Slepemerket er ekte max-hold, ikke et speil av sensoren.
    *
-   * top_n_average deler paa antall dager og ikke alltid paa tre, saa
-   * topp-3-snittet kan gaa ned igjen tidlig i maaneden. En slepeviser som
-   * synker ser oedelagt ut, saa hoeyeste verdi holdes til maaneden snur.
+   * sensor.effektvakt_topp_3_snitt_denne_maned deler alltid paa tre og kan
+   * bare stige, men kortet leser den ikke alltid: finner det ingen topp-3-
+   * sensor paa enheten, faller det tilbake paa kostnadssensorens
+   * topp_3_projisert_kw, som bytter dagens dagsmaks mot projeksjonen og
+   * dermed synker igjen naar timen roer seg. En slepeviser som synker ser
+   * oedelagt ut, saa hoeyeste verdi holdes til maaneden snur.
    */
   _slepe_hold(kw) {
     const na = new Date();
@@ -774,6 +777,11 @@ class EffektvaktCard extends HTMLElement {
     // innlede fritt, mens etiketten skriver ut enheten og ikke skal gjenta
     // "maaneden ligger an til", som alt staar i setningen foer.
     const harTrinn = harTall && kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt;
+    // Hoppet mellom trinnene ligger i attributtet, ikke i tilstanden.
+    // Tilstanden til kostnadssensoren er kostnad_denne_timen_kr, som er null
+    // nesten alltid og spiker foerst naar en time faktisk flytter maaneden
+    // opp. Mangler attributtet, droppes leddet framfor aa skrive «undefined».
+    const hoppKr = harTrinn ? talletAv(kostnad.attributes?.kostnad_neste_trinn_kr) : null;
     const trinnlinjer = (enhet, innledning) => {
       if (!harTrinn) return [];
       const a = this._trinn.aktivt;
@@ -783,9 +791,10 @@ class EffektvaktCard extends HTMLElement {
           ` ${tall(a.til, 0, sprak)} ${enhet}, ${a.kr} kroner i måneden.`,
       ];
       if (n) {
+        const mer = hoppKr === null ? "" : `, altså ${hoppKr} kroner mer`;
         ut.push(
           `Neste trinn starter på ${tall(n.fra, 0, sprak)} ${enhet} og koster` +
-            ` ${n.kr} kroner i måneden, altså ${kostnad.state} kroner mer.`
+            ` ${n.kr} kroner i måneden${mer}.`
         );
       }
       return ut;

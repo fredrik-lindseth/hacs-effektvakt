@@ -122,18 +122,38 @@ customElements.define("ha-card", HaCard);
 //
 // Skru på tallene her for å prøve andre avlesninger. Verdiene under er tatt
 // fra Fredriks eget anlegg 21.09.2026: BKK, trinn 2-5 kW til 250 kr/mnd, og
-// 165 kr/mnd i sprang opp til neste trinn.
+// 165 kr/mnd i sprang opp til neste trinn. De tre dagsmaksene bak tallene er
+// 4,80, 3,35 og 3,08 kW, og resten er regnet av modell.py med dem, så en verdi
+// som endres alene kan gi en kombinasjon Effektvakt aldri ville sendt.
+
+// Attributtene alle Effektvakt-sensorene bærer, fra _EffektvaktBaseSensor.
+// Regnestykket bak marginen står her i klartekst: måltrinnet, dagstaket og
+// taket for timen vi står i.
+const FELLES = {
+  elapsed_minutes_in_hour: 45.0,
+  actual_kwh_this_hour: 0.31,
+  current_kw: 1.08,
+  maal_terskel_kw: 5.0,
+  maal_trinn_kr: 250,
+  dagstak_kw: 5.0,
+  time_tak_kw: 5.0,
+  dagens_maks_kw: 3.08,
+  topp_2_andre_dager_kw: 8.15,
+  kutt_anbefalt_kw: 0.0,
+  kan_legge_paa_kw: 4.59,
+  last_update: "2026-09-21T19:45:00+00:00",
+};
 
 const tilstander = {
   "sensor.effektvakt_projisert_time_snitt": {
     state: "0.41",
     last_updated: "2026-09-21T19:45:00+00:00",
-    attributes: { current_kw: 1.08, friendly_name: "Effektvakt Projisert time-snitt" },
+    attributes: { ...FELLES, friendly_name: "Effektvakt Projisert time-snitt" },
   },
   "sensor.effektvakt_topp_3_snitt_denne_maned": {
     state: "3.743",
     last_updated: "2026-09-21T19:45:00+00:00",
-    attributes: { friendly_name: "Effektvakt Topp-3 snitt denne måned" },
+    attributes: { ...FELLES, friendly_name: "Effektvakt Topp-3 snitt denne måned" },
   },
   // Coordinatoren har ikke lest effektsensoren ennå: ingen current_kw, og da
   // er 0,00 kW ikke en måling av et hus som ikke bruker strøm.
@@ -142,14 +162,25 @@ const tilstander = {
     last_updated: "2026-09-21T19:45:00+00:00",
     attributes: { friendly_name: "Effektvakt Projisert time-snitt" },
   },
+  // Tilstanden er kostnad_denne_timen_kr, altså kronene den inneværende timen
+  // er i ferd med å låse inn. Den er null nesten alltid. Hoppet opp til neste
+  // trinn står fast hele måneden og ligger i kostnad_neste_trinn_kr.
+  // Attributtet kapasitetstrinn er utelatt: kortet leser det ikke, og en kopi
+  // av trinn-tabellen her ville stått i veien for --dso.
   "sensor.effektvakt_kostnad_neste_trinn": {
-    state: "165",
+    state: "0",
     last_updated: "2026-09-21T19:45:00+00:00",
     attributes: {
+      ...FELLES,
+      kostnad_neste_trinn_kr: 165,
       trinn_na_kr: 250,
       trinn_na_ovre_grense_kw: 5.0,
       trinn_neste_kr: 415,
+      besparelse_trinn_under_kr: 95,
+      trinn_under_oppnaelig: false,
+      kostnad_denne_timen_kr: 0,
       topp_3_projisert_kw: 3.743,
+      minste_mulige_topp_3_kw: 3.743,
       friendly_name: "Effektvakt Kostnad neste trinn",
     },
   },
