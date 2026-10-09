@@ -255,7 +255,10 @@ def bygg_zip(git: Git, sha: str, mal: Path) -> str:
 
 def sha256_av(sti: Path) -> str:
     with sti.open("rb") as fil:
-        return hashlib.file_digest(fil, "sha256").hexdigest()
+        digest = hashlib.sha256()
+        for blokk in iter(lambda: fil.read(1024 * 1024), b""):
+            digest.update(blokk)
+        return digest.hexdigest()
 
 
 # --------------------------------------------------------------------------
@@ -546,39 +549,12 @@ def udatert_seksjon(repo_root: Path, versjon: str) -> str | None:
     return None
 
 
-def commits_siden_forrige(git: Git, kandidat: Kandidat) -> str:
-    tagger = [t for t in git.tekst("tag", "--sort=-version:refname").splitlines() if t != kandidat.tag]
-    spenn = f"{tagger[0]}..{kandidat.sha}" if tagger else kandidat.sha
-    logg = git.tekst("log", spenn, "--pretty=format:- %s", "--no-merges")
-    return logg or "- Første release"
+def bygg_body(kandidat: Kandidat, repo_root: Path) -> str:
+    """HACS viser release-bodyen: bare den korte, brukerrettede noten.
 
-
-def bygg_body(git: Git, kandidat: Kandidat, digest: str, repo_root: Path) -> str:
-    """Release-body-en: noten fra CHANGELOG, pluss beviset for hva som ligger i ZIP-en.
-
-    Både SHA-en og sha256-en står i teksten, så bindingen mellom tagg, ZIP og
-    attestasjon kan leses av et menneske på releasesiden, ikke bare av `gh`.
+    Tagg, ZIP og attestasjon verifiseres separat fra brukerteksten.
     """
-    url = f"https://github.com/{kandidat.repo}"
-    return "\n".join(
-        [
-            hent_release_note(kandidat.versjon, repo_root),
-            "",
-            "## Verifisering",
-            "",
-            f"Bygget fra commit [`{kandidat.sha[:12]}`]({url}/commit/{kandidat.sha}), "
-            f"som er commiten taggen `{kandidat.tag}` peker på.",
-            "",
-            f"**SHA256:** `{digest}` ([hvordan verifisere]({url}/blob/{kandidat.tag}/SECURITY.md))",
-            "",
-            "<details>",
-            "<summary>Alle commits</summary>",
-            "",
-            commits_siden_forrige(git, kandidat),
-            "",
-            "</details>",
-        ]
-    )
+    return hent_release_note(kandidat.versjon, repo_root)
 
 
 def _versjonstall(versjon: str) -> tuple[int, ...]:
@@ -923,7 +899,7 @@ def kjor(
     else:
         print("- Hopper over attestasjonssjekken: `plan` kjøres før ZIP-en er attestert.")
 
-    body = bygg_body(git, kandidat, digest, repo_root)
+    body = bygg_body(kandidat, repo_root)
     latest = skal_vaere_latest(gh, kandidat)
 
     if bare_plan:

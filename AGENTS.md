@@ -341,6 +341,24 @@ merkes av folk som ikke sitter i denne økten.
   til `/config/custom_components/effektvakt/` og en omstart. Legg tilbake
   etterpå hvis versjonen ikke var ment å bli stående.
 
+## Release-noter for Home Assistant
+
+GitHub-release-bodyen er teksten brukerne leser i HACS inne i Home Assistant.
+Skriv for den flaten: korte punkter om funksjoner, synlige rettelser og hva
+brukeren må gjøre. Første release beskriver hva brukeren får; senere releaser
+beskriver forskjellen fra forrige versjon.
+
+- Merk bare brukerrelevante punkter med `<!--kort-->`, normalt 5–10 korte punkter.
+- Skriv nødvendige handlinger under `### Dette må du gjøre selv`.
+- Legg testtall, CI, refaktorering, datakildepinner og annen utviklerinformasjon
+  i full CHANGELOG eller utviklerdokumentasjonen, uten kortmerke.
+- Release-bodyen skal ikke fylles med commit-logg, SHA-er eller byggedetaljer.
+  Proveniens bevises gjennom tagg, ZIP og attestasjon; se `SECURITY.md`.
+- Generer og les den faktiske korte release-noten før publisering. En kort
+  overskrift gjør ikke et langt avsnitt kort.
+
+Detaljer og kontrollkommandoer: [docs/release-notes.md](docs/release-notes.md).
+
 ## Dokumentasjon
 
 `docs/development.md` er utvikler-guiden og har repo-strukturen,

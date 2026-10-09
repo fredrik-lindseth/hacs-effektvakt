@@ -18,20 +18,30 @@ underveis, er det «Fikset» som gjelder deg.
 
 ### Dette må du gjøre selv
 
-- Velg nettselskap og pek på effektsensoren din under **Innstillinger >
-  Enheter og tjenester > Legg til integrasjon > Effektvakt**. Resten har
-  standardverdier som duger. Stegene står i [docs/oppsett.md](docs/oppsett.md).
-- Kortet legges inn i dashbordet selv. Det registrerer seg som ressurs ved
-  oppstart, men Home Assistant setter ikke inn kort for deg.
-  [docs/dashboard-kort.md](docs/dashboard-kort.md) viser oppsettet, og
-  [docs/dashboard-eksempel.yaml](docs/dashboard-eksempel.yaml) kan limes rett
-  inn.
-- Blueprintene importeres for hånd hvis du vil at noe skal kuttes automatisk.
-  Fire av dem, med import-lenker i [docs/blueprints.md](docs/blueprints.md).
-  Uten dem varsler Effektvakt, men rører ingenting. Har du importert
-  lastkutt-blueprints fra `main` tidligere, importer dem på nytt sammen med
-  denne oppdateringen: gjeninnkoblingsvernet krever den nye tjenesten
-  `effektvakt.styr_last`. Den gamle climate-hjelperen er nå valgfri.
+- Installer gjennom HACS som egendefinert integrasjon, og velg nettselskap
+  og effektsensor i oppsettet. Se [README](README.md#installasjon).
+- Legg Effektvakt-kortet til i dashbordet. Se [kortoppsettet](docs/dashboard-kort.md).
+- Importer [blueprintene](docs/blueprints.md) hvis du ønsker varsling eller
+  automatisk lastkutt. Har du brukt eldre lastkutt-blueprints fra `main`,
+  importer dem på nytt sammen med oppdateringen.
+- Bruker du egne maler fra utviklingsversjonen, oppdater de omdøpte
+  sensorattributtene. Navnene står i [sensoroversikten](docs/sensorer.md).
+
+### Dette får du
+
+- Varsel før timen gir dyrere nettleie. Projisert time-snitt og kapasitetsmargin
+  viser om forbruket er på vei til neste trinn. <!--kort-->
+- Råd som tar hensyn til månedens tre toppdager og tiden som er igjen av
+  timen: hvor mye du kan legge til, og hvor mye som bør kuttes. <!--kort-->
+- Et dashbordkort med analog effektskive, kapasitetstrinn og månedspriser. <!--kort-->
+- Fire blueprints for varsling, varmtvannsbereder, panelovner og andre
+  kuttbare laster, med en hovedbryter for automatikken. <!--kort-->
+- Gjeninnkobling som overlever omlasting og omstart. Overtatte laster slippes
+  ved timeskiftet eller tidsgrensen, og minste påtid blir ivaretatt. <!--kort-->
+- Norske husholdningstariffer med topp-3-beregning, og mulighet for egne
+  kapasitetstrinn. Andre tariffmodeller gir beskjed om begrensningen. <!--kort-->
+- Norsk og engelsk oppsett, sensortekster og dashbordkort. Manglende
+  måledata vises som ukjent. <!--kort-->
 
 ### Lagt til
 
@@ -40,19 +50,19 @@ underveis, er det «Fikset» som gjelder deg.
   for måneden, risikonivå, tilgjengelig kutt og hva timen koster. Pluss
   `binary_sensor.effektvakt_kutt_ned_anbefalt`, som automasjoner trigger på, og
   `switch.effektvakt_automatikk` som hovedbryter. Alle sammen i
-  [docs/sensorer.md](docs/sensorer.md). <!--kort-->
+  [docs/sensorer.md](docs/sensorer.md).
 - **Et Lovelace-kort som gjenskaper den analoge effektvakten fra
   sikringsskapet.** Skiven tegnes av dine egne kapasitetstrinn, så
   kronebeløpene på buen er prisene nettselskapet ditt faktisk tar. Rød viser er
   projeksjonen, den tynne svarte er effekten akkurat nå, og trekanten utenfor
   buen er månedens topp-3-snitt. Kortet følger med integrasjonen og serveres
-  derfra, det skal ikke installeres for seg. <!--kort-->
+  derfra, det skal ikke installeres for seg.
 - **Kapasitetstrinn for 71 norske nettselskap**, hentet rett fra
   [fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) på en pinnet
   commit og en pinnet tariffdato. Tabellen kan etterprøves mot kilden med én
   kommando, og CI feller hvis den har drevet. Har du et selskap som ikke står i
   listen, kan du skrive trinnene selv for topp-3-modellen. Andre eller
-  uverifiserte tariffmetoder kan ikke brukes til styringsråd ennå. [docs/dso.md](docs/dso.md). <!--kort-->
+  uverifiserte tariffmetoder kan ikke brukes til styringsråd ennå. [docs/dso.md](docs/dso.md).
 - **Fire blueprints** for varmtvannsbereder, panelovner, en generell last og
   ren varsling. De tre lastkutt-blueprintene bruker lastvernet til å be om
   gjeninnkobling ved neste timeskifte, fordi verdien av et kutt slutter der.
@@ -77,7 +87,7 @@ underveis, er det «Fikset» som gjelder deg.
 ### Fikset
 
 - Oppdatert kapasitetstrinn fra 1. oktober 2026 for Asker, Barents, Glitre, Kystnett, Midtnett og Norgesnett fra kildeverifiserte fri-nettleie-data.
-- Etna gir ukjent økonomi og styringsråd over 25 kW, og Nettselskapet fra og med 75 kW, fordi tariffgrunnlaget da er utenfor kildebekreftet omfang. <!--kort-->
+- Etna gir ukjent økonomi og styringsråd over 25 kW, og Nettselskapet fra og med 75 kW, fordi tariffgrunnlaget da er utenfor kildebekreftet omfang.
 
 Feilrettingene under gjelder både beregninger og trygg gjeninnkobling.
 De gjelder deg hvis du har kjørt integrasjonen fra `main`.
@@ -86,20 +96,20 @@ De gjelder deg hvis du har kjørt integrasjonen fra `main`.
   laster det faktisk overtok, originaltemperaturen og fristen. Det prøver
   igjen når en utilgjengelig aktuator kommer tilbake. Slått av automatikk og
   nye risikohendelser avbryter ikke ansvaret. Minste påtid kan ikke lenger
-  omgås av blink i sensoren. [docs/blueprints.md](docs/blueprints.md). <!--kort-->
+  omgås av blink i sensoren. [docs/blueprints.md](docs/blueprints.md).
 - **Manglende målinger gir ukjent råd.** Ugyldig eller utdatert effekt blir
   ikke behandlet som null forbruk med ledig kapasitet. Måledekning og
-  coordinatorens friskhet vises hver for seg. <!--kort-->
+  coordinatorens friskhet vises hver for seg.
 - **Sommertidsskiftet regnes i faktisk tid.** De to 02-timene om høsten
-  holdes atskilt når effekt integreres og måleravlesninger fordeles. <!--kort-->
+  holdes atskilt når effekt integreres og måleravlesninger fordeles.
 - **Feil tariffmodell gir en forklaring.** Sør Aurdal Energi bruker
   månedsmaks, og Tinfos har uverifisert metode. Disse får ikke lenger
   topp-3-råd; nye oppsett forklarer begrensningen og eksisterende oppsett får
-  et repair-varsel. Trinnprisene beholder ørene fra kilden. <!--kort-->
+  et repair-varsel. Trinnprisene beholder ørene fra kilden.
 - **Kuttbehovet tar hensyn til resten av timen.** Nødvendig momentan
   lastreduksjon skilles fra reduksjonen i timegjennomsnitt. Tilgjengelig
   kuttbar last og allerede brukt energi inngår når et kutt vurderes, så små
-  laster kan hjelpe tidsnok og tapte timer ikke fremstilles som reddbare. <!--kort-->
+  laster kan hjelpe tidsnok og tapte timer ikke fremstilles som reddbare.
 
 - **Terskelen gikk rett vei, men regnestykket gikk feil vei.** Effektvakt
   regnet med at jo høyere de andre dagene i måneden var, jo mer tålte dagen i
@@ -107,7 +117,7 @@ De gjelder deg hvis du har kjørt integrasjonen fra `main`.
   gamle modellen 5,90 kW der grensen var 3,20, og 5,50 der den var 4,00: god
   margin, mens du var langt over. Hele terskelaritmetikken ligger nå ett sted,
   og margin, risiko, kostnad og «kan legge på» regner alle fra det samme taket.
-  [docs/beregninger.md](docs/beregninger.md). <!--kort-->
+  [docs/beregninger.md](docs/beregninger.md).
 - **Timen sto på 0,000 kWh med en vanlig norsk HAN-avleser.** Forbruket ble
   bygget utelukkende av differanser på energisensoren, og en HAN-avleser
   rapporterer én gang i timen. Projeksjonen kollapset dermed mot
@@ -115,13 +125,13 @@ De gjelder deg hvis du har kjørt integrasjonen fra `main`.
   effektsensoren mellom hver avlesning, og energimåleren retter den etterpå,
   uten at de to legges oppå hverandre. kWh som kommer etter timeskiftet havner
   på timen før, og en oppstart midt i timen sier hvilket minutt vi har
-  sammenhengende måling fra framfor å gjette. <!--kort-->
+  sammenhengende måling fra framfor å gjette.
 - **En vannkoker tidlig i timen kuttet varmtvannsberederen.** To minutter
   inn i timen er projeksjonen nesten bare øyeblikkseffekt, så 2 kW
   oppå 3,5 kW grunnlast ble til «over terskelen» selv om timen endte på 3,6.
   Kriteriet er nå kroner og ikke geometri: de to øverste risikonivåene krever
   at timen faktisk koster noe, regnet med fradrag for hvor mye en kortvarig
-  last rekker å bety i det som er igjen av timen. <!--kort-->
+  last rekker å bety i det som er igjen av timen.
 - **Configure-dialogen slettet det du hadde lagret.** En tur innom for å
   justere sikkerhetsmarginen nullet ekstra effektsensorer og
   varmtvannssensoren, fordi skjemaet ble bygget med tomme standardverdier.
