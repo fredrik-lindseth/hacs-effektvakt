@@ -37,6 +37,8 @@ class TrinnOppsett:
     dso_ukjent: bool
     mangler_topptrinn: bool
     hoyeste_terskel_kw: float | None
+    fastledd_metode: str = "TRE_DØGNMAX_MND"
+    metode_ikke_stoettet: bool = False
 
 
 def les_trinn(*, dso_id: Any, custom: Any) -> TrinnOppsett:
@@ -59,7 +61,9 @@ def les_trinn(*, dso_id: Any, custom: Any) -> TrinnOppsett:
             hoyeste_terskel_kw=None,
         )
     return TrinnOppsett(
-        trinn=list(info["kapasitetstrinn"]),
+        trinn=list(info["kapasitetstrinn"]) if info["fastledd_metode"] == "TRE_DØGNMAX_MND" else [],
+        fastledd_metode=info["fastledd_metode"],
+        metode_ikke_stoettet=info["fastledd_metode"] != "TRE_DØGNMAX_MND",
         dso_noekkel=noekkel,
         dso_ukjent=False,
         mangler_topptrinn=False,
@@ -78,7 +82,7 @@ def _fra_custom(custom: Any) -> TrinnOppsett:
     trinn: Trinn = []
     for rad in custom:
         terskel, pris = rad[0], rad[1]
-        trinn.append((math.inf if terskel is None else float(terskel), int(pris)))
+        trinn.append((math.inf if terskel is None else float(terskel), float(pris)))
 
     hoyeste = trinn[-1][0] if trinn else None
     mangler = hoyeste is not None and not math.isinf(hoyeste)

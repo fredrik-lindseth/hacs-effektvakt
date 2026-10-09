@@ -67,45 +67,17 @@ LASTKUTT_BLUEPRINTS = sorted(p for p in BLUEPRINTS_DIR.glob("*.yaml") if "kun_va
 
 
 @pytest.mark.parametrize("blueprint_path", LASTKUTT_BLUEPRINTS)
-def test_lastkutt_slipper_lasten_ved_timeskiftet(blueprint_path: Path):
-    """Verdien av et kutt slutter ved timeskiftet.
-
-    Nettleien måles time for time, så minuttene etter xx:00 sparer ingenting
-    og flytter bare forbruket inn i den nye timen. Derfor venter kuttet på
-    neste hele time, ikke på en klokke som teller minutter.
-    """
+def test_lastkutt_delegerer_ansvar_til_vedvarende_vern(blueprint_path: Path):
+    """Ingen ventetid i en avbrytbar automasjon skal eie gjeninnkoblingen."""
     data = _load(blueprint_path)
-    ventinger = _finn_alle(data, "wait_for_trigger")
-    assert ventinger, f"{blueprint_path.name} venter ikke på noe, den bruker fortsatt bare en delay"
-
-    timeskifter = [
-        t
-        for venting in ventinger
-        for t in venting
-        if t.get("platform") == "time_pattern" and t.get("minutes") == 0 and t.get("seconds") == 0
-    ]
-    assert timeskifter, f"{blueprint_path.name} venter ikke på neste hele time"
-
-
-@pytest.mark.parametrize("blueprint_path", LASTKUTT_BLUEPRINTS)
-def test_lastkutt_blueprints_har_max_off_minutes(blueprint_path: Path):
-    """max_off_minutes lever videre som absolutt tak over timeskiftet.
-
-    Kommer time_pattern-triggeren aldri, for eksempel fordi HA er i en rar
-    tilstand, skal lasten fortsatt tilbake. Derfor er taket timeout-en på
-    ventingen, og continue_on_timeout må slippe sekvensen videre til
-    tilbakestillingen.
-    """
-    data = _load(blueprint_path)
-    inputs = data["blueprint"]["input"]
-    assert "max_off_minutes" in inputs, f"{blueprint_path.name} mangler max_off_minutes failsafe-input"
-
-    tekst = blueprint_path.read_text()
-    assert "timeout" in tekst, f"{blueprint_path.name} bruker ikke max_off_minutes som timeout"
-    assert "{{ max_off_minutes }}" in tekst, f"{blueprint_path.name} leser ikke max_off_minutes"
-    assert _finn_alle(data, "continue_on_timeout") == [True] * len(_finn_alle(data, "wait_for_trigger")), (
-        f"{blueprint_path.name} slipper ikke lasten når taket nås"
-    )
+    assert not _finn_alle(data, "wait_for_trigger")
+    assert not _finn_alle(data, "delay")
+    assert set(_finn_alle(data, "service")) == {"effektvakt.styr_last"}
+    for handling in data["action"]:
+        assert handling["data"]["eier"] == "{{ this.entity_id }}"
+        assert handling["data"]["max_off_minutes"] == "{{ max_off_minutes }}"
+        assert handling["data"]["min_on_minutes"] == "{{ min_on_minutes }}"
+    assert any(t.get("platform") == "time_pattern" for t in data["trigger"])
 
 
 @pytest.mark.parametrize("blueprint_path", LASTKUTT_BLUEPRINTS)
@@ -126,7 +98,8 @@ def test_lastkutt_gater_kuttingen_på_bryteren(blueprint_path: Path):
     data = _load(blueprint_path)
     assert "automatikk_switch" in data["blueprint"]["input"], f"{blueprint_path.name} leser ikke hovedbryteren"
     assert "automatikk_switch" in data["variables"], f"{blueprint_path.name} mangler variabelen"
-    assert GATE in blueprint_path.read_text(), f"{blueprint_path.name} har input men ingen condition"
+    for handling in data["action"]:
+        assert handling["data"]["automatikk_switch"] == "{{ automatikk_switch }}"
 
 
 def test_kun_varsel_gates_ikke_på_bryteren():

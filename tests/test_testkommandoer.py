@@ -435,6 +435,14 @@ def test_pre_commit_kaller_de_samme_oppskriftene(recipes: dict[str, list[str]]) 
     )
 
 
+def test_dso_hook_kaller_laaset_kildekontroll() -> None:
+    config = yaml.safe_load(_les(PRECOMMIT))
+    (hook,) = [h for repo in config["repos"] for h in repo["hooks"] if h["id"] == "dso_kilde"]
+    assert hook["entry"] == "just dso-sjekk"
+    assert hook["language"] == "system"
+    assert hook["pass_filenames"] is False
+
+
 def test_verktoyversjonene_er_de_samme_i_hooken_og_kvalitet_gruppa() -> None:
     """Ulik ruff lokalt og i hooken viser seg som at formateringen endrer seg selv."""
     config = yaml.safe_load(_les(PRECOMMIT))

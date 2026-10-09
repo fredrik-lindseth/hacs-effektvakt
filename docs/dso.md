@@ -11,6 +11,7 @@ Hver DSO ser slik ut:
 "bkk": {
     "navn": "BKK",
     "prisomrade": "NO5",
+    "fastledd_metode": "TRE_DØGNMAX_MND",
     "kapasitetstrinn": [
         (2.0, 155),  # (øvre kW-grense, kr/mnd inkl. mva)
         (5.0, 250),
@@ -24,6 +25,15 @@ Hver DSO ser slik ut:
 
 Trinnlisten er sortert stigende på kW-terskel, og terskelen er øvre grense for
 trinnet. Siste element har `float("inf")` og er det øverste trinnet.
+
+Bare `TRE_DØGNMAX_MND` er støttet av den operative topp-3-modellen.
+`MND_MAX` og `UKJENT` beholdes i kildetabellen med sine priser og metode,
+men kan ikke velges i nytt oppsett og gir ingen operative kapasitetstrinn
+i eksisterende oppsett. Egendefinerte trinn forutsetter topp-3-metoden.
+
+Sør Aurdal Energi bruker månedsmaks, ikke topp-3. Deres [offisielle tariff
+fra 1. september 2026](https://sae.no/uploads/Kundeinformasjon/2026_09_Kundeinformasjon_tariffer.pdf),
+side 2, oppgir 562,50 kr til og med 5 kW og 650 kr til og med 8 kW.
 
 ---
 
@@ -43,8 +53,8 @@ mva-fritak (Nord-Norge og tiltakssonen har det). Generatoren henter bare prisene
 
 fri-nettleie oppgir nedre kW-grense og kr/år eks. mva. Vi lagrer øvre kW-grense
 og kr/mnd inkl. mva, så øvre grense for et trinn er nedre grense for det neste,
-og prisen deles på 12 og ganges med mva-faktoren. Halve kroner rundes opp, slik
-prislistene selv gjør.
+og prisen deles på 12 og ganges med mva-faktoren. Tariffgrunnlaget beholder
+ørene; bare presentasjonen kan runde beløp.
 
 Kjøringen er pinnet til en commit og en tariff-dato i `_meta` i
 `scripts/dso_kilder.json`. Da gir `--check` samme svar neste år som i dag,

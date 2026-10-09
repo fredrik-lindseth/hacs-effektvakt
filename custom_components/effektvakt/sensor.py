@@ -70,7 +70,7 @@ def _glem_tilgjengelig_kutt(hass: HomeAssistant, entry: ConfigEntry) -> None:
         registry.async_remove(entity_id)
 
 
-def _kapasitetstrinn_json(trinn: list[tuple[float, int]]) -> list[list[float | int | None]]:
+def _kapasitetstrinn_json(trinn: list[tuple[float, float]]) -> list[list[float | None]]:
     """Trinn-tabellen som [kW, kr]-par et dashboard kan lese.
 
     Øverste terskel er float("inf") internt. inf er ugyldig JSON og knekker både
@@ -112,6 +112,9 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
         if not d:
             return None
         return {
+            "maalegrunnlag_gyldig": d.get("maalegrunnlag_gyldig"),
+            "beregning_gyldig": d.get("beregning_gyldig"),
+            "maalegrunnlag_problem": d.get("maalegrunnlag_problem"),
             "elapsed_minutes_in_hour": d.get("elapsed_minutes_in_hour"),
             "minutter_igjen_av_timen": d.get("minutter_igjen_av_timen"),
             "actual_kwh_this_hour": d.get("actual_kwh_this_hour"),

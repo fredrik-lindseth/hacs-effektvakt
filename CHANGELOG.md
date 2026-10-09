@@ -28,7 +28,10 @@ underveis, er det «Fikset» som gjelder deg.
   inn.
 - Blueprintene importeres for hånd hvis du vil at noe skal kuttes automatisk.
   Fire av dem, med import-lenker i [docs/blueprints.md](docs/blueprints.md).
-  Uten dem varsler Effektvakt, men rører ingenting.
+  Uten dem varsler Effektvakt, men rører ingenting. Har du importert
+  lastkutt-blueprints fra `main` tidligere, importer dem på nytt sammen med
+  denne oppdateringen: gjeninnkoblingsvernet krever den nye tjenesten
+  `effektvakt.styr_last`. Den gamle climate-hjelperen er nå valgfri.
 
 ### Lagt til
 
@@ -48,10 +51,11 @@ underveis, er det «Fikset» som gjelder deg.
   [fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) på en pinnet
   commit og en pinnet tariffdato. Tabellen kan etterprøves mot kilden med én
   kommando, og CI feller hvis den har drevet. Har du et selskap som ikke står i
-  listen, kan du skrive trinnene selv. [docs/dso.md](docs/dso.md). <!--kort-->
+  listen, kan du skrive trinnene selv for topp-3-modellen. Andre eller
+  uverifiserte tariffmetoder kan ikke brukes til styringsråd ennå. [docs/dso.md](docs/dso.md). <!--kort-->
 - **Fire blueprints** for varmtvannsbereder, panelovner, en generell last og
-  ren varsling. Hver av dem slipper lasten ved neste timeskifte uansett hva
-  Effektvakt sier, fordi verdien av et kutt slutter der.
+  ren varsling. De tre lastkutt-blueprintene bruker lastvernet til å be om
+  gjeninnkobling ved neste timeskifte, fordi verdien av et kutt slutter der.
   [docs/blueprints.md](docs/blueprints.md).
 - **Svar på hva timen faktisk tåler.** Alle sensorene bærer
   `minutter_igjen_av_timen` og `kan_legge_paa_resten_av_timen_kw`: med ett kW
@@ -67,12 +71,32 @@ underveis, er det «Fikset» som gjelder deg.
   et åpent øverste trinn, får du beskjed framfor en sensor som stille sier «god
   margin» for alltid.
 - **Diagnostikk** kan lastes ned fra integrasjonssiden og legges ved en
-  feilrapport som den er. Den inneholder ikke hvilke sensorer du har pekt på.
+  feilrapport. Den viser oppsett, målegrunnlag og lastvernets aktive kutt
+  og gjeninnkoblingsfrister.
 
 ### Fikset
 
-Tre feil i kjernen, alle av typen som gjør vakten taus akkurat når den trengs.
+Feilrettingene under gjelder både beregninger og trygg gjeninnkobling.
 De gjelder deg hvis du har kjørt integrasjonen fra `main`.
+
+- **Gjeninnkoblingen overlever reload og omstart.** Lastvernet husker hvilke
+  laster det faktisk overtok, originaltemperaturen og fristen. Det prøver
+  igjen når en utilgjengelig aktuator kommer tilbake. Slått av automatikk og
+  nye risikohendelser avbryter ikke ansvaret. Minste påtid kan ikke lenger
+  omgås av blink i sensoren. [docs/blueprints.md](docs/blueprints.md). <!--kort-->
+- **Manglende målinger gir ukjent råd.** Ugyldig eller utdatert effekt blir
+  ikke behandlet som null forbruk med ledig kapasitet. Måledekning og
+  coordinatorens friskhet vises hver for seg. <!--kort-->
+- **Sommertidsskiftet regnes i faktisk tid.** De to 02-timene om høsten
+  holdes atskilt når effekt integreres og måleravlesninger fordeles. <!--kort-->
+- **Feil tariffmodell gir en forklaring.** Sør Aurdal Energi bruker
+  månedsmaks, og Tinfos har uverifisert metode. Disse får ikke lenger
+  topp-3-råd; nye oppsett forklarer begrensningen og eksisterende oppsett får
+  et repair-varsel. Trinnprisene beholder ørene fra kilden. <!--kort-->
+- **Kuttbehovet tar hensyn til resten av timen.** Nødvendig momentan
+  lastreduksjon skilles fra reduksjonen i timegjennomsnitt. Tilgjengelig
+  kuttbar last og allerede brukt energi inngår når et kutt vurderes, så små
+  laster kan hjelpe tidsnok og tapte timer ikke fremstilles som reddbare. <!--kort-->
 
 - **Terskelen gikk rett vei, men regnestykket gikk feil vei.** Effektvakt
   regnet med at jo høyere de andre dagene i måneden var, jo mer tålte dagen i

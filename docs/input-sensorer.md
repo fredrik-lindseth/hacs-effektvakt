@@ -23,6 +23,8 @@ Hva Effektvakt trenger fra Home Assistant for å fungere.
 
 **Maksgrense**: Effektvakt avviser verdier over 100 000 W (100 kW). Høyere verdier logges som advarsel og behandles som `unknown`.
 
+**Datakvalitet under drift**: `unknown`, `unavailable`, ugyldig enhet eller tall og rapporter eldre enn 120 sekunder gir ukjent beregning. En uendret verdi er fortsatt fersk hvis kilden rapporterer den på nytt. Det er rapporttidspunktet (`last_reported`, ellers `last_updated`), ikke siste verdiendring, som teller. `maalegrunnlag_gyldig`, `beregning_gyldig` og `maalegrunnlag_problem` forklarer skillet fra en coordinator som har stoppet. Aktive kutt beholder gjeninnkoblingsvernet også når målingene faller ut.
+
 **Kjente kilder**:
 
 - Tibber Pulse (HAN-port, oppdaterer hvert 2-10 sek)

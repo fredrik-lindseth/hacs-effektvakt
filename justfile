@@ -9,7 +9,7 @@
 #
 #   unit + kvalitet   tests/ med stubbet Home Assistant, Python 3.13
 #   ha-minimum        tests_ha/ mot ekte HA 2025.1.0 (Python 3.13)
-#   ha-current        tests_ha/ mot ekte HA 2026.9.2 (Python 3.14)
+#   ha-current        tests_ha/ mot ekte HA 2026.10.0 (Python 3.14)
 #
 # Gruppene står i pyproject.toml og er låst i uv.lock. tests/ og tests_ha/ kan
 # ikke dele miljø: tests/conftest.py stubber homeassistant.* i sys.modules, og

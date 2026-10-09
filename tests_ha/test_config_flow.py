@@ -517,3 +517,10 @@ async def test_et_oppsett_uten_sensorer_migreres_uten_laster(hass: HomeAssistant
     assert entry.version == ENTRY_VERSION
     assert CONF_LASTER not in entry.data
     assert hass.states.get(TILGJENGELIG_KUTT) is None
+
+
+async def test_egendefinert_nettselskap_har_oversettbar_etikett(hass: HomeAssistant) -> None:
+    resultat = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    valg = next(iter(resultat["data_schema"].schema.values()))
+    assert valg.config["translation_key"] == "dso"
+    assert {"value": "custom", "label": "custom"} in valg.config["options"]

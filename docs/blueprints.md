@@ -23,7 +23,7 @@ Integrasjonen lager én switch per oppsett, `switch.effektvakt_automatikk`. Slå
 
 Alle fire blueprintene tar den inn som `automatikk_switch`. Feltet er valgfritt: lar du det stå tomt, oppfører automasjonen seg nøyaktig som før bryteren fantes, så eksisterende automasjoner overlever en oppdatering uten at du rører dem. Vil du at de skal lytte, må du peke feltet på bryteren.
 
-Bryteren stopper bare kutt. Grenene som slår last på igjen er ikke gatet, for ellers kunne en varmtvannsbereder blitt stående av fordi noen vippet bryteren midt i et kutt. Slår du av mens et kutt pågår, kommer lasten tilbake ved neste timeskifte. I `prioritert_lastkutt` skjer det med én gang: den faller gjennom til default-grenen som slår alt på.
+Bryteren stopper nye kutt. Ved neste vurdering, senest innen ett minutt, ber blueprinten lastvernet slippe et aktivt kutt. Den uavhengige fristtimeren fortsetter uansett; bare lastene Effektvakt selv overtok blir gjenopprettet.
 
 `kun_varsel` er unntaket. Den gater ikke på bryteren i det hele tatt. Har du skrudd av automatikken, er det du som må kutte, og da er varselet verdt mer, ikke mindre. Den sier i stedet fra i teksten at ingenting kuttes av seg selv.
 
@@ -39,7 +39,7 @@ Det er også den enkleste demperen mot yo-yo: uten den varmer berederen 2 kW eks
 
 Er risikoen fortsatt der i den nye timen, kuttes lasten igjen, men først etter `min_on_minutes` på. Den påtiden er det som skiller et slipp fra en pause på null sekunder.
 
-`max_off_minutes` er blitt et absolutt tak i stedet for hovedregelen. Kommer timeskiftet aldri, for eksempel fordi HA står i en rar tilstand, slippes lasten når taket nås. Standard er 60 minutter, som er akkurat lengre enn det lengste et kutt kan vare når timeskiftet virker.
+`max_off_minutes` er blitt et absolutt tak i stedet for hovedregelen. Vernet velger den tidligste av timeskiftet og dette taket og setter en egen fristtimer. Standard er 60 minutter, som er akkurat lengre enn det lengste et kutt kan vare når timeskiftet virker.
 
 ---
 
@@ -56,7 +56,7 @@ Er risikoen fortsatt der i den nye timen, kuttes lasten igjen, men først etter 
 | `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren                         |
 | `switch_entity`        | (ingen)                                      | Switchen som slås av                        |
 | `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over. Tom = kutt alltid   |
-| `max_off_minutes`      | 60                                           | Absolutt tak hvis timeskiftet aldri kommer  |
+| `max_off_minutes`      | 60                                           | Kortere grense kan slippe før timeskiftet  |
 | `min_on_minutes`       | 5                                            | Minste påtid før lasten kan kuttes på nytt  |
 
 **Oppførsel**:
@@ -97,7 +97,7 @@ use_blueprint:
 | `switch_high_priority`   | (ingen)                         | Kuttes først (like under)                  |
 | `switch_medium_priority` | (ingen)                         | Kuttes i tillegg (over)                    |
 | `automatikk_switch`      | (tom)                           | Hovedbryteren, se over                     |
-| `max_off_minutes`        | 60                              | Absolutt tak hvis timeskiftet aldri kommer |
+| `max_off_minutes`        | 60                              | Kortere grense kan slippe før timeskiftet |
 | `min_on_minutes`         | 5                               | Minste påtid før nytt kutt                 |
 
 **Oppførsel**:
@@ -126,7 +126,7 @@ use_blueprint:
 
 ## climate_min_temp.yaml
 
-**Hva**: Setter en climate-entitet (panelovn) til min-temp når kutt anbefales, og restorer til lagret temperatur ved neste hele time eller når risiko er borte. En `input_number`-hjelper persisterer temperaturen over HA-restart.
+**Hva**: Setter en climate-entitet (panelovn) til min-temp når kutt anbefales, og restorer til lagret temperatur ved neste hele time eller når risiko er borte. Lastvernet persisterer originaltemperaturen over HA-restart; den gamle `restore_helper`-inputen er valgfri og brukes ikke lenger.
 
 **Passer til**: Panelovner og andre climate-entiteter der du ikke vil slå av helt, men redusere setpunkt.
 
@@ -137,29 +137,17 @@ use_blueprint:
 | `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren                        |
 | `climate_entity`       | (ingen)                                      | Panelovn eller annen climate               |
 | `min_temp`             | 10 °C                                        | Setpunkt under kutt                        |
-| `restore_helper`       | (ingen)                                      | `input_number` for å lagre forrige temp    |
+| `restore_helper`       | (tom)                                        | Valgfritt eldre felt; brukes ikke lenger   |
 | `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over                     |
-| `max_off_minutes`      | 60                                           | Absolutt tak hvis timeskiftet aldri kommer |
+| `max_off_minutes`      | 60                                           | Kortere grense kan slippe før timeskiftet |
 | `min_on_minutes`       | 5                                            | Minste tid på normal temp før ny senking   |
-
-**Sett opp `input_number` manuelt**:
-
-```yaml
-input_number:
-  panelovn_stue_restore_temp:
-    name: Panelovn stue - restore-temp
-    min: 5
-    max: 30
-    step: 0.5
-    unit_of_measurement: °C
-```
 
 **Oppførsel**:
 
-- Sensor `on`: lagre nåværende temp i `input_number`, sett climate til `min_temp`
+- Sensor `on`: lagre nåværende temp i lastvernet, sett climate til `min_temp`
 - Neste hele time: restore til lagret temp
 - Sensor `off`: restore til lagret temp
-- HA-restart: restore til lagret temp (trigger på `homeassistant.start`)
+- HA-restart: lastvernet leser ansvaret fra disk og gjenoppretter når aktuatoren svarer
 
 Temperaturen lagres én gang, før første senking. Varer risikoen i flere timer, er det den brukeren satte som kommer tilbake hver gang, ikke min-temp.
 
@@ -173,7 +161,6 @@ use_blueprint:
     binary_sensor_entity: binary_sensor.effektvakt_kutt_ned_anbefalt
     climate_entity: climate.panelovn_stue
     min_temp: 10
-    restore_helper: input_number.panelovn_stue_restore_temp
     automatikk_switch: switch.effektvakt_automatikk
     max_off_minutes: 60
     min_on_minutes: 5
@@ -230,10 +217,28 @@ use_blueprint:
 
 ---
 
-## Failsafe-garanti
+## Gjeninnkoblingsvern
 
-Alle blueprints med laststyring (enkel_lastkutt, prioritert_lastkutt, climate_min_temp) gir lasten tilbake ved timeskiftet, og senest når `max_off_minutes` løper ut. Taket gjelder uavhengig av hva Effektvakt rapporterer.
+Lastkutt-blueprintene krever `effektvakt.styr_last` fra integrasjonen. Oppdater
+integrasjonen og importer blueprintene på nytt samtidig. Eldre, allerede
+importerte kopier har fortsatt den gamle ventingen og får ikke vernet automatisk.
 
-Løkken som kutter time etter time stopper også av seg selv når sensoren ikke lenger sier `on`. Henger coordinatoren, setter watchdogen sensorene til `unknown` etter 2 minutter, og `unknown` er ikke `on`. VVB-en din blir aldri stående av på ubestemt tid.
+Blueprinten ber om kutt eller slipp og vurderer vedvarende risiko hvert minutt.
+Integrasjonens lastvern lagrer originaltilstand, eier og frist før kuttet. Det
+slipper ved neste hele time eller `max_off_minutes`, det som kommer først.
+Gjentatte forespørsler forlenger aldri fristen. Reload av automasjoner avbryter
+ikke vernet. Ved HA-start gjenopprettes tidligere eide kutt så snart aktuatoren
+svarer. En utilgjengelig aktuator prøves igjen når tilstanden endrer seg og hvert
+30. sekund. HA må kjøre og aktuatoren må være tilgjengelig for at en kommando
+skal kunne utføres.
 
-Hovedbryteren endrer ikke dette: den hindrer nye kutt, men avbryter aldri et kutt som alt er i gang.
+Minste påtid regnes fra bekreftet gjeninnkobling og lagres på disk. Blink i
+risikosensoren eller en ny automasjonskjøring kan derfor ikke omgå den. Kutt
+kan først begynne igjen ved neste vurdering etter at påtiden er utløpt.
+
+En switch som allerede var av, eller et setpunkt som allerede var lavere enn
+kutt-temperaturen, overtas ikke og blir heller ikke gjenopprettet. Et manuelt
+endret setpunkt under kuttet beholdes. To automasjoner kan ikke eie et aktivt
+kutt på samme aktuator samtidig; den andre får en tjenestefeil. Bruk én
+styringsautomasjon per last. Vernet fortsetter å fullføre aktive gjeninnkoblinger
+selv om et Effektvakt-oppsett lastes ut. Nye kutt krever en aktiv automasjon.

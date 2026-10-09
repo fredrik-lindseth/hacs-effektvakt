@@ -54,13 +54,77 @@ const FORKLARING_ID = "ev-forklaring";
 // da trenger en skjermleserbruker det samme svaret. Originalens egne merker,
 // maaleverkssymbol, klasse og proevespenning, staar i docs/dashboard-kort.md:
 // de er historisk pynt og hoerer ikke til avlesningen.
-const FORKLARING =
-  "Rød viser er projisert time-snitt, altså hvor timen ender hvis forbruket fortsetter som nå." +
-  " Tynn svart viser er effekten akkurat nå." +
-  " Trekanten utenfor buen er slepemerket, som står på topp-3-snittet for måneden og aldri" +
-  " går ned igjen." +
-  " Båndet ytterst er kapasitetstrinnene med månedspris, der trinnet måneden ligger an til er" +
-  " tykt og neste trinn er rødt.";
+const KORTTEKSTER = {
+  nb: {
+    projisert: "Projisert", na: "Effekt nå", topp3: "Topp-3 mnd",
+    entity: "Sensor for projisert time-snitt",
+    kostnad_entity: "Kostnadssensor (valgfri, finnes automatisk)",
+    tittel: "Tittel", maks_kw: "Skalaens toppverdi", stil: "Skive",
+    konfigurasjon: "Effektvakt-kortet trenger en entity: sensoren for projisert time-snitt.",
+    ugyldig_svg: "Skiven kom ikke som gyldig SVG",
+    hentefeil: "Fikk ikke hentet skiven: {feil} Kortet prøver igjen.",
+    henter: "Henter skiven …", ukjent: "ukjent verdi", kilowatt: "kilowatt",
+    trinn: "{innledning} kapasitetstrinnet {fra} til {til} {enhet}, {kr} kroner i måneden.",
+    neste: "Neste trinn starter på {fra} {enhet} og koster {kr} kroner i måneden{mer}.",
+    mer: ", altså {kr} kroner mer", det_er: "Det er", ligger_an: "Måneden ligger an til",
+    maaler: "Effektmåler", maaler_for: "Effektmåler for {dso}",
+    ingen_venter: "Ingen avlesning: Effektvakt har ingen måling å vise ennå,",
+    ingen_borte: "Ingen avlesning: {entity} er utilgjengelig,",
+    parkert: "så viserne står parkert på null.",
+    timen: "Timen ender på {kw} hvis forbruket fortsetter som nå.",
+    akkurat_na: "{kw} går akkurat nå.",
+    maaneden: "Måneden ligger an til {kw}, som er topp-3-snittet og det du betaler for.",
+    venter: "Effektvakt har ingen måling å vise ennå, så viserne står parkert på null.",
+    borte: "{entity} er utilgjengelig, så viserne står parkert på null.",
+    ingen_viser: "Viserne viser ingen avlesning nå.",
+    forklaring: "Rød viser er projisert time-snitt, altså hvor timen ender hvis forbruket fortsetter som nå." +
+      " Tynn svart viser er effekten akkurat nå." +
+      " Trekanten utenfor buen er slepemerket, som står på topp-3-snittet for måneden og aldri går ned igjen." +
+      " Båndet ytterst er kapasitetstrinnene med månedspris, der trinnet måneden ligger an til er tykt og neste trinn er rødt.",
+    beskrivelse: "Analog effektvakt med kapasitetstrinn, projisert time-snitt og slepemerke.",
+  },
+  en: {
+    projisert: "Projected", na: "Power now", topp3: "Monthly top 3",
+    entity: "Projected hourly average sensor",
+    kostnad_entity: "Cost sensor (optional, detected automatically)",
+    tittel: "Title", maks_kw: "Scale maximum", stil: "Dial",
+    konfigurasjon: "The Effektvakt card needs an entity: the projected hourly average sensor.",
+    ugyldig_svg: "The dial was not returned as valid SVG",
+    hentefeil: "Could not load the dial: {feil} The card will retry.",
+    henter: "Loading the dial …", ukjent: "unknown value", kilowatt: "kilowatts",
+    trinn: "{innledning} capacity tier {fra} to {til} {enhet}, NOK {kr} per month.",
+    neste: "The next tier starts at {fra} {enhet} and costs NOK {kr} per month{mer}.",
+    mer: ", an increase of NOK {kr}", det_er: "This is", ligger_an: "The month is heading for",
+    maaler: "Power meter", maaler_for: "Power meter for {dso}",
+    ingen_venter: "No reading: Effektvakt has no measurement to display yet,",
+    ingen_borte: "No reading: {entity} is unavailable,",
+    parkert: "so the needles are parked at zero.",
+    timen: "The hour will end at {kw} if consumption continues at the current rate.",
+    akkurat_na: "Current power is {kw}.",
+    maaneden: "The month is heading for {kw}, its top-three average and the basis of your capacity charge.",
+    venter: "Effektvakt has no measurement to display yet, so the needles are parked at zero.",
+    borte: "{entity} is unavailable, so the needles are parked at zero.",
+    ingen_viser: "The needles are not displaying a reading now.",
+    forklaring: "The red needle shows the projected hourly average: where the hour will end if consumption continues at the current rate." +
+      " The thin black needle shows current power." +
+      " The triangle outside the arc is the peak marker. It holds the month's highest top-three average and never moves down." +
+      " The outer band shows capacity tiers and their monthly prices. The projected tier is thick and the next tier is red.",
+    beskrivelse: "Analog demand monitor with capacity tiers, a projected hourly average and a peak marker.",
+  },
+};
+
+// HA sender aktivt spraak i locale.language og language. Ustoettede spraak
+// faller tilbake paa norsk; lokale tall og ord skal bruke samme spraak.
+function kortSprak(hass) {
+  const valgt = hass?.locale?.language || hass?.language || "nb";
+  return typeof valgt === "string" && /^en(?:[-_]|$)/i.test(valgt) ? "en" : "nb";
+}
+
+function kortTekst(hass, nokkel, verdier = {}) {
+  const tekst = KORTTEKSTER[kortSprak(hass)][nokkel] ?? KORTTEKSTER.nb[nokkel] ?? nokkel;
+  return tekst.replace(/\{([^}]+)\}/g, (_, navn) => verdier[navn] ?? `{${navn}}`);
+}
+
 
 const CSS = `
 :host {
@@ -373,7 +437,7 @@ class EffektvaktCard extends HTMLElement {
 
   setConfig(config) {
     if (!config || !config.entity) {
-      throw new Error("Effektvakt-kortet trenger en entity: sensoren for projisert time-snitt.");
+      throw new Error(kortTekst(this._hass, "konfigurasjon"));
     }
     this._config = { ...config };
     this._feil = null;
@@ -432,15 +496,17 @@ class EffektvaktCard extends HTMLElement {
     // Uten dette leses de samme verdiene to ganger etter hverandre.
     this._avlesning.setAttribute("aria-hidden", "true");
     this._felt = {};
+    this._etiketter = {};
     for (const [nokkel, etikett, klasse] of [
-      ["projisert", "Projisert", "rod"],
-      ["na", "Effekt nå", ""],
-      ["topp3", "Topp-3 mnd", ""],
+      ["projisert", "projisert", "rod"],
+      ["na", "na", ""],
+      ["topp3", "topp3", ""],
     ]) {
       const boks = document.createElement("div");
       if (klasse) boks.className = klasse;
       const dt = document.createElement("dt");
-      dt.textContent = etikett;
+      dt.textContent = kortTekst(this._hass, etikett);
+      this._etiketter[nokkel] = dt;
       const dd = document.createElement("dd");
       dd.textContent = "–";
       boks.append(dt, dd);
@@ -543,7 +609,7 @@ class EffektvaktCard extends HTMLElement {
     const dokument = new DOMParser().parseFromString(svar.svg, "image/svg+xml");
     const svg = dokument.documentElement;
     if (svg.nodeName !== "svg") {
-      throw new Error("Skiven kom ikke som gyldig SVG");
+      throw new Error(kortTekst(this._hass, "ugyldig_svg"));
     }
     this._svg = document.importNode(svg, true);
     this._svg.removeAttribute("width");
@@ -645,6 +711,9 @@ class EffektvaktCard extends HTMLElement {
     this._tittel.textContent = this._config.tittel ?? "";
     this._tittel.hidden = !this._config.tittel;
 
+    for (const [nokkel, node] of Object.entries(this._etiketter)) {
+      node.textContent = kortTekst(this._hass, nokkel);
+    }
     this._visMelding();
     if (!this._svg) return;
 
@@ -653,7 +722,7 @@ class EffektvaktCard extends HTMLElement {
 
     // set hass fyrer paa hver eneste tilstandsendring i HA. Uten denne
     // sammenligningen ville kortet regnet om skiven flere ganger i sekundet.
-    const nokkel = [projisert?.last_updated, kostnad?.last_updated, this._config.tittel].join("|");
+    const nokkel = [projisert?.last_updated, kostnad?.last_updated, this._config.tittel, kortSprak(this._hass)].join("|");
     if (nokkel === this._sisteNokkel) return;
     this._sisteNokkel = nokkel;
 
@@ -677,9 +746,9 @@ class EffektvaktCard extends HTMLElement {
   _visMelding() {
     let tekst = "";
     if (this._feil) {
-      tekst = `Fikk ikke hentet skiven: ${this._feil} Kortet prøver igjen.`;
+      tekst = kortTekst(this._hass, "hentefeil", { feil: this._feil });
     } else if (!this._svg && this._henter !== null) {
-      tekst = "Henter skiven …";
+      tekst = kortTekst(this._hass, "henter");
     }
     this._melding.textContent = tekst;
     this._melding.hidden = !tekst;
@@ -763,75 +832,53 @@ class EffektvaktCard extends HTMLElement {
   _skrivTekst(avlesning, projisertKw, naKw, slepeKw, kostnad) {
     const harTall = avlesning === AVLESNING_OK;
     const venter = avlesning === AVLESNING_VENTER;
-    const sprak = this._hass.locale?.language || "nb-NO";
+    const tekst = (nokkel, verdier) => kortTekst(this._hass, nokkel, verdier);
+    const sprak = kortSprak(this._hass) === "en" ? "en-US" : "nb-NO";
     const kw = (v) => (v === null ? "–" : `${tall(v, 2, sprak)} kW`);
-    // Skjermleseren har ikke skiven aa se paa, saa enheten skrives ut.
-    // "kW" leses som bokstaver, "kilowatt" leses som ordet.
-    const lest = (v) => (v === null ? "ukjent verdi" : `${tall(v, 2, sprak)} kilowatt`);
+    const lest = (v) => (v === null ? tekst("ukjent") : `${tall(v, 2, sprak)} ${tekst("kilowatt")}`);
+    const kroner = (v) => tall(v, Number.isInteger(v) ? 0 : 2, sprak);
 
     this._felt.projisert.textContent = harTall ? kw(projisertKw) : "–";
     this._felt.na.textContent = harTall ? kw(naKw) : "–";
     this._felt.topp3.textContent = harTall ? kw(slepeKw) : "–";
 
-    // Trinnteksten trengs i to utgaver: den synlige bruker "kW" og kan
-    // innlede fritt, mens etiketten skriver ut enheten og ikke skal gjenta
-    // "maaneden ligger an til", som alt staar i setningen foer.
     const harTrinn = harTall && kostnad && !erUgyldig(kostnad) && this._trinn?.aktivt;
-    // Hoppet mellom trinnene ligger i attributtet, ikke i tilstanden.
-    // Tilstanden til kostnadssensoren er kostnad_denne_timen_kr, som er null
-    // nesten alltid og spiker foerst naar en time faktisk flytter maaneden
-    // opp. Mangler attributtet, droppes leddet framfor aa skrive «undefined».
     const hoppKr = harTrinn ? talletAv(kostnad.attributes?.kostnad_neste_trinn_kr) : null;
     const trinnlinjer = (enhet, innledning) => {
       if (!harTrinn) return [];
       const a = this._trinn.aktivt;
       const n = this._trinn.neste;
-      const ut = [
-        `${innledning} kapasitetstrinnet ${tall(a.fra, 0, sprak)} til` +
-          ` ${tall(a.til, 0, sprak)} ${enhet}, ${a.kr} kroner i måneden.`,
-      ];
+      const ut = [tekst("trinn", {
+        innledning, fra: tall(a.fra, 0, sprak), til: tall(a.til, 0, sprak), enhet, kr: kroner(a.kr),
+      })];
       if (n) {
-        const mer = hoppKr === null ? "" : `, altså ${hoppKr} kroner mer`;
-        ut.push(
-          `Neste trinn starter på ${tall(n.fra, 0, sprak)} ${enhet} og koster` +
-            ` ${n.kr} kroner i måneden${mer}.`
-        );
+        ut.push(tekst("neste", {
+          fra: tall(n.fra, 0, sprak), enhet, kr: kroner(n.kr),
+          mer: hoppKr === null ? "" : tekst("mer", { kr: kroner(hoppKr) }),
+        }));
       }
       return ut;
     };
 
-    // Etiketten maa baere hele betydningen, ikke bare tallene: hva timen ender
-    // paa, hva som gaar naa, hva maaneden ligger an til og hva det koster.
-    const skive = this._dsoNavn ? `Effektmåler for ${this._dsoNavn}` : "Effektmåler";
-    // Uten avlesning maa etiketten si hvorfor. «Venter» og «utilgjengelig» er
-    // to ulike beskjeder til den som lurer paa hvorfor skiven er tom.
-    const uten = venter
-      ? "Ingen avlesning: Effektvakt har ingen måling å vise ennå,"
-      : `Ingen avlesning: ${this._config.entity} er utilgjengelig,`;
+    const skive = this._dsoNavn ? tekst("maaler_for", { dso: this._dsoNavn }) : tekst("maaler");
+    const uten = venter ? tekst("ingen_venter") : tekst("ingen_borte", { entity: this._config.entity });
     const etikett = harTall
       ? [
           `${skive}.`,
-          `Timen ender på ${lest(projisertKw)} hvis forbruket fortsetter som nå.`,
-          `${lest(naKw)} går akkurat nå.`,
-          `Måneden ligger an til ${lest(slepeKw)}, som er topp-3-snittet og det du betaler for.`,
-          ...trinnlinjer("kilowatt", "Det er"),
+          tekst("timen", { kw: lest(projisertKw) }),
+          tekst("akkurat_na", { kw: lest(naKw) }),
+          tekst("maaneden", { kw: lest(slepeKw) }),
+          ...trinnlinjer(tekst("kilowatt"), tekst("det_er")),
         ]
-      : [`${skive}.`, uten, "så viserne står parkert på null."];
+      : [`${skive}.`, uten, tekst("parkert")];
     this._svg.setAttribute("aria-label", etikett.join(" "));
-
-    // Beskrivelsen sier hva merkene paa skiven betyr. Etiketten over sier hva
-    // de staar paa. Delt slik gjentas ingenting for skjermleseren.
     this._tekstalternativ.textContent = harTall
-      ? FORKLARING
-      : `${FORKLARING} Viserne viser ingen avlesning nå.`;
+      ? tekst("forklaring")
+      : `${tekst("forklaring")} ${tekst("ingen_viser")}`;
 
     const synlig = harTall
-      ? trinnlinjer("kW", "Måneden ligger an til")
-      : [
-          venter
-            ? "Effektvakt har ingen måling å vise ennå, så viserne står parkert på null."
-            : `${this._config.entity} er utilgjengelig, så viserne står parkert på null.`,
-        ];
+      ? trinnlinjer("kW", tekst("ligger_an"))
+      : [venter ? tekst("venter") : tekst("borte", { entity: this._config.entity })];
     this._kostnad.textContent = synlig.join(" ");
     this._kostnad.hidden = synlig.length === 0;
   }
@@ -853,8 +900,10 @@ class EffektvaktCardEditor extends HTMLElement {
   }
 
   set hass(hass) {
+    const forrigeSprak = kortSprak(this._hass);
     this._hass = hass;
     if (this._skjema) this._skjema.hass = hass;
+    if (kortSprak(hass) !== forrigeSprak) this._tegn();
     this._hentStiler();
   }
 
@@ -905,7 +954,7 @@ class EffektvaktCardEditor extends HTMLElement {
   _tegn() {
     if (!this._skjema) {
       this._skjema = document.createElement("ha-form");
-      this._skjema.computeLabel = (felt) => ETIKETTER[felt.name] ?? felt.name;
+      this._skjema.computeLabel = (felt) => kortTekst(this._hass, felt.name);
       this._skjema.addEventListener("value-changed", (hendelse) => {
         this.dispatchEvent(
           new CustomEvent("config-changed", {
@@ -923,13 +972,6 @@ class EffektvaktCardEditor extends HTMLElement {
   }
 }
 
-const ETIKETTER = {
-  entity: "Sensor for projisert time-snitt",
-  kostnad_entity: "Kostnadssensor (valgfri, finnes automatisk)",
-  tittel: "Tittel",
-  maks_kw: "Skalaens toppverdi",
-  stil: "Skive",
-};
 
 customElements.define(KORTTYPE, EffektvaktCard);
 customElements.define(EDITORTYPE, EffektvaktCardEditor);
@@ -938,7 +980,9 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: KORTTYPE,
   name: "Effektvakt",
-  description: "Analog effektvakt med kapasitetstrinn, projisert time-snitt og slepemerke.",
+  get description() {
+    return kortTekst({ language: document.documentElement.lang }, "beskrivelse");
+  },
   preview: true,
   documentationURL: "https://github.com/fredrik-lindseth/hacs-effektvakt/blob/main/docs/dashboard-kort.md",
 });

@@ -25,6 +25,13 @@ from custom_components.effektvakt.faceplate import (
 from custom_components.effektvakt.frontend import ws_faceplate
 from tests.conftest import make_entry
 
+
+@pytest.fixture(autouse=True)
+def _lastvern_har_egne_ha_tester():
+    with patch("custom_components.effektvakt.async_setup_lastvern", new_callable=AsyncMock):
+        yield
+
+
 PAKKE = Path(__file__).parent.parent / "custom_components/effektvakt"
 MANIFEST = json.loads((PAKKE / "manifest.json").read_text())
 

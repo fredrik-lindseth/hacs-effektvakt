@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 # Kapasitetstrinn slik dso.py leverer dem: (øvre terskel i kW, månedspris i kr),
 # sortert stigende. Øverste trinn har float("inf") som terskel.
-Trinn = list[tuple[float, int]]
+Trinn = list[tuple[float, float]]
 
 
 def topp_n_sum(verdier: Iterable[float], *, n: int) -> float:
@@ -220,7 +220,8 @@ def beregn_topp_3_oversikt(daily_max_kw: Mapping[date, float], *, today: date) -
 class Terskel:
     """Taket timen vi står i måles mot, og tallene det er bygget av.
 
-    Alle kW-feltene er time-snitt, samme enhet som projeksjonen.
+    Tak og margin er time-snitt, samme enhet som projeksjonen.
+    `kutt_anbefalt_kw` er noedvendig lastreduksjon resten av timen.
 
     Er `maal_terskel_kw` None, finnes det ikke noe dyrere trinn å unngå: enten
     er nettselskapet ukjent, eller så ligger måneden alt på øverste trinn. Da er
@@ -228,7 +229,7 @@ class Terskel:
     """
 
     maal_terskel_kw: float | None
-    maal_trinn_kr: int | None
+    maal_trinn_kr: float | None
     dagstak_kw: float | None
     time_tak_kw: float | None
     margin_kw: float | None
@@ -245,6 +246,7 @@ def beregn_terskel(
     daily_max_kw: Mapping[date, float],
     today: date,
     projected_kw: float,
+    elapsed_h: float = 0.0,
 ) -> Terskel:
     """Regn ut taket for timen vi står i, og marginen opp til det.
 
@@ -290,7 +292,7 @@ def beregn_terskel(
         dagstak_kw=x,
         time_tak_kw=time_tak,
         margin_kw=margin,
-        kutt_anbefalt_kw=max(0.0, -margin),
+        kutt_anbefalt_kw=max(0.0, -margin) / max(1e-9, 1.0 - elapsed_h) if elapsed_h < 1 else 0.0,
         kan_legge_paa_kw=max(0.0, margin),
         dagens_maks_kw=dagens_maks,
         topp_2_andre_dager_kw=topp_2_andre,
@@ -346,15 +348,15 @@ class KostnadInfo:
     Feltnavnene er også nøklene coordinatoren eksponerer i data-dicten.
     """
 
-    kostnad_neste_trinn_kr: int
-    trinn_na_kr: int
+    kostnad_neste_trinn_kr: float
+    trinn_na_kr: float
     trinn_na_ovre_grense_kw: float | None
-    trinn_neste_kr: int | None
-    besparelse_trinn_under_kr: int
+    trinn_neste_kr: float | None
+    besparelse_trinn_under_kr: float
     trinn_under_terskel_kw: float | None
     trinn_under_oppnaelig: bool
     trinn_under_realistisk: bool
-    kostnad_denne_timen_kr: int
+    kostnad_denne_timen_kr: float
     topp_3_projisert_kw: float
     minste_mulige_topp_3_kw: float
     hoyeste_trinn: bool
@@ -480,10 +482,9 @@ def kortvarig_paaslag_kw(*, elapsed_h: float) -> float:
     den størrelsen ville lagt på om den ble slått på nå, og null når timen er
     omme og projeksjonen er målt faktum.
 
-    At fradraget krymper i takt med resten av timen er også det som gjør at
-    varselet kommer tidsnok: et kutt på `KORTVARIG_LAST_KW` eller mer rekker
-    alltid å hente inn overskridelsen når fradraget endelig slipper taket, for
-    begge skalerer med `1 - elapsed_h`. Avveiningen står i docs/beregninger.md.
+    Kuttets mulighet regnes separat av faktisk tilgjengelig last og energi
+    som alt er brukt. Fradraget alene garanterer ikke at kuttet rekker aa
+    spare et trinn. Avveiningen står i docs/beregninger.md.
     """
     return KORTVARIG_LAST_KW * max(0.0, 1.0 - elapsed_h)
 
@@ -492,13 +493,16 @@ def kortvarig_paaslag_kw(*, elapsed_h: float) -> float:
 class Kuttkriterium:
     """Svaret på «koster denne timen noe når vi ikke tror på en kortvarig topp».
 
-    `oppfylt` er det eneste som gater kutt. De to andre feltene er
-    mellomregningen, eksponert så et kutt kan forklares i ettertid.
+    `oppfylt` gater kutt. Resten er mellomregning og den besparelsen et
+    tilgjengelig kutt fortsatt kan gi, eksponert for aa forklare raadet.
     """
 
     oppfylt: bool
     varig_projeksjon_kw: float
     kortvarig_paaslag_kw: float
+    mulig_besparelse_kr: float = 0.0
+    unngaaelig_besparelse_kr: float = 0.0
+    kutt_mulig: bool = False
 
 
 def vurder_kuttkriterium(
@@ -509,6 +513,7 @@ def vurder_kuttkriterium(
     projected_kw: float,
     actual_kwh_this_hour: float,
     elapsed_h: float,
+    tilgjengelig_kutt_kw: float | None = None,
 ) -> Kuttkriterium:
     """Flytter denne timen kapasitetstrinnet, også uten en kortvarig topp?
 
@@ -529,8 +534,39 @@ def vurder_kuttkriterium(
         today=today,
         projected_kw=varig,
     )
+    # Allerede brukt energi kan ikke hentes tilbake. Sammenlign utfallet uten
+    # kutt med det beste utfallet tilgjengelig lastreduksjon kan gi naa.
+    rest_h = max(0.0, 1.0 - elapsed_h)
+    etter_kutt = (
+        actual_kwh_this_hour
+        if tilgjengelig_kutt_kw is None
+        else max(actual_kwh_this_hour, projected_kw - max(0.0, tilgjengelig_kutt_kw) * rest_h)
+    )
+    uten = compute_kostnad(trinn=trinn, daily_max_kw=daily_max_kw, today=today, projected_kw=projected_kw)
+    med = compute_kostnad(trinn=trinn, daily_max_kw=daily_max_kw, today=today, projected_kw=etter_kutt)
+    mulig = uten.kostnad_denne_timen_kr if uten is not None else 0.0
+    unngaaelig = max(0.0, mulig - (med.kostnad_denne_timen_kr if med is not None else 0.0))
+
+    # En liten kuttbar last rekker ikke aa vente paa 1,5 kW-fradraget.
+    # Etter ti minutter kreves derfor baade maalt vedvarende overskridelse
+    # og et kutt som fortsatt sparer et trinn. Store laster beholder den
+    # kortvarige toppen som vern mot vannkoker og gjenoppvarming.
+    liten_last = tilgjengelig_kutt_kw is not None and 0 < tilgjengelig_kutt_kw < KORTVARIG_LAST_KW
+    vedvarende = False
+    if liten_last and elapsed_h >= 10 / 60:
+        maalt = compute_kostnad(
+            trinn=trinn,
+            daily_max_kw=daily_max_kw,
+            today=today,
+            projected_kw=actual_kwh_this_hour / elapsed_h,
+        )
+        vedvarende = maalt is not None and maalt.kostnad_denne_timen_kr > 0
+    kutt_mulig = unngaaelig > 0 and rest_h > 0
     return Kuttkriterium(
-        oppfylt=kostnad is not None and kostnad.kostnad_denne_timen_kr > 0,
+        oppfylt=kutt_mulig and (vedvarende or (kostnad is not None and kostnad.kostnad_denne_timen_kr > 0)),
         varig_projeksjon_kw=varig,
         kortvarig_paaslag_kw=paaslag,
+        mulig_besparelse_kr=mulig,
+        unngaaelig_besparelse_kr=unngaaelig,
+        kutt_mulig=kutt_mulig,
     )

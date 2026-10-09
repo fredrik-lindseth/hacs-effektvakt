@@ -15,11 +15,13 @@ Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis
 
 ## Hvordan det virker
 
-Norske nettselskap fakturerer kapasitetsleddet etter snittet av de tre høyeste time-snittene fra ulike dager i måneden (NVE-modellen). Drar én time snittet av de tre over neste terskel, betaler du det høyere trinnet for hele måneden, uansett hvor lite du bruker resten av tiden.
+De fleste norske nettselskap fakturerer kapasitetsleddet etter snittet av de tre høyeste time-snittene fra ulike dager i måneden (NVE-modellen). Drar én time snittet av de tre over neste terskel, betaler du det høyere trinnet for hele måneden, uansett hvor lite du bruker resten av tiden.
 
 Motsatt vei gjelder også: er dagens topp allerede blant de tre høyeste, koster en ny time på samme nivå ingenting.
 
 Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund og projiserer hva time-snittet blir ved time-slutt, ut fra hva som er brukt så langt og hva som brukes akkurat nå. Marginen måles mot terskelen for neste trinn, justert for hvilke av topp-3-dagene som allerede er registrert denne måneden. Risiko-nivået har hysterese, så en kortvarig dipp slår ikke lasten av og på igjen med det samme.
+
+Bare denne topp-3-metoden er støttet. Sør Aurdal Energi (månedsmaks) og Tinfos (uverifisert metode) er sperret for styringsråd; se [tariffgrunnlaget](docs/dso.md). Manglende eller mer enn to minutter gamle effektmålinger gir ukjent råd, ikke ledig kapasitet. Tid og timegrenser regnes i UTC, slik at de to 02-timene om høsten holdes atskilt.
 
 ## Hva du får
 
@@ -27,6 +29,7 @@ Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund og projiserer 
 - Risiko for neste trinn (god margin, nærmer seg, like under, over terskelen) og en binary sensor som automations kan trigge på
 - Anslag på hvor mye du faktisk har å kutte, summert fra lastene du har lagt inn
 - Fire blueprints for varmtvannsbereder, panelovner og varsler
+- Lagret gjeninnkoblingsansvar og minste påtid som overlever automasjons-reload og HA-omstart; utilgjengelige laster forsøkes gjenopprettet når de svarer igjen
 - Et Lovelace-kort som tegner skiven fra dine egne kapasitetstrinn
 - Watchdog som setter sensorene til `unknown` hvis coordinatoren henger
 

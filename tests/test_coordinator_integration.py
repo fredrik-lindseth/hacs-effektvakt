@@ -116,7 +116,7 @@ async def test_maalerdelta_over_timeskiftet_havner_paa_timen_foer():
 
 @pytest.mark.asyncio
 async def test_to_tunge_dager_bak_seg_gir_kutt_og_ikke_god_margin():
-    """Hele poenget i hacs-effektvakt-2p7wpch, gjennom hele pipeline.
+    """To tidligere toppdager gir riktig råd gjennom hele pipeline.
 
     6,0 og 5,8 kW logget, 10 kW nå midt i timen, altså 5,0 kW projisert. Topp-3
     lander da på (6,0 + 5,8 + 5,0) / 3 = 5,6 og måneden går fra 250 til 415 kr.
@@ -144,7 +144,8 @@ async def test_to_tunge_dager_bak_seg_gir_kutt_og_ikke_god_margin():
     assert data["dagstak_kw"] == pytest.approx(3.2)
     assert data["time_tak_kw"] == pytest.approx(3.2)
     assert data["margin_kw"] == pytest.approx(-1.8)
-    assert data["kutt_anbefalt_kw"] == pytest.approx(1.8)
+    # 1,8 kWh må spares i halvtimen som gjenstår: 3,6 kW faktisk last.
+    assert data["kutt_anbefalt_kw"] == pytest.approx(3.6)
     assert data["kan_legge_paa_kw"] == 0.0
     assert data["risiko_niva"] == RISIKO_OVER_TERSKEL
     # Og kronene er ekte: topp-3 går fra 5 kW-trinnet til 10 kW-trinnet

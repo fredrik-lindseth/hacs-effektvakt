@@ -42,7 +42,7 @@ Bruker du `Egendefinert` DSO i config, er du ansvarlig for å holde trinnene opp
 
 ## HA-restart mister hysterese-pending-state
 
-Coordinatoren persisterer `hysterese_state.nivå` til disk, men ikke `pending_nivå` og `pending_since`. Etter HA-restart er det aktive risiko-nivået korrekt, men eventuelle ventende trinnendringer mistes. Timeren for nedgang i risiko starter på nytt.
+Coordinatoren lagrer hysterese-state, men gjenoppretter bare `nivå`, ikke `pending_nivå` og `pending_since`. Etter HA-restart er det aktive risiko-nivået korrekt, men eventuelle ventende trinnendringer mistes. Timeren for nedgang i risiko starter på nytt.
 
 Konsekvens: Etter restart kan risiko holde seg på `like_under_terskel` litt lenger enn forventet, selv om forbruket har gått ned. Det er det konservative valget.
 

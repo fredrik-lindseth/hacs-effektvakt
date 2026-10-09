@@ -59,8 +59,9 @@ være.
    config entries og aldri kan slettes. `tests/test_dso_data.py` har et frosset
    nøkkelsett som blokkerer sletting og tillater nye. Skal et nettselskap inn,
    legges det der med slug og mva-sone, ikke i `dso.py`.
-3. **Topp-3-regelen er domenet, og den bor i `modell.py`.** Nettselskapet
-   fakturerer snittet av de tre høyeste time-snittene fra tre ulike dager i
+3. **Tariffmetoden avgjør regnestykket, og aritmetikken bor i `modell.py`.**
+   Effektvakt støtter `TRE_DØGNMAX_MND`: nettselskapet fakturerer snittet av
+   de tre høyeste time-snittene fra tre ulike dager i
    måneden. En enkelt time over terskelen koster ikke trinnet i seg selv: den
    må dra snittet av de tre over. Er dagens topp allerede blant de tre høyeste,
    er en ny time på samme nivå gratis.
@@ -76,7 +77,10 @@ være.
    antakelsen. Legger du til en terskel, legg den her og la coordinatoren
    kalle, ellers får integrasjonen to svar på det samme spørsmålet igjen.
    Tester i `tests/test_terskelmodell.py`, utledningen i
-   `docs/beregninger.md`.
+   `docs/beregninger.md`. Generatoren beholder `fastledd_metode` fra kilden.
+   `MND_MAX` (Sør Aurdal Energi) og `UKJENT` (Tinfos) er foreløpig sperret
+   med forklaring i oppsettet og repair for eksisterende entries. Ikke kjør
+   topp-3 mot disse bare fordi trinntabellen har samme form.
 4. **Hysterese-invarianten**: oppgang i risiko er umiddelbar, nedgang krever
    holdetid, og flere trinn ned tas ett om gangen med ny timer per trinn.
    `apply_hysteresis` i `hysterese.py`, tester i `tests/test_hysteresis.py`.
@@ -87,14 +91,16 @@ være.
    `unknown`. Sjekken kjører hvert minutt fra `async_setup_entry`.
    Automasjoner og blueprints regner med at `unknown` betyr «vet ikke», ikke
    «alt er fint».
-6. **Failsafe-regelen i blueprintene**: hver blueprint som styrer last slipper
-   den ved neste timeskifte, uavhengig av hva Effektvakt sier, fordi verdien av
-   et kutt slutter der. `max_off_minutes` er bare nødbremsen hvis timeskiftet
-   uteblir, og `min_on_minutes` krever at lasten har stått på en stund før den
-   kan kuttes igjen i den nye timen.
-   Hovedbryteren `switch.effektvakt_automatikk` stopper nye kutt, men avbryter
-   aldri en failsafe-timer som alt går. Fjerner du den grenen, kan en
-   varmtvannsbereder bli stående av i det uendelige.
+6. **Lastvernet eier gjeninnkoblingen.** Lastkutt-blueprintene kaller
+   `effektvakt.styr_last`; de skal ikke eie failsafe med en avbrytbar
+   `wait_for_trigger` eller `delay`. `lastvern.py` lagrer eier,
+   originaltilstand, frist og minste påtid før kutt. Lasten slippes ved
+   timeskiftet eller `max_off_minutes`, det som kommer først. Minste påtid
+   regnes fra bekreftet gjeninnkobling og overlever blink, reload og restart.
+   Bare overtatte laster gjenopprettes; manuelle setpunkt beholdes.
+   Hovedbryteren hindrer nye kutt, aldri gjeninnkobling. Vernet overlever
+   entry-unload og prøver igjen når en utilgjengelig aktuator kommer tilbake.
+   Ekte HA-scenarier for alle tre blueprints ligger i `tests_ha/test_lastvern.py`.
 7. **Repoet er norsk.** Kode, kommentarer, docs og commit-meldinger på norsk,
    uformelt bokmål uten a-endinger. Docstrings og kommentarer i Python-filene
    bruker aa/oe/aa-translitterasjon enkelte steder; følg filen du er i framfor
@@ -110,7 +116,7 @@ repo-strukturen i sin helhet.
   `/effektvakt-static`, melder URL-en inn i Lovelace sitt ressursregister,
   websocket-kommandoen som leverer skiven), `config_flow.py` (config flow og
   options flow, sensorvalidering).
-- **Domene**: fem filer uten en eneste HA-import, så de kan regnes og testes
+- **Domene**: filer uten en eneste HA-import, så de kan regnes og testes
   uten stubber. `modell.py` har topp-3-aritmetikken, terskelmodellen,
   projeksjonen, risikoklassifiseringen og kostnaden. `timeregnskap.py` eier
   timen: trapesintegrasjon, avstemming mot måleren, den ventende timen over
@@ -118,12 +124,14 @@ repo-strukturen i sin helhet.
   `hysterese.py` er `HystereseState` og `apply_hysteresis`. `laster.py` er de
   kuttbare lastene og `compute_tilgjengelig_kutt_kw`. `oppsett.py` slår opp
   trinn-tabellen en config entry faktisk får, og navngir hullene i den.
+  `tid.py` regner varighet og timegrenser i UTC, med lokale kalenderdatoer.
 - **Drift**: `coordinator.py` er ticket, ikke regnestykket. Den leser config
   entry, henter sensorverdier gjennom `avlesning.py`, mater `Timeregnskap`,
   spør `modell.py`, `laster.py` og `hysterese.py`, setter tick-intervallet og
-  skriver tilstanden til `Store`. `avlesning.py` er den eneste andre filen som
-  rører `hass.states`. Legg ny logikk som en fri funksjon, ikke som en metode,
-  og legg den i domenelaget hvis den er ren regning.
+  skriver tilstanden til `Store`. `avlesning.py` leser målegrunnlaget, og
+  `lastvern.py` leser aktuatorer og eier vedvarende kutt gjennom tjenesten
+  `styr_last`, uavhengig av automasjons- og entry-reload. Legg ren regning
+  som frie funksjoner i domenelaget.
 - **Entiteter**: `sensor.py` (seks sensorer), `binary_sensor.py`
   (`binary_sensor.effektvakt_kutt_ned_anbefalt`), `switch.py` (hovedbryteren),
   `diagnostics.py`.
@@ -177,6 +185,7 @@ feil som overlevde fordi testene kodet inn samme antakelse som koden.
 | `custom_components/effektvakt/modell.py`     | Terskelmodellen, projeksjonen, risikoklassifiseringen og kostnaden. Ren Python, se regel 3 |
 | `custom_components/effektvakt/hysterese.py`  | `HystereseState` og `apply_hysteresis`, se regel 4                                         |
 | `custom_components/effektvakt/oppsett.py`     | Trinn-tabellen en config entry får, ukjent DSO-nøkkel og manglende topptrinn                |
+| `custom_components/effektvakt/lastvern.py` | Vedvarende eierskap, fristslipp, minste påtid og retry for lastkutt-blueprintene |
 | `custom_components/effektvakt/laster.py`     | Kuttbare laster fra config entry, `compute_tilgjengelig_kutt_kw` og migreringen fra strategi |
 | `custom_components/effektvakt/const.py`      | Risiko-nivåer og rangering, tick-intervaller, watchdog-terskler, legacy-mapping, klamper   |
 | `custom_components/effektvakt/config_flow.py`| Config flow og options flow, validering av effekt- og energisensor                         |
@@ -203,7 +212,7 @@ just test-unit               # tests/ med stubbet Home Assistant
 just check                   # ruff check, ruff format --check, mypy, vulture
 just test                    # begge, det som kreves før commit
 just test-ha minimum         # tests_ha/ mot ekte HA 2025.1.0, det hacs.json lover
-just test-ha current         # tests_ha/ mot ekte HA 2026.9.2
+just test-ha current         # tests_ha/ mot ekte HA 2026.10.0
 just coverage                # begge suitene slått sammen, feller under 95 %
 pre-commit run --files <filene dine>
 ```

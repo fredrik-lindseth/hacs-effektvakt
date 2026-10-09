@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.util import dt as dt_util_module
 
-from .const import MAX_POWER_CLAMP_W, VALID_ENERGY_UNITS, VALID_POWER_UNITS
+from .const import MAX_POWER_CLAMP_W, VALID_ENERGY_UNITS, VALID_POWER_UNITS, WATCHDOG_STALE_THRESHOLD_SECONDS
+from .tid import tidslinje
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
+def read_power_kw(hass: HomeAssistant, entity_id: str | None, *, now: datetime | None = None) -> float | None:
     """Les power-sensor og returner verdi normalisert til kW.
 
     Returnerer None hvis sensor ikke finnes, er unavailable, har ugyldig
@@ -38,6 +39,8 @@ def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
     state = hass.states.get(entity_id)
     if state is None or state.state in ("unknown", "unavailable", None):
         return None
+    if now is not None and not power_report_is_current(state, now=now):
+        return None
     try:
         value = float(state.state)
     except (ValueError, TypeError):
@@ -47,10 +50,10 @@ def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
     unit = (state.attributes or {}).get("unit_of_measurement")
     if unit not in VALID_POWER_UNITS:
         return None
+    if abs(value) * (1000 if unit == "kW" else 1) > MAX_POWER_CLAMP_W:
+        _LOGGER.warning("power_sensor %s = %s %s > clamp %s W", entity_id, value, unit, MAX_POWER_CLAMP_W)
+        return None
     if unit == "W":
-        if value > MAX_POWER_CLAMP_W:
-            _LOGGER.warning("power_sensor %s = %s W > clamp %s", entity_id, value, MAX_POWER_CLAMP_W)
-            return None
         return value / 1000
     return value  # kW
 
@@ -136,3 +139,20 @@ def read_state_timestamp(hass: HomeAssistant, entity_id: str | None, *, now: dat
     if (lokal.tzinfo is None) != (now.tzinfo is None):
         return None
     return lokal
+
+
+def power_report_is_current(state: object, *, now: datetime) -> bool:
+    """Rapportalder, også når tallet er uendret. last_changed er ikke en puls.
+
+    Eldre kilder uten last_reported bruker last_updated. Mangler begge, kan
+    vi ikke avgjøre alder; verdien valideres fortsatt av read_power_kw.
+    """
+    rapport = getattr(state, "last_reported", None)
+    if not isinstance(rapport, datetime):
+        rapport = getattr(state, "last_updated", None)
+    if not isinstance(rapport, datetime):
+        return True
+    if (rapport.tzinfo is None) != (now.tzinfo is None):
+        return False
+    alder = (tidslinje(now) - tidslinje(rapport)).total_seconds()
+    return 0 <= alder <= WATCHDOG_STALE_THRESHOLD_SECONDS

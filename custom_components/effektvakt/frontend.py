@@ -213,16 +213,16 @@ def _finn_entry(hass: HomeAssistant, entity_id: str | None) -> ConfigEntry | Non
     return None
 
 
-def _kapasitetstrinn(entry: ConfigEntry) -> list[tuple[float, int]]:
+def _kapasitetstrinn(entry: ConfigEntry) -> list[tuple[float, float]]:
     """Trinn fra coordinatoren naar entryen er lastet, ellers rett fra config."""
     coordinator = getattr(entry, "runtime_data", None)
     trinn = getattr(coordinator, "kapasitetstrinn", None)
     if trinn:
-        return [(float(t[0]), int(t[1])) for t in trinn]
+        return [(float(t[0]), float(t[1])) for t in trinn]
 
     custom = entry.data.get(CONF_KAPASITETSTRINN_CUSTOM)
     if custom:
-        return [(float(t[0]), int(t[1])) for t in custom]
+        return [(float(t[0]), float(t[1])) for t in custom]
     dso_info = KAPASITETSTRINN_PER_DSO.get(entry.data.get(CONF_DSO, ""))
     return list(dso_info["kapasitetstrinn"]) if dso_info else []
 

@@ -1,10 +1,10 @@
 set_safety_buffer:
   name: Sett sikkerhetsmargin
-  description: Endre safety_buffer_kw runtime uten reload.
+  description: Endre sikkerhetsmarginen uten å laste integrasjonen på nytt.
   fields:
     kw:
       name: kW
-      description: Ny safety_buffer-verdi i kW
+      description: Ny sikkerhetsmargin i kW
       required: true
       selector:
         number:
@@ -12,7 +12,64 @@ set_safety_buffer:
           max: 5
           step: 0.1
           mode: slider
-
 reset_topp_3:
   name: Nullstill topp-3-buffer
-  description: Tøm daily_max-historikken for inneværende måned. Debug-hjelp.
+  description: Tøm historikken over døgnmaks for inneværende måned.
+styr_last:
+  name: Styr last med gjeninnkoblingsvern
+  description: Be om kutt eller gjeninnkobling. Overtatte laster slippes ved neste hele time eller lengste
+    kutttid, det som kommer først. Eierskap og minste påtid overlever reload og omstart.
+  fields:
+    entity_id:
+      name: Last
+      required: true
+      selector:
+        entity:
+          domain:
+          - switch
+          - climate
+      description: Bryter eller climate-entitet som skal styres. En last som allerede er av, overtas ikke.
+    eier:
+      name: Automasjon som eier kuttet
+      required: true
+      selector:
+        entity:
+          domain: automation
+      description: Automasjonen som ber om kuttet. To automasjoner kan ikke eie samme aktive kutt.
+    kutt:
+      name: Be om kutt
+      required: true
+      selector:
+        boolean: null
+      description: På ber om kutt; av gjenoppretter bare en last denne automasjonen eier.
+    automatikk_switch:
+      name: Automatikkbryter
+      selector:
+        entity:
+          domain: switch
+      description: Valgfri hovedbryter. Alt annet enn på hindrer nye kutt og ber om gjeninnkobling.
+    max_off_minutes:
+      name: Lengste kutt i minutter
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 240
+      description: Neste hele time kan slippe lasten tidligere enn denne grensen.
+    min_on_minutes:
+      name: Minste påtid i minutter
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+      description: Regnes fra bekreftet gjeninnkobling, også over reload og omstart.
+    min_temp:
+      name: Setpunkt under kutt
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 30
+          unit_of_measurement: °C
+      description: Setpunkt for climate under kuttet. Forrige setpunkt lagres automatisk.

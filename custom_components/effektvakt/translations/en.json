@@ -11,7 +11,7 @@
       },
       "sensors": {
         "title": "Select sensors",
-        "description": "Effektvakt needs a power sensor (instant power in W or kW) and ideally an energy sensor (cumulative kWh).",
+        "description": "Effektvakt needs a power sensor (instantaneous power in W or kW) and ideally an energy sensor (cumulative Wh or kWh).",
         "data": {
           "power_sensor": "Power sensor (instant)",
           "energy_sensor": "Energy sensor (cumulative, optional but recommended)",
@@ -22,7 +22,7 @@
         "title": "Custom capacity tiers",
         "description": "Enter your own kW thresholds and monthly prices, lowest first. Write the top tier with null as the threshold to make it unbounded: [[2, 155], [5, 250], [null, 415]]. Leave it out and Effektvakt has no idea what consumption above the highest number costs.",
         "data": {
-          "kapasitetstrinn_custom": "Capacity tiers (JSON, e.g. [[2, 130], [5, 230]])"
+          "kapasitetstrinn_custom": "Capacity tiers (JSON, e.g. [[2, 130], [5, 230], [null, 400]])"
         }
       }
     },
@@ -32,7 +32,8 @@
       "energy_unit_invalid": "Energy sensor must have unit Wh or kWh",
       "peak_sensor_warning": "Sensor looks like a peak/average aggregate. Pick an instant sensor or confirm.",
       "kapasitetstrinn_invalid": "Capacity tiers must be list of [kW, NOK] pairs sorted ascending",
-      "already_configured": "This power sensor is already configured"
+      "already_configured": "This power sensor is already configured",
+      "fastledd_metode_ikke_stoettet": "Effektvakt supports the average of three daily peaks. This grid company uses a different or unverified method."
     },
     "abort": {
       "already_configured": "Already configured"
@@ -144,6 +145,10 @@
     "ukjent_dso": {
       "title": "Effektvakt no longer knows this grid company",
       "description": "The configuration points at the grid company «{dso}», which is not in the capacity tier table. It has been removed or renamed since you set up Effektvakt. Without capacity tiers neither risk nor cost can be computed, and the sensors stay empty. Remove the configuration and add it again with the correct grid company."
+    },
+    "fastledd_metode_ikke_stoettet": {
+      "title": "Unsupported capacity tariff method",
+      "description": "The grid company {dso} uses {metode}. Effektvakt currently supports only the average of three daily peaks. Risk and cost advice is disabled to avoid controlling loads with the wrong tariff model. Keep this configuration while waiting for support; do not select another grid company to bypass this check."
     }
   },
   "selector": {
@@ -153,12 +158,17 @@
         "like_under_terskel": "Just under the threshold",
         "over_terskel": "Over the threshold"
       }
+    },
+    "dso": {
+      "options": {
+        "custom": "Custom"
+      }
     }
   },
   "services": {
     "set_safety_buffer": {
       "name": "Set safety buffer",
-      "description": "Change safety_buffer_kw without reload.",
+      "description": "Change the safety buffer without reloading the integration.",
       "fields": {
         "kw": {
           "name": "kW",
@@ -168,7 +178,52 @@
     },
     "reset_topp_3": {
       "name": "Reset top-3 buffer",
-      "description": "Clear daily_max history for the current month."
+      "description": "Clear daily peak history for the current month."
+    },
+    "styr_last": {
+      "name": "Control load with restoration guard",
+      "description": "Request a cut or restoration. Owned loads are restored at the next hour or maximum cut duration, whichever comes first. Ownership and minimum time on survive reloads and restarts.",
+      "fields": {
+        "entity_id": {
+          "name": "Load",
+          "description": "Switch or climate entity to control. A load already off is not claimed."
+        },
+        "eier": {
+          "name": "Owning automation",
+          "description": "Automation responsible for the cut. Two automations cannot own the same active cut."
+        },
+        "kutt": {
+          "name": "Request load cut",
+          "description": "True requests a cut; false restores only a load owned by this automation."
+        },
+        "automatikk_switch": {
+          "name": "Automation switch",
+          "description": "Optional main switch. Anything other than on blocks new cuts and requests restoration."
+        },
+        "max_off_minutes": {
+          "name": "Maximum cut duration in minutes",
+          "description": "The next whole hour may restore the load earlier than this limit."
+        },
+        "min_on_minutes": {
+          "name": "Minimum time on in minutes",
+          "description": "Measured from confirmed restoration, including across reloads and restarts."
+        },
+        "min_temp": {
+          "name": "Cut temperature",
+          "description": "Climate setpoint during the cut. The previous setpoint is stored automatically."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "lastvern_ugyldig_last": {
+      "message": "The restoration guard supports only switch and climate entities."
+    },
+    "lastvern_ugyldig_eier": {
+      "message": "The owner must be the automation requesting the cut."
+    },
+    "lastvern_opptatt": {
+      "message": "{entity_id} is already controlled by {eier}."
     }
   }
 }

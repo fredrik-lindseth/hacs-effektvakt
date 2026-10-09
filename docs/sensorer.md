@@ -51,7 +51,7 @@ Skal du legge til en entitet: unique_id og entity_id skal ha samme nøkkel som `
 
 Navnet stemmer fortsatt: marginen er avstanden til det trinnet måneden faktisk kan ende på, og krysser du den, er det neste trinn du havner på. Fram til september 2026 var det ikke sant. Da målte sensoren mot `max(neste terskel, snitt av topp-2 dager)`, et tall uten betydning, og en lav projeksjon kunne gjøre «neste trinn» til et trinn brukeren for lengst hadde passert.
 
-**Pålitelighet**: Avhenger av projisert time-snitt, og er mer usikker tidlig i timen. Er verdien `unknown`, finnes det ikke noe dyrere trinn å måle mot: enten er nettselskapet ukjent, eller så ligger måneden alt på øverste trinn.
+**Pålitelighet**: Avhenger av projisert time-snitt, og er mer usikker tidlig i timen. `unknown` kan bety manglende eller utdaterte effektmålinger, ukjent eller sperret tariffmetode, eller at måneden alt ligger på øverste trinn. Se `beregning_gyldig` og `maalegrunnlag_problem` før du tolker en ukjent margin.
 
 ---
 
@@ -253,7 +253,7 @@ kapasitetstrinn:
 
 Siden de to øverste risikonivåene krever at timen faktisk koster penger, gjør den også det. Setter du `min_risiko_for_kutt` til `naermer_seg_terskel`, slår sensoren på også for timer som er gratis; det er den aggressive innstillingen, og den er ment slik.
 
-**Verdier**: `on` (vises som «Kutt anbefalt»), `off` («Ingen handling»), `unknown` (coordinator stale)
+**Verdier**: `on` (vises som «Kutt anbefalt»), `off` («Ingen handling»), `unknown` (manglende beregningsgrunnlag eller coordinator som har stoppet)
 
 **Typisk bruk**: Trigger i enkel_lastkutt.yaml og climate_min_temp.yaml. Er en enklere grensesnitt enn å lese `risiko_niva` direkte.
 
@@ -271,7 +271,7 @@ Sensoren følger ikke switchen. Den sier at risikoen er der, ikke at noen gjør 
 
 **Overlever omstart**: ja. Alt annet enn et lagret `off`, altså første oppstart, tapt historikk og `unavailable`, gir `on`.
 
-**Hva den ikke gjør**: den rører ikke beregningen. Projisert time-snitt, risiko og kostnad regnes og vises som før, så du ser fortsatt hva timen koster mens du lar berederen gå. Den avbryter heller ikke et kutt som pågår; lasten kommer tilbake ved neste timeskifte, og senest når blueprintets `max_off_minutes` løper ut. Se [blueprints.md](blueprints.md) for hvordan automasjonene leser den.
+**Hva den ikke gjør**: den rører ikke beregningen. Projisert time-snitt, risiko og kostnad regnes og vises som før, så du ser fortsatt hva timen koster mens du lar berederen gå. Ved neste blueprint-vurdering, senest innen ett minutt, ber avslått automatikk om gjeninnkobling av eide laster. Lastvernets lagrede frist og gjenforsøk gjelder fortsatt. Se [blueprints.md](blueprints.md) for hvordan automasjonene leser den.
 
 ---
 
@@ -291,14 +291,17 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | `time_tak_kw`                 | kW       | `max(dagens_maks_kw, dagstak_kw)`: det marginen måles mot         |
 | `dagens_maks_kw`              | kW       | Høyeste ferdige time i dag                                        |
 | `topp_2_andre_dager_kw`       | kW       | Sum av de to høyeste dagsmaksene fra andre dager enn i dag        |
-| `kutt_anbefalt_kw`            | kW       | `max(0, -margin)`: hvor mye som bør kuttes nå                     |
+| `kutt_anbefalt_kw`            | kW       | Momentant kutt: `max(0, -margin) / gjenstående timer`                     |
 | `kan_legge_paa_kw`            | kW       | `max(0, margin)`: hvor mye time-snittet tåler å stige             |
 | `kan_legge_paa_resten_av_timen_kw` | kW  | Hvor mye last du kan slå på nå og la stå timen ut                 |
-| `last_update`                 | ISO 8601 | Tidspunkt for siste vellykkede coordinator-oppdatering            |
+| `last_update`                 | ISO 8601 | Tidspunkt for siste coordinator-oppdatering; ikke bevis på fersk måling |
+| `maalegrunnlag_gyldig`        | bool | Om effektsensoren har en gyldig, fersk verdi |
+| `beregning_gyldig`            | bool | Om både målegrunnlag og støttet tariffgrunnlag finnes |
+| `maalegrunnlag_problem`       | tekst | Årsak til at beregningen ikke kan gi råd, ellers `null` |
 
 `kan_legge_paa_kw` og `kan_legge_paa_resten_av_timen_kw` svarer på to forskjellige spørsmål. Det første er hvor mye time-snittet tåler å stige, det andre hvor mye last du kan slå på. En last som står på i ti av seksti minutter flytter snittet med en sjettedel av effekten sin, så kl. 18:50 med 1 kW margin er svaret 6 kW og ikke 1. Det er «kan jeg sette på vaskemaskinen nå», og det er hele grunnen til at tallet finnes. Utledningen står i [beregninger.md](beregninger.md#resten-av-timen).
 
-Radene fra `maal_terskel_kw` til `topp_2_andre_dager_kw` er terskelmodellen, i den rekkefølgen den regnes. `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw` og `kan_legge_paa_kw` er `null` når det ikke finnes noe dyrere trinn å unngå, altså ved ukjent nettselskap eller på øverste trinn. Se [beregninger.md](beregninger.md#terskelmodellen).
+Radene fra `maal_terskel_kw` til `topp_2_andre_dager_kw` er terskelmodellen, i den rekkefølgen den regnes. `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw` og `kan_legge_paa_kw` er `null` når måle-/tariffgrunnlaget mangler, eller når måneden er på øverste trinn. Bare det siste betyr at et dyrere trinn ikke finnes. Se [beregninger.md](beregninger.md#terskelmodellen).
 
 Last-attributtene ligger bare på `sensor.effektvakt_tilgjengelig_kutt`, og kostnadsattributtene bare på `sensor.effektvakt_kostnad_neste_trinn`.
 

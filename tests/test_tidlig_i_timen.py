@@ -113,7 +113,9 @@ def test_fradraget_tar_oss_aldri_under_det_timen_alt_har_brukt():
         elapsed_h=0.9,
     )
     assert kriterium.varig_projeksjon_kw == pytest.approx(5.2)
-    assert kriterium.oppfylt is True
+    assert kriterium.oppfylt is False
+    assert kriterium.mulig_besparelse_kr == 165
+    assert kriterium.unngaaelig_besparelse_kr == 0
 
 
 BKK = [

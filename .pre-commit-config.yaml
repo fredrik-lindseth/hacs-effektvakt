@@ -73,7 +73,7 @@ repos:
       - id: dso_kilde
         name: DSO-tabell mot fri-nettleie
         # Henter tariffene fra nett med mindre FRI_NETTLEIE_ROOT peker på en utsjekk
-        entry: python3 scripts/generer_dso_fra_fri_nettleie.py --check
+        entry: just dso-sjekk
         language: system
         pass_filenames: false
         files: ^(custom_components/effektvakt/dso\.py|scripts/(generer_dso_fra_fri_nettleie\.py|dso_kilder\.json))$

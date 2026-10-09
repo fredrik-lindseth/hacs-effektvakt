@@ -70,4 +70,10 @@ class EffektvaktKuttNedAnbefaltBinarySensor(CoordinatorEntity, BinarySensorEntit
     def extra_state_attributes(self) -> dict[str, Any]:
         """Bryterens stilling, slik at et dashboard slipper å slå opp
         entitets-id-en til en switch som avhenger av config entryen."""
-        return {"automatikk_aktiv": self.coordinator.automatikk_aktiv}
+        data = self.coordinator.data or {}
+        return {
+            "automatikk_aktiv": self.coordinator.automatikk_aktiv,
+            "maalegrunnlag_gyldig": data.get("maalegrunnlag_gyldig"),
+            "beregning_gyldig": data.get("beregning_gyldig"),
+            "maalegrunnlag_problem": data.get("maalegrunnlag_problem"),
+        }

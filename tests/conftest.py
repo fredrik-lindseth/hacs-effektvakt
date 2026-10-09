@@ -18,6 +18,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 # Mock Home Assistant-moduler før vi importerer vår kode
 sys.modules["homeassistant"] = MagicMock()
 
+
+class _HomeAssistantError(Exception):
+    """Tjenestefeil i enhetstester; ekte HA testes separat."""
+
+
+class _ServiceValidationError(_HomeAssistantError):
+    """Valideringsfeil fra en tjeneste."""
+
+
+_exceptions_mod = MagicMock()
+_exceptions_mod.HomeAssistantError = _HomeAssistantError
+_exceptions_mod.ServiceValidationError = _ServiceValidationError
+sys.modules["homeassistant.exceptions"] = _exceptions_mod
+
+
 _const_mod = MagicMock()
 _const_mod.STATE_OFF = "off"
 _const_mod.STATE_ON = "on"

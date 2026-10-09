@@ -14,6 +14,7 @@ import pytest
 from homeassistant.helpers import issue_registry as ir
 
 from custom_components.effektvakt import (
+    ISSUE_FASTLEDD_METODE,
     ISSUE_MANGLER_TOPPTRINN,
     ISSUE_UKJENT_DSO,
     async_setup_entry,
@@ -128,9 +129,21 @@ async def test_egendefinerte_trinn_uten_topptrinn_gir_repair_melding():
 
 
 @pytest.mark.asyncio
-async def test_et_oppsett_uten_problemer_rydder_begge_meldingene():
+async def test_et_oppsett_uten_problemer_rydder_meldingene():
     """Har brukeren rettet opp, skal meldingen vekk uten at noen maa trykke bort noe."""
     await _sett_opp(make_entry(entry_id="abc", dso="bkk"))
 
     assert ir.async_create_issue.call_count == 0
-    assert _slettede_issues() == [f"{ISSUE_UKJENT_DSO}_abc", f"{ISSUE_MANGLER_TOPPTRINN}_abc"]
+    assert _slettede_issues() == [
+        f"{ISSUE_UKJENT_DSO}_abc",
+        f"{ISSUE_MANGLER_TOPPTRINN}_abc",
+        f"{ISSUE_FASTLEDD_METODE}_abc",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ikke_stoettet_fastledd_metode_gir_repair_melding():
+    await _sett_opp(make_entry(entry_id="abc", dso="sor_aurdal_energi"))
+    issue = _opprettede_issues()[f"{ISSUE_FASTLEDD_METODE}_abc"]
+    assert issue["translation_placeholders"] == {"dso": "sor_aurdal_energi", "metode": "MND_MAX"}
+    assert issue["is_fixable"] is False

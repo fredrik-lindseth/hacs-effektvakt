@@ -123,7 +123,7 @@ def test_binary_sensor_folger_ikke_bryteren():
 
     bs = EffektvaktKuttNedAnbefaltBinarySensor(coord)
     assert bs.is_on is True
-    assert bs.extra_state_attributes == {"automatikk_aktiv": False}
+    assert bs.extra_state_attributes["automatikk_aktiv"] is False
 
 
 def test_binary_sensor_eksponerer_bryteren_som_attributt():
@@ -134,4 +134,4 @@ def test_binary_sensor_eksponerer_bryteren_som_attributt():
     coord.automatikk_aktiv = True
 
     bs = EffektvaktKuttNedAnbefaltBinarySensor(coord)
-    assert bs.extra_state_attributes == {"automatikk_aktiv": True}
+    assert bs.extra_state_attributes["automatikk_aktiv"] is True

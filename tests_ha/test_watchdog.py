@@ -27,7 +27,7 @@ from custom_components.effektvakt.const import (
 )
 from custom_components.effektvakt.coordinator import EffektvaktCoordinator
 
-from .conftest import SENSOR_IDS
+from .conftest import LAST_SENSOR, POWER_SENSOR, SENSOR_IDS
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 TALLSENSORER = SENSOR_IDS
 
 
-async def _tikk(hass: HomeAssistant, freezer, sekunder: int) -> None:
+async def _tikk(hass: HomeAssistant, freezer, sekunder: int, *, rapporter: bool = False) -> None:
     """Flytt klokken framover i steg og la timerne kjoere underveis.
 
     Ett stort hopp ville latt alle timerne forfalle i samme runde, og da
@@ -48,6 +48,10 @@ async def _tikk(hass: HomeAssistant, freezer, sekunder: int) -> None:
     steg = WATCHDOG_INTERVAL_SECONDS // 2
     for _ in range(sekunder // steg):
         freezer.tick(timedelta(seconds=steg))
+        if rapporter:
+            for sensor in (POWER_SENSOR, LAST_SENSOR):
+                state = hass.states.get(sensor)
+                hass.states.async_set(sensor, state.state, state.attributes)
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
 
@@ -79,7 +83,7 @@ async def test_watchdogen_slaar_ikke_til_paa_en_frisk_coordinator(
     hass: HomeAssistant, freezer, oppsett: MockConfigEntry
 ) -> None:
     """Fem minutter i normal drift skal ikke gi et eneste «vet ikke»."""
-    await _tikk(hass, freezer, 300)
+    await _tikk(hass, freezer, 300, rapporter=True)
 
     for entity_id in TALLSENSORER:
         assert hass.states.get(entity_id).state != STATE_UNKNOWN, entity_id
@@ -95,6 +99,9 @@ async def test_sensorene_kommer_tilbake_naar_coordinatoren_svarer_igjen(
 
     # Neste vellykkede runde, uten aa vente paa tick-intervallet: poenget er
     # at watchdogen ikke har satt noe i en tilstand den ikke kommer ut av.
+    for sensor in (POWER_SENSOR, LAST_SENSOR):
+        state = hass.states.get(sensor)
+        hass.states.async_set(sensor, state.state, state.attributes)
     await oppsett.runtime_data.async_refresh()
     await hass.async_block_till_done()
 

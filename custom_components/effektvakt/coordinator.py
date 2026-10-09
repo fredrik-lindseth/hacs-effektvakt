@@ -58,9 +58,11 @@ from .modell import (
     compute_elapsed_h,
     compute_kostnad,
     compute_projected_avg,
+    topp_n_sum,
     vurder_kuttkriterium,
 )
 from .oppsett import TrinnOppsett, les_trinn
+from .tid import tidslinje
 from .timeregnskap import Timeregnskap
 
 if TYPE_CHECKING:
@@ -145,7 +147,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             dso_id=entry.data.get(CONF_DSO),
             custom=entry.data.get(CONF_KAPASITETSTRINN_CUSTOM),
         )
-        self.kapasitetstrinn: list[tuple[float, int]] = self.trinn_oppsett.trinn
+        self.kapasitetstrinn: list[tuple[float, float]] = self.trinn_oppsett.trinn
         _logg_trinnproblemer(self.trinn_oppsett)
 
         # Mutable state
@@ -221,8 +223,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         await self._load_stored_data()
         now = dt_util_now()
 
-        power_kw = read_power_kw(self.hass, self.power_sensor)
-        current_kw = power_kw or 0.0
+        power_kw = read_power_kw(self.hass, self.power_sensor, now=now)
+        current_kw = power_kw
         energy_now = read_energy_kwh(self.hass, self.energy_sensor)
 
         self._regnskap.akkumuler(now=now, power_kw=power_kw)
@@ -241,6 +243,14 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(avlesninger)
 
         elapsed_h = compute_elapsed_h(now)
+        if current_kw is None or not self.kapasitetstrinn:
+            # En ugyldig avlesning er ikke null forbruk. Hysteresen får heller
+            # ikke bruke målehullet som dokumentasjon på fallende risiko.
+            self._hysterese_state.pending_nivå = None
+            self._hysterese_state.pending_since = None
+            self._last_successful_update = now
+            await self._persist()
+            return self._uten_beregningsgrunnlag(now=now, current_kw=current_kw, elapsed_h=elapsed_h)
         projected_avg = compute_projected_avg(
             actual_kwh_this_hour=self._regnskap.current_hour_kwh,
             current_kw=current_kw,
@@ -252,6 +262,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             daily_max_kw=self._regnskap.daily_max_kw,
             today=now.date(),
             projected_kw=projected_avg,
+            elapsed_h=elapsed_h,
         )
         kriterium = vurder_kuttkriterium(
             trinn=self.kapasitetstrinn,
@@ -260,6 +271,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             projected_kw=projected_avg,
             actual_kwh_this_hour=self._regnskap.current_hour_kwh,
             elapsed_h=elapsed_h,
+            tilgjengelig_kutt_kw=tilgjengelig_kutt_kw,
         )
         resten_av_timen = beregn_resten_av_timen(margin_kw=terskel.margin_kw, elapsed_h=elapsed_h)
         topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
@@ -303,6 +315,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         await self._persist()
 
         return {
+            "maalegrunnlag_gyldig": True,
+            "beregning_gyldig": True,
+            "maalegrunnlag_problem": None,
             "projected_avg_kw": round(projected_avg, 3),
             "current_kw": round(current_kw, 3),
             "actual_kwh_this_hour": round(self._regnskap.current_hour_kwh, 3),
@@ -326,6 +341,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
             "timen_flytter_trinnet": kriterium.oppfylt,
+            "mulig_besparelse_kr": kriterium.mulig_besparelse_kr,
+            "unngaaelig_besparelse_kr": kriterium.unngaaelig_besparelse_kr,
+            "kutt_mulig": kriterium.kutt_mulig,
             "varig_projeksjon_kw": round(kriterium.varig_projeksjon_kw, 3),
             "kortvarig_paaslag_kw": round(kriterium.kortvarig_paaslag_kw, 3),
             "last_update": now.isoformat(),
@@ -337,6 +355,52 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             **kostnad_felter,
         }
 
+    def _uten_beregningsgrunnlag(self, *, now: datetime, current_kw: float | None, elapsed_h: float) -> dict:
+        """Behold kjent energi og historikk, publiser ukjente råd som None."""
+        topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
+        ukjente = (
+            "projected_avg_kw",
+            "margin_kw",
+            "time_tak_kw",
+            "dagstak_kw",
+            "maal_terskel_kw",
+            "maal_trinn_kr",
+            "dagens_maks_kw",
+            "topp_2_andre_dager_kw",
+            "kutt_anbefalt_kw",
+            "kan_legge_paa_kw",
+            "kan_legge_paa_resten_av_timen_kw",
+            "risiko_niva",
+            "raw_risiko_niva",
+            "timen_flytter_trinnet",
+            "varig_projeksjon_kw",
+            "kortvarig_paaslag_kw",
+            "mulig_besparelse_kr",
+            "unngaaelig_besparelse_kr",
+            "kutt_mulig",
+            "tilgjengelig_kutt_kw",
+            "kuttet_naa_kw",
+        )
+        return {
+            **dict.fromkeys((*ukjente, *KOSTNAD_FELT_NAVN)),
+            "maalegrunnlag_gyldig": current_kw is not None,
+            "beregning_gyldig": False,
+            "maalegrunnlag_problem": "effekt_ukjent_eller_utdatert"
+            if current_kw is None
+            else "kapasitetstrinn_mangler",
+            "current_kw": rund(current_kw),
+            "actual_kwh_this_hour": round(self._regnskap.current_hour_kwh, 3),
+            "kwh_maalt_fra_minutt": self._regnskap.maalt_fra_minutt(),
+            "elapsed_minutes_in_hour": int(elapsed_h * 60),
+            "minutter_igjen_av_timen": (1 - elapsed_h) * 60,
+            "topp_3_snitt_denne_maned_kw": rund(topp_n_sum(self._regnskap.daily_max_kw.values(), n=3) / 3),
+            "topp_3_dager": [asdict(dag) for dag in topp_3.dager],
+            "topp_3_inkluderer_i_dag": topp_3.i_dag_teller_med,
+            "dag_som_ryker": None if topp_3.dag_som_ryker is None else asdict(topp_3.dag_som_ryker),
+            "kutt_kilder": [],
+            "last_update": now.isoformat(),
+        }
+
     def _les_laster(self) -> list[LastAvlesning]:
         """Les effekt, navn og bryterstilling for hver konfigurerte last.
 
@@ -345,7 +409,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         """
         avlesninger = []
         for last in self.laster:
-            kw = read_power_kw(self.hass, last.effekt_sensor)
+            kw = read_power_kw(self.hass, last.effekt_sensor, now=dt_util_now())
             avlesninger.append(
                 LastAvlesning(
                     oppsett=last,
@@ -365,4 +429,4 @@ def is_coordinator_stale(
     """True hvis siste vellykkede oppdatering er eldre enn watchdog-terskel."""
     if last_successful_update is None:
         return True
-    return (now - last_successful_update).total_seconds() > WATCHDOG_STALE_THRESHOLD_SECONDS
+    return (tidslinje(now) - tidslinje(last_successful_update)).total_seconds() > WATCHDOG_STALE_THRESHOLD_SECONDS

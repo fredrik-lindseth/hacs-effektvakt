@@ -89,8 +89,9 @@ def _dso_options() -> list[selector.SelectOptionDict]:
     options = [
         selector.SelectOptionDict(value=k, label=v["navn"])
         for k, v in sorted(KAPASITETSTRINN_PER_DSO.items(), key=lambda kv: kv[1]["navn"])
+        if v["fastledd_metode"] == "TRE_DØGNMAX_MND"
     ]
-    options.append(selector.SelectOptionDict(value="custom", label="Egendefinert"))
+    options.append(selector.SelectOptionDict(value="custom", label="custom"))
     return options
 
 
@@ -247,7 +248,7 @@ def _last_valg(laster: list[LastOppsett]) -> list[selector.SelectOptionDict]:
     ]
 
 
-def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
+def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, float]]:
     """Egendefinerte trinn fra tekstfeltet, som `[kW, kr]`-par sortert stigende.
 
     `null` som terskel er det oeverste trinnet, det uten oevre grense, slik de
@@ -265,7 +266,7 @@ def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
     if not isinstance(raw, list) or not raw:
         raise ValueError("kapasitetstrinn maa vaere en ikke-tom liste")
 
-    trinn: list[tuple[float | None, int]] = []
+    trinn: list[tuple[float | None, float]] = []
     forrige_kw = -1.0
     for rad in raw:
         if not (isinstance(rad, list | tuple) and len(rad) == 2):
@@ -274,7 +275,7 @@ def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, int]]:
         kw = math.inf if terskel is None else terskel
         if kw <= forrige_kw:
             raise ValueError("trinnene maa sorteres stigende, og bare det siste kan vaere null")
-        trinn.append((terskel, int(rad[1])))
+        trinn.append((terskel, float(rad[1])))
         forrige_kw = kw
     return trinn
 
@@ -292,17 +293,24 @@ class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
         self._peak_advart = False
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_sensors()
+            info = KAPASITETSTRINN_PER_DSO.get(user_input[CONF_DSO])
+            if info is not None and info["fastledd_metode"] != "TRE_DØGNMAX_MND":
+                errors[CONF_DSO] = "fastledd_metode_ikke_stoettet"
+            else:
+                self._data.update(user_input)
+                return await self.async_step_sensors()
 
         return self.async_show_form(
             step_id="user",
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_DSO, default=DEFAULT_DSO): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=_dso_options(),
+                            translation_key=CONF_DSO,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         ),
                     ),

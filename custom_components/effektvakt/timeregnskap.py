@@ -28,6 +28,7 @@ from datetime import date, datetime, timedelta
 
 from .const import MAX_ENERGY_DELTA_KWH
 from .modell import top_n_average
+from .tid import legg_til_time, tidslinje
 
 # Trapesintegrasjonen antar at effekten mellom to tick lå et sted mellom de to
 # avlesningene. Går det lenger enn dette, har HA vært nede eller stått fast, og
@@ -65,7 +66,7 @@ def hour_state_is_current(*, hour_start: datetime | None, now: datetime) -> bool
         return False
     if (hour_start.tzinfo is None) != (now.tzinfo is None):
         return False
-    if not timedelta(0) <= now - hour_start < timedelta(hours=1):
+    if not timedelta(0) <= tidslinje(now) - tidslinje(hour_start) < timedelta(hours=1):
         return False
     return (hour_start.hour, hour_start.utcoffset()) == (now.hour, now.utcoffset())
 
@@ -78,7 +79,7 @@ def timer_mellom(fra: datetime | None, til: datetime) -> float | None:
     """
     if fra is None or (fra.tzinfo is None) != (til.tzinfo is None):
         return None
-    return (til - fra).total_seconds() / 3600
+    return (tidslinje(til) - tidslinje(fra)).total_seconds() / 3600
 
 
 @dataclass(frozen=True)
@@ -117,12 +118,14 @@ def integrer_effekt(
     timer = timer_mellom(forrige_ts, na)
     if forrige_ts is None or timer is None or timer <= 0 or timer > MAX_INTEGRATION_GAP_H:
         return IntegrertEnergi(foer_timeskiftet_kwh=0.0, etter_timeskiftet_kwh=0.0)
-    if timeskifte is None or not forrige_ts < timeskifte <= na:
+    if timeskifte is None or not tidslinje(forrige_ts) < tidslinje(timeskifte) <= tidslinje(na):
         return IntegrertEnergi(
             foer_timeskiftet_kwh=0.0,
             etter_timeskiftet_kwh=(forrige_kw + na_kw) / 2 * timer,
         )
-    andel_foer = (timeskifte - forrige_ts).total_seconds() / (na - forrige_ts).total_seconds()
+    andel_foer = (tidslinje(timeskifte) - tidslinje(forrige_ts)).total_seconds() / (
+        tidslinje(na) - tidslinje(forrige_ts)
+    ).total_seconds()
     kw_ved_skiftet = forrige_kw + (na_kw - forrige_kw) * andel_foer
     return IntegrertEnergi(
         foer_timeskiftet_kwh=(forrige_kw + kw_ved_skiftet) / 2 * timer * andel_foer,
@@ -176,9 +179,12 @@ def tidsandeler(
     """
     if fra is None or (fra.tzinfo is None) != (til.tzinfo is None):
         return Tidsandeler(forrige_time=0.0, denne_timen=0.0)
+    fra, til, time_start = tidslinje(fra), tidslinje(til), tidslinje(time_start)
+    if forrige_time_start is not None:
+        forrige_time_start = tidslinje(forrige_time_start)
     if til <= fra:
         return Tidsandeler(forrige_time=0.0, denne_timen=1.0)
-    total = (til - fra).total_seconds()
+    total = (tidslinje(til) - tidslinje(fra)).total_seconds()
     denne = max(0.0, (til - max(fra, time_start)).total_seconds())
     forrige = 0.0
     if forrige_time_start is not None:
@@ -252,6 +258,9 @@ def vektet_estimat(
     """
     if len({t.tzinfo is None for t in (vindu_fra, vindu_til, estimat_til)}) > 1:
         return estimat_kwh
+    vindu_fra, vindu_til, estimat_til = tidslinje(vindu_fra), tidslinje(vindu_til), tidslinje(estimat_til)
+    if dekket_fra is not None:
+        dekket_fra = tidslinje(dekket_fra)
     vindu = (vindu_til - vindu_fra).total_seconds()
     if vindu <= 0:
         return 0.0
@@ -429,7 +438,7 @@ class Timeregnskap:
             estimat_forrige_time_kwh=self._vekt_forrige_time(vindu_fra=vindu_fra, vindu_til=maaler_ts),
             estimat_denne_timen_kwh=vektet_estimat(
                 estimat_kwh=self.estimert_siden_maaler_kwh,
-                vindu_fra=max(vindu_fra, time_start),
+                vindu_fra=max(vindu_fra, time_start, key=tidslinje),
                 vindu_til=maaler_ts,
                 estimat_til=now,
                 dekket_fra=self.dekket_fra,
@@ -504,11 +513,11 @@ class Timeregnskap:
         ventende = self.ventende_time
         if ventende is None:
             return 0.0
-        time_slutt = ventende.hour_start + timedelta(hours=1)
+        time_slutt = legg_til_time(ventende.hour_start)
         return vektet_estimat(
             estimat_kwh=ventende.estimat_kwh,
-            vindu_fra=max(vindu_fra, ventende.hour_start),
-            vindu_til=min(vindu_til, time_slutt),
+            vindu_fra=max(vindu_fra, ventende.hour_start, key=tidslinje),
+            vindu_til=min(vindu_til, time_slutt, key=tidslinje),
             estimat_til=time_slutt,
             dekket_fra=ventende.dekket_fra,
         )
@@ -519,11 +528,11 @@ class Timeregnskap:
         Er tidsstempelet ubrukelig, altså borte, i framtida eller eldre enn den
         forrige avlesningen vår, faller vi tilbake på tidspunktet for ticket.
         """
-        if raa is None or raa > now:
+        if raa is None or tidslinje(raa) > tidslinje(now):
             return now
         if self.siste_maaler_ts is not None:
             forrige = self.siste_maaler_ts
-            if (forrige.tzinfo is None) != (raa.tzinfo is None) or raa < forrige:
+            if (forrige.tzinfo is None) != (raa.tzinfo is None) or tidslinje(raa) < tidslinje(forrige):
                 return now
         return raa
 
@@ -537,8 +546,8 @@ class Timeregnskap:
             return
         if (fra.tzinfo is None) != (self.dekket_fra.tzinfo is None):
             return
-        if fra <= self.dekket_fra:
-            self.dekket_fra = max(time_start, fra)
+        if tidslinje(fra) <= tidslinje(self.dekket_fra):
+            self.dekket_fra = max(time_start, fra, key=tidslinje)
 
     def _finalize_hour(self) -> None:
         """Lås timen som er ferdig inn i daily_max_kw og nullstill akkumulatoren.

@@ -59,72 +59,32 @@ blueprint:
           step: 1
 
 variables:
-  switch_entity: !input switch_entity
-  binary_sensor_entity: !input binary_sensor_entity
   max_off_minutes: !input max_off_minutes
   min_on_minutes: !input min_on_minutes
   automatikk_switch: !input automatikk_switch
+  binary_sensor_entity: !input binary_sensor_entity
+  switch_entity: !input switch_entity
 
+# Gjentatt vurdering tar opp vedvarende risiko etter minste paatid.
+# Gjeninnkoblingen eies av integrasjonen og fortsetter ved automasjonsreload.
 trigger:
   - platform: state
     entity_id: !input binary_sensor_entity
-    to: "on"
-    id: trigger_off
-  - platform: state
-    entity_id: !input binary_sensor_entity
-    to: "off"
-    id: trigger_on
+    to:
+  - platform: time_pattern
+    minutes: "/1"
+  - platform: homeassistant
+    event: start
 
-mode: restart
+mode: queued
+max: 10
 
 action:
-  - choose:
-      - conditions:
-          # Bare kuttingen er gatet. Å slå på igjen skal alltid få gå,
-          # ellers kan en last bli stående av fordi bryteren ble vippet.
-          - condition: trigger
-            id: trigger_off
-          - condition: template
-            value_template: >
-              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
-        sequence:
-          # Løkken kjører én runde per time risikoen varer. Går sensoren av
-          # underveis, avbryter mode: restart hele greia og trigger_on-grenen
-          # slår lasten på.
-          - repeat:
-              sequence:
-                - service: switch.turn_off
-                  target:
-                    entity_id: "{{ switch_entity }}"
-                # Verdien av kuttet slutter ved timeskiftet. Timene måles hver
-                # for seg, så minuttene etter xx:00 sparer ingenting, de
-                # flytter bare forbruket inn i den nye timen.
-                - wait_for_trigger:
-                    - platform: time_pattern
-                      hours: "*"
-                      minutes: 0
-                      seconds: 0
-                  timeout:
-                    minutes: "{{ max_off_minutes }}"
-                  continue_on_timeout: true
-                - service: switch.turn_on
-                  target:
-                    entity_id: "{{ switch_entity }}"
-                - delay:
-                    minutes: "{{ min_on_minutes }}"
-              while:
-                # Henger Effektvakt, står sensoren unknown og ikke on, og da
-                # stopper løkken med lasten på.
-                - condition: state
-                  entity_id: !input binary_sensor_entity
-                  state: "on"
-                - condition: template
-                  value_template: >
-                    {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
-      - conditions:
-          - condition: trigger
-            id: trigger_on
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: "{{ switch_entity }}"
+  - service: effektvakt.styr_last
+    data:
+      entity_id: "{{ switch_entity }}"
+      eier: "{{ this.entity_id }}"
+      kutt: "{{ is_state(binary_sensor_entity, 'on') }}"
+      automatikk_switch: "{{ automatikk_switch }}"
+      max_off_minutes: "{{ max_off_minutes }}"
+      min_on_minutes: "{{ min_on_minutes }}"

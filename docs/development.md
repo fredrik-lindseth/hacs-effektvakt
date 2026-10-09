@@ -17,6 +17,7 @@ custom_components/effektvakt/
     frontend.py         # Statisk servering, Lovelace-ressurs, websocket-kommandoen
     hysterese.py        # HystereseState og apply_hysteresis
     laster.py           # Kuttbare laster, tilgjengelig kutt, observasjon av kutt
+    lastvern.py         # Lagret eierskap, frister, gjeninnkobling og minste påtid
     manifest.json       # HA integration manifest
     modell.py           # Terskelmodell, projeksjon, risiko, kostnad (ren Python)
     oppsett.py          # Trinn-tabellen en config entry faar, og hullene i den
@@ -25,6 +26,7 @@ custom_components/effektvakt/
     strings.json        # Kildeteksten til oversettelsene
     switch.py           # switch.effektvakt_automatikk, hovedbryteren
     timeregnskap.py     # Timen: integrasjon, måleravstemming, dagsmaks, lagring
+    tid.py             # Faktisk varighet og timegrenser i UTC
     translations/       # nb.json og en.json
     www/                # effektvakt-card.js, Lovelace-kortet
 
@@ -98,9 +100,9 @@ Avhengighetene står som `[dependency-groups]` i `pyproject.toml` og er låst i
 | `unit`       | `.venv-unit`       | 3.13   | `tests/` med stubbet Home Assistant          |
 | `kvalitet`   | `.venv-kvalitet`   | 3.13   | ruff, mypy, vulture, pre-commit              |
 | `ha-minimum` | `.venv-ha-minimum` | 3.13   | ekte HA 2025.1.0, det `hacs.json` lover      |
-| `ha-current` | `.venv-ha-current` | 3.14   | ekte HA 2026.9.2                             |
+| `ha-current` | `.venv-ha-current` | 3.14   | ekte HA 2026.10.0                             |
 
-De to HA-gruppene er løst i `uv.lock` og venter på `tests_ha/`. Verktøyene i
+De to HA-gruppene er løst i `uv.lock` og kjører `tests_ha/`, inkludert blueprintenes kontrollflyt og lastvern med ekte Home Assistant. Verktøyene i
 `kvalitet` er pinnet eksakt til de samme versjonene `.pre-commit-config.yaml`
 bruker; sprik der viser seg som at formateringen endrer seg av seg selv.
 
@@ -274,7 +276,7 @@ utenfor repoet, og det vil vi vite før neste release.
 
 ## Services
 
-Effektvakt registrerer to tjenester:
+Effektvakt registrerer tre tjenester:
 
 ### `effektvakt.set_safety_buffer`
 
@@ -296,6 +298,15 @@ service: effektvakt.reset_topp_3
 
 ---
 
+### `effektvakt.styr_last`
+
+Lastkutt-blueprintene bruker denne tjenesten. `lastvern.py` lagrer automasjonen
+som eier kuttet, aktuatorens originaltilstand, frist og minste påtid før
+handling. Kuttet slippes ved neste hele time eller makstiden, og gjenforsøk
+fortsetter hvis aktuatoren ikke svarer. Vernet lever uavhengig av entry- og
+automasjons-reload. Ved HA-start gjenopprettes lagrede kutt så snart lasten
+svarer. Se [blueprints.md](blueprints.md#gjeninnkoblingsvern) for kontrakten.
+
 ## Diagnostics
 
-HA-diagnostics er støttet. Eksporter diagnose fra **Settings > Devices & Services > Effektvakt > (device) > Download diagnostics**. Diagnose-filen inneholder koordinator-data, hysterese-state og kapasitetstrinn, men aldri sensor-entitet-ID-er (unngår persondata).
+HA-diagnostics er støttet. Eksporter diagnose fra **Settings > Devices & Services > Effektvakt > (device) > Download diagnostics**. Diagnosefilen inneholder oppsett med entitets-ID-er, coordinator-data, målegrunnlag, hysterese, tariffmetode og kapasitetstrinn. Lastvernets aktive eierskap, frister og minste påtid er også med. Les gjennom filen før du deler den.

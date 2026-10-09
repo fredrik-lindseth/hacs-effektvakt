@@ -37,7 +37,7 @@ import sys
 import tarfile
 import urllib.request
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -112,17 +112,16 @@ def aktiv_tariff(data: dict[str, Any], paa: date, kundegruppe: str = "husholdnin
     return None
 
 
-def kr_mnd(aar_eks_mva: float, mva: float) -> int:
+def kr_mnd(aar_eks_mva: float, mva: float) -> float:
     """kr/år eks. mva til kr/mnd inkl. mva, slik dso.py lagrer det.
 
-    Halve kroner rundes opp. Innebygd round() gjør bankers rounding og ville
-    gitt 232 der prislisten sier 233.
+    Behold ørene i tariffgrunnlaget; avrunding er bare presentasjon.
     """
     maaned = Decimal(str(aar_eks_mva)) / 12 * (1 + Decimal(str(mva)))
-    return int(maaned.quantize(Decimal(1), ROUND_HALF_UP))
+    return float(maaned.quantize(Decimal("0.01")))
 
 
-def trinn_fra_tariff(tariff: dict[str, Any], mva: float) -> list[tuple[float, int]]:
+def trinn_fra_tariff(tariff: dict[str, Any], mva: float) -> list[tuple[float, float]]:
     """Gjør fri-nettleies fastledd om til våre (øvre kW-grense, kr/mnd inkl. mva).
 
     De oppgir nedre kW-grense og kr/år eks. mva. Øvre grense for trinn i er nedre
@@ -135,7 +134,7 @@ def trinn_fra_tariff(tariff: dict[str, Any], mva: float) -> list[tuple[float, in
     terskler = fastledd.get("terskler")
     if not terskler:
         raise Kildefeil(f"fastledd-metode {metode} uten terskler")
-    trinn: list[tuple[float, int]] = []
+    trinn: list[tuple[float, float]] = []
     for i, rad in enumerate(terskler):
         oevre = float(terskler[i + 1]["terskel"]) if i + 1 < len(terskler) else math.inf
         trinn.append((oevre, kr_mnd(rad["pris"], mva)))
@@ -171,7 +170,8 @@ def generer(meta: dict[str, Any], rader: dict[str, dict[str, Any]]) -> str:
         "",
         "    navn: str",
         "    prisomrade: str",
-        "    kapasitetstrinn: list[tuple[float, int]]  # (kW-terskel, kr/mnd)",
+        "    fastledd_metode: str",
+        "    kapasitetstrinn: list[tuple[float, float]]  # (kW-terskel, kr/mnd)",
         "",
         "",
         "KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {",
@@ -181,6 +181,7 @@ def generer(meta: dict[str, Any], rader: dict[str, dict[str, Any]]) -> str:
         linjer.append(f'    "{nokkel}": {{')
         linjer.append(f'        "navn": "{rad["navn"]}",')
         linjer.append(f'        "prisomrade": "{rad["prisomrade"]}",')
+        linjer.append(f'        "fastledd_metode": "{rad["fastledd_metode"]}",')
         linjer.append('        "kapasitetstrinn": [')
         for kw, pris in rad["kapasitetstrinn"]:
             linjer.append(f"            ({_trinn_literal(kw)}, {pris}),")
@@ -222,6 +223,7 @@ def bygg_rader(
             "navn": kilde["navn"],
             "prisomrade": kilde["prisomrade"],
             "kapasitetstrinn": trinn,
+            "fastledd_metode": metode,
         }
     return rader, utelatt, ikke_nve
 

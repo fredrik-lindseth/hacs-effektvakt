@@ -11,6 +11,10 @@ filene under `custom_components/effektvakt/www/` serveres på `/effektvakt-stati
 og integrasjonen melder URL-en inn i Lovelace sine ressurser selv når HA starter.
 Er integrasjonen installert, ligger «Effektvakt» i kortvelgeren.
 
+Kortets etiketter, kostnadsforklaringer, statusmeldinger, skjermlesertekst og
+editor følger Home Assistants språk på norsk og engelsk. Andre språk bruker
+norsk. Brukerens tittel og YAML-nøklene endres ikke ved språkbytte.
+
 ## Legg det inn
 
 ```yaml

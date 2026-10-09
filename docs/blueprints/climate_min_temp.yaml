@@ -2,8 +2,8 @@ blueprint:
   name: Effektvakt - Climate med min-temp
   description: >
     Sett climate-entitet (panelovn) til min-temp ved kutt anbefalt, og
-    restore til lagret verdi når risiko er borte. Bruker en input_number-hjelper
-    for å persistere temperatur over HA-restart.
+    restore til lagret verdi når risiko er borte. Integrasjonens lastvern
+    lagrer originaltemperaturen og gjenopptar ansvaret etter HA-restart.
     Setpunktet settes tilbake ved neste hele time, eller når sensoren går av,
     det som kommer først. Nettleien måles per time, så et kutt som varer inn i
     neste time flytter bare oppvarmingen dit. max_off_minutes er nødbremsen
@@ -32,7 +32,8 @@ blueprint:
           unit_of_measurement: °C
     restore_helper:
       name: input_number for å lagre forrige temperatur
-      description: Opprett en input_number med min=5, max=30, step=0.5, og pek hit.
+      description: Valgfritt felt fra eldre oppsett; lastvernet lagrer temperaturen selv.
+      default: ""
       selector:
         entity:
           domain: input_number
@@ -72,94 +73,34 @@ blueprint:
           step: 1
 
 variables:
-  climate_entity: !input climate_entity
-  restore_helper: !input restore_helper
-  min_temp: !input min_temp
   max_off_minutes: !input max_off_minutes
   min_on_minutes: !input min_on_minutes
   automatikk_switch: !input automatikk_switch
+  binary_sensor_entity: !input binary_sensor_entity
+  climate_entity: !input climate_entity
+  min_temp: !input min_temp
 
+# Gjentatt vurdering tar opp vedvarende risiko etter minste paatid.
+# Gjeninnkoblingen eies av integrasjonen og fortsetter ved automasjonsreload.
 trigger:
   - platform: state
     entity_id: !input binary_sensor_entity
-    to: "on"
-    id: kutt
-  - platform: state
-    entity_id: !input binary_sensor_entity
-    to: "off"
-    id: restore
+    to:
+  - platform: time_pattern
+    minutes: "/1"
   - platform: homeassistant
     event: start
-    id: ha_start
 
-mode: restart
+mode: queued
+max: 10
 
 action:
-  - choose:
-      - conditions:
-          # Bare senkingen er gatet. Restore, både på sensor og på HA-start,
-          # skal alltid få gå, ellers kan et rom bli stående på 10 grader.
-          - condition: trigger
-            id: kutt
-          - condition: template
-            value_template: >
-              {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
-        sequence:
-          # Lagres utenfor løkken, ellers ville runde to lagret setpunktet
-          # rommet nettopp fikk tilbake og ikke det brukeren hadde satt.
-          - service: input_number.set_value
-            target:
-              entity_id: "{{ restore_helper }}"
-            data:
-              value: "{{ state_attr(climate_entity, 'temperature') | float(20) }}"
-          - repeat:
-              sequence:
-                - service: climate.set_temperature
-                  target:
-                    entity_id: "{{ climate_entity }}"
-                  data:
-                    temperature: "{{ min_temp }}"
-                # Verdien av senkingen slutter ved timeskiftet. Timene måles
-                # hver for seg, så minuttene etter xx:00 sparer ingenting.
-                - wait_for_trigger:
-                    - platform: time_pattern
-                      hours: "*"
-                      minutes: 0
-                      seconds: 0
-                  timeout:
-                    minutes: "{{ max_off_minutes }}"
-                  continue_on_timeout: true
-                - service: climate.set_temperature
-                  target:
-                    entity_id: "{{ climate_entity }}"
-                  data:
-                    temperature: "{{ states(restore_helper) | float(20) }}"
-                - delay:
-                    minutes: "{{ min_on_minutes }}"
-              while:
-                # Henger Effektvakt, står sensoren unknown og ikke on, og da
-                # stopper løkken med normal temperatur.
-                - condition: state
-                  entity_id: !input binary_sensor_entity
-                  state: "on"
-                - condition: template
-                  value_template: >
-                    {{ automatikk_switch == '' or is_state(automatikk_switch, 'on') }}
-      - conditions:
-          - condition: trigger
-            id: restore
-        sequence:
-          - service: climate.set_temperature
-            target:
-              entity_id: "{{ climate_entity }}"
-            data:
-              temperature: "{{ states(restore_helper) | float(20) }}"
-      - conditions:
-          - condition: trigger
-            id: ha_start
-        sequence:
-          - service: climate.set_temperature
-            target:
-              entity_id: "{{ climate_entity }}"
-            data:
-              temperature: "{{ states(restore_helper) | float(20) }}"
+  - service: effektvakt.styr_last
+    data:
+      entity_id: "{{ climate_entity }}"
+      eier: "{{ this.entity_id }}"
+      kutt: "{{ is_state(binary_sensor_entity, 'on') }}"
+      automatikk_switch: "{{ automatikk_switch }}"
+      max_off_minutes: "{{ max_off_minutes }}"
+      min_on_minutes: "{{ min_on_minutes }}"
+      min_temp: "{{ min_temp }}"

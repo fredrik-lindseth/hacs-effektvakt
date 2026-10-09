@@ -439,7 +439,7 @@ def _farge(rolle: str, stil: Stil | None = None) -> str:
     return PALETT[rolle]
 
 
-def _forste_terskel(kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> float:
+def _forste_terskel(kapasitetstrinn: list[tuple[float, float]], maks_kw: float) -> float:
     for terskel, _ in kapasitetstrinn:
         if math.isfinite(terskel) and 0 < terskel < maks_kw:
             return terskel
@@ -487,7 +487,7 @@ def _stigehovedtall(
     return tuple(valgt)
 
 
-def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, int]], maks_kw: float) -> Skala:
+def lag_skala(stil: Stil, kapasitetstrinn: list[tuple[float, float]], maks_kw: float) -> Skala:
     """Utled skalaen av stilen og brukerens kapasitetstrinn."""
     maks, steg = skalatopp(maks_kw)
     sokkel_kw = 0.0
@@ -540,13 +540,15 @@ def _delstreker(skala: Skala, regel: str) -> list[float]:
     return verdier
 
 
-def _segmenter(kapasitetstrinn: list[tuple[float, int]], skala: Skala) -> list[tuple[float, float, int, float | None]]:
+def _segmenter(
+    kapasitetstrinn: list[tuple[float, float]], skala: Skala
+) -> list[tuple[float, float, float, float | None]]:
     """Band mellom tersklene: (fra_kw, til_kw, kr, terskel_i_skala_eller_None).
 
     Naar skalaen starter over null (komprimerte stiler) faller trinnene under
     startverdien utenfor skiven. Det er aerlig: skiven kan ikke vise dem.
     """
-    segmenter: list[tuple[float, float, int, float | None]] = []
+    segmenter: list[tuple[float, float, float, float | None]] = []
     fra = skala.min_kw
     for terskel, kr in kapasitetstrinn:
         if fra >= skala.maks_kw:
@@ -711,7 +713,7 @@ def _skala_tegning(skala: Skala, stil: Stil) -> list[str]:
     return ut
 
 
-def _trinnband(kapasitetstrinn: list[tuple[float, int]], skala: Skala, stil: Stil) -> list[str]:
+def _trinnband(kapasitetstrinn: list[tuple[float, float]], skala: Skala, stil: Stil) -> list[str]:
     """Kapasitetstrinn: buesegment per trinn, radielle merker ved tersklene, kr/mnd utenfor."""
     segmenter = _segmenter(kapasitetstrinn, skala)
     if not segmenter:
@@ -723,11 +725,11 @@ def _trinnband(kapasitetstrinn: list[tuple[float, int]], skala: Skala, stil: Sti
         v_fra = skala.vinkel(fra)
         v_til = skala.vinkel(til)
         ut.append(
-            f'<g id="trinn-{indeks}" data-kw-fra="{_n(fra)}" data-kw-til="{_n(til)}" data-kr="{kr}">'
+            f'<g id="trinn-{indeks}" data-kw-fra="{_n(fra)}" data-kw-til="{_n(til)}" data-kr="{kr:g}">'
             f'<path class="trinn-bue" d="{_bue(R_TRINN_BUE, v_fra + 0.7, v_til - 0.7)}" fill="none"'
             f' stroke="{_farge("trykk", stil)}" stroke-width="9" stroke-linecap="butt"/>'
         )
-        tekst = f"{kr} KR"
+        tekst = f"{kr:g} KR"
         buelengde = math.radians(v_til - v_fra) * R_TRINN_TEKST
         storrelse = _tilpasset_storrelse(tekst, buelengde - 14)
         if storrelse is not None:
@@ -1087,7 +1089,7 @@ def _deksel(stil: Stil) -> list[str]:
 
 def generate_faceplate(
     *,
-    kapasitetstrinn: list[tuple[float, int]],
+    kapasitetstrinn: list[tuple[float, float]],
     maks_kw: float = MAKS_KW_STANDARD,
     variant: Variant = "card",
     dso_navn: str | None = None,

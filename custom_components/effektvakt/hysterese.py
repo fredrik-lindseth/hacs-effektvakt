@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .const import RISIKO_LEVELS, RISIKO_RANK
+from .tid import tidslinje
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
@@ -72,7 +73,7 @@ def apply_hysteresis(
         state.pending_since = now
         return
 
-    if (now - state.pending_since) >= holdetid:
+    if (tidslinje(now) - tidslinje(state.pending_since)) >= holdetid:
         ett_under = _nivå_ett_under(state.nivå)
         state.nivå = ett_under
         if RISIKO_RANK[state.nivå] > rå_rank:

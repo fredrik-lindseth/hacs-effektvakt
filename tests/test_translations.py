@@ -7,9 +7,11 @@ og hassfest kjoerer bare i CI. Testene her er den lokale fangsten.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 from custom_components.effektvakt.binary_sensor import BINARY_SENSOR_KEY
 from custom_components.effektvakt.config_flow import CONF_SLETT_LAST
@@ -158,3 +160,35 @@ def test_strategi_begrepet_er_borte_fra_oversettelsene(navn):
 def test_binaersensoren_heter_kutt_anbefalt_paa_norsk():
     """Entitets-id-en er laast i binary_sensor.py, navnet er det oversettelsen sier."""
     assert _last(STRINGS)["entity"]["binary_sensor"][BINARY_SENSOR_KEY]["name"] == "Kutt anbefalt"
+
+
+@pytest.mark.parametrize("navn", sorted(SPRAAK))
+def test_tjenester_og_alle_felt_har_oversettelse(navn):
+    tjenester = yaml.safe_load((PAKKE / "services.yaml").read_text())
+    tekster = _last(SPRAAK[navn])["services"]
+    assert set(tekster) == set(tjenester)
+    for tjeneste, skjema in tjenester.items():
+        tekst = tekster[tjeneste]
+        assert tekst["name"] and tekst["description"]
+        assert set(tekst.get("fields", {})) == set(skjema.get("fields", {}))
+        for felt in skjema.get("fields", {}):
+            assert tekst["fields"][felt]["name"]
+            assert tekst["fields"][felt]["description"]
+        if navn == "strings.json":
+            assert tekst["name"] == skjema["name"]
+            assert tekst["description"] == skjema["description"]
+            for felt in skjema.get("fields", {}):
+                for egenskap in ("name", "description"):
+                    assert tekst["fields"][felt][egenskap] == skjema["fields"][felt][egenskap]
+
+
+@pytest.mark.parametrize("navn", ["nb.json", "en.json"])
+def test_plassholdere_i_oversettelser_er_de_samme(navn):
+    def tekster(data, sti=""):
+        for key, verdi in data.items():
+            if isinstance(verdi, dict):
+                yield from tekster(verdi, sti + "." + key)
+            else:
+                yield sti + "." + key, set(re.findall(r"\{([^{}]+)\}", verdi))
+
+    assert dict(tekster(_last(SPRAAK[navn]))) == dict(tekster(_last(STRINGS)))

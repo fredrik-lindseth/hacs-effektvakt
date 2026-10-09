@@ -137,7 +137,9 @@ har nå. Forskjellen betyr noe når en måleravlesning retter den timen som nett
 inn: rettingen skal også kunne gå nedover, uten at den må konkurrere med seg selv. En
 omstart som kjører innlåsingen på nytt for den samme timen kan fortsatt ikke telle dobbelt.
 
-Dette er dag-snitt av maks-timer, ikke rå time-verdier. Modellen er identisk med Elhubs metode for kapasitetstrinn-bestemmelse.
+Dette er dag-snitt av maks-timer, ikke rå time-verdier. Modellen gjelder
+nettselskap med `TRE_DØGNMAX_MND`; månedsmaks og ukjent fastledd-metode
+gir ingen operative råd.
 
 ---
 
@@ -210,6 +212,11 @@ kan_legge_paa_resten_av_timen_kw = margin_kw / (1 - elapsed_h)
 minutter_igjen_av_timen          = 60 - elapsed_minutes_in_hour
 ```
 
+Samme tidsdeling gjelder nødvendig reduksjon: `kutt_anbefalt_kw = max(0, -margin_kw) / (1 - elapsed_h)`.
+Kl. 18:50 med projisert 6 kW og tak 5 kW kreves 6 kW reduksjon resten av timen.
+Dette er lastreduksjon nå; marginen er endring i hele timens gjennomsnitt.
+Når timen er omme kan ingen lastreduksjon endre den.
+
 Kl. 18:50 med 1 kW margin er det 6 kW som kan legges på, ikke 1. «Margin 1,00 kW» forteller det aldri, og marginen blir mer tillatende jo nærmere timeslutt man kommer.
 
 Tallet kappes ved 100 kW. Formelen deler på resten av timen og går mot uendelig de siste sekundene, og en verdi som spretter til 3600 knekker både grafen og tilliten. Samme absoluttgrense som effektavlesningen klampes mot, for ingen bolig trekker mer.
@@ -218,7 +225,9 @@ Er `margin_kw` `null`, er påslaget `null`: finnes det ikke noe dyrere trinn å 
 
 ### Ingen terskel å måle mot
 
-`maal_terskel_kw`, `dagstak_kw`, `time_tak_kw`, `margin_kw` og `kan_legge_paa_kw` er alle `null` i to tilfeller: ukjent nettselskap (tomt trinn-sett) og måned som alt ligger på øverste trinn. Da finnes det ikke noe dyrere trinn å unngå. Risikoen er `god_margin`, og `kutt_anbefalt_kw` er 0.
+På øverste trinn er `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw`, `margin_kw` og `kan_legge_paa_kw` `null`: det finnes ikke noe dyrere trinn å unngå. Risikoen er da `god_margin`, og `kutt_anbefalt_kw` er 0.
+
+Manglende eller utdatert effekt og tomt eller sperret tariffgrunnlag er et annet tilfelle. Coordinatoren publiserer da ukjent risiko og ukjente styringsråd med `beregning_gyldig: false`. Historikken beholdes; det manglende grunnlaget skal aldri tolkes som god margin.
 
 Det står `null` og ikke uendelig med vilje: `inf` er ugyldig JSON og knekker både recorder og websocket.
 
@@ -333,9 +342,19 @@ En last på P kW som slås på ved `e0` løfter projeksjonen med `P × (1 − e0
 
 Ventingen koster noe. Et varsel som kommer for sent er like ubrukelig som et som kommer for tidlig, for verdien av et kutt faller med resten av timen: kutter du 2 kW ved minutt ti, forsvinner 1,67 kW av time-snittet, ved minutt femti bare 0,33.
 
-At begge sidene skalerer med `1 − elapsed_h` er det som holder avveiningen på plass. Fradraget slipper taket når overskridelsen passerer `KORTVARIG_LAST_KW × (1 − elapsed_h)`, og et kutt som står igjen på samme tidspunkt henter inn `kuttet × (1 − elapsed_h)`. **Er den kuttbare lasten minst like stor som `KORTVARIG_LAST_KW`, rekker kuttet alltid å hente inn hele overskridelsen**, uansett når i timen den dukker opp. Derfor er 1,5 kW satt under de 2 kW en varmtvannsbereder trekker.
+Kriteriet sammenligner dessuten tariffen uten kutt med tariffen etter tilgjengelig
+lastreduksjon resten av timen. `mulig_besparelse_kr` er forskjellen fra allerede
+avsluttede dager; `unngaaelig_besparelse_kr` er det et kutt nå fortsatt kan spare.
+Energi som alt er brukt er gulvet i begge beregninger. Har timen allerede låst
+inn samme trinn selv etter kutt, blir det ingen automatisk kuttanbefaling.
 
-Prisen er at små overskridelser varsles sent. En vedvarende time på 6,0 kW mot et tak på 5,0 meldes rundt minutt tjue, ikke ved minutt null, og en på 5,2 kW først rundt minutt femti. Har du bare 0,3 kW kuttbar last, kommer varselet i praksis for sent til at kuttet berger timen; men 0,3 kW hadde uansett ikke berget den. Tallet hører hjemme i `const.py` som `KORTVARIG_LAST_KW`, og skal kalibreres mot ekte drift framfor mot følelsen av at det er for tregt.
+Store kuttbare laster beholder fradraget som vern mot korte topper og
+beredere som varmer igjen etter timeskiftet. For en last under 1,5 kW kan
+ventingen ellers gjøre kuttet verdiløst. Fra minutt ti får slike laster også
+et signal når målt gjennomsnitt så langt gir et dyrere trinn, og tilgjengelig
+kutt fortsatt gir en lavere tariff. Med 5,2 kW gjennom timen og 0,3 kW kutt
+ved minutt ti blir resultatet 4,95 kWh; samme kutt ved minutt 53 kommer for sent.
+Dette er en varighetsantakelse, ikke en garanti for at lasten ville vart timen ut.
 
 ---
 
@@ -350,7 +369,7 @@ Prisen er at små overskridelser varsles sent. En vedvarende time på 6,0 kW mot
 | `0 < margin <= buffer`          | `like_under_terskel`  |
 | `margin <= 0`                   | `over_terskel`        |
 
-Margin = `time_tak_kw - projected_avg`, se [terskelmodellen](#terskelmodellen). Er `margin_kw` `null`, altså ukjent nettselskap eller øverste trinn, er risikoen `god_margin`: det finnes ikke noe dyrere trinn å advare mot.
+Margin = `time_tak_kw - projected_avg`, se [terskelmodellen](#terskelmodellen). Med gyldig grunnlag og `margin_kw` lik `null` er måneden på øverste trinn, og risikoen er `god_margin`. Ved manglende måling eller tariff går coordinatoren utenom klassifiseringen og publiserer ukjent risiko.
 
 Kuttkriteriet er et veto over tabellen. **De to øverste nivåene er forbeholdt timer som faktisk koster penger.** Er `timen_flytter_trinnet` usann, settes nivået ned til `naermer_seg_terskel` uansett hvor høyt projeksjonen står. Vetoet ligger i klassifiseringen og ikke i binærsensoren nettopp fordi det ikke skal kunne omgås av `min_risiko_for_kutt`: det er en retting av hva projeksjonen er verdt, ikke en preferanse.
 

@@ -6,7 +6,7 @@ Effektvakt settes opp fra **Settings > Devices & Services > Add Integration > Ef
 
 ## Steg 1: Nettselskap
 
-Velg nettselskapet ditt fra listen. Effektvakt kjenner kapasitetstrinnene og månedsprisene til 72 norske nettselskap, og henter dem automatisk. Står ikke ditt nettselskap der, eller har du egne trinn du vil regne mot, velger du **Egendefinert** og legger inn tersklene selv.
+Velg nettselskapet ditt fra listen. Kildetabellen inneholder 71 nettselskap; de 69 med støttet topp-3-metode kan velges. Sør Aurdal Energi og Tinfos er sperret fordi de bruker henholdsvis månedsmaks og uverifisert metode. Står ikke ditt nettselskap der, eller har du egne trinn du vil regne mot, velger du **Egendefinert** og legger inn tersklene selv.
 
 Hvor dataene kommer fra og hvordan de oppdateres står i [dso.md](dso.md).
 
@@ -39,11 +39,11 @@ Under Innstillinger:
 
 | Innstilling           | Standard             | Beskrivelse                                                |
 | --------------------- | -------------------- | ---------------------------------------------------------- |
-| Sikkerhetsbuffer (kW) | 1,0                  | Margin under terskelen som gir `like_under_terskel`         |
+| Sikkerhetsbuffer (kW) | 1,0                  | Margin som bestemmer når forvarselet begynner         |
 | Min risiko for kutt   | Like under terskelen | Under dette nivået er `binary_sensor` av                    |
 | Risiko-holdetid (min) | 5                    | Hvor lenge nedgang i risiko må holde seg før det bekreftes  |
 
-Sikkerhetsbufferen er hovedknappen. En stor buffer gir tidligere varsel og flere kutt, en liten gir færre kutt og mindre margin når du bommer. Holdetiden finnes for at risikoen ikke skal falle tilbake i samme sekund som effekten dipper, så lasten ikke blir slått av og på gjentatte ganger i samme time.
+En stor sikkerhetsbuffer gir tidligere forvarsel. De høyeste risikonivåene krever i tillegg at kuttkriteriet viser en unngåelig kostnad; buffer alene utløser dem ikke. Holdetiden finnes for at risikoen ikke skal falle tilbake i samme sekund som effekten dipper, så lasten ikke blir slått av og på gjentatte ganger i samme time.
 
 Standardverdiene duger den første uken. Vent til du har sett noen dager med ekte forbruk før du skrur på dem.
 

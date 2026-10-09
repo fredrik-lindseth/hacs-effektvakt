@@ -15,6 +15,7 @@ from .const import DOMAIN, ENTRY_VERSION, WATCHDOG_INTERVAL_SECONDS
 from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stale
 from .frontend import async_register_frontend, async_unregister_frontend
 from .laster import migrer_til_laster
+from .lastvern import async_setup_lastvern
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -33,6 +34,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.S
 # issue_id-en henger paa entry_id saa to oppsett kan ha hver sin.
 ISSUE_UKJENT_DSO = "ukjent_dso"
 ISSUE_MANGLER_TOPPTRINN = "mangler_topptrinn"
+ISSUE_FASTLEDD_METODE = "fastledd_metode_ikke_stoettet"
 
 SERVICE_SET_SAFETY_BUFFER = "set_safety_buffer"
 SERVICE_RESET_TOPP_3 = "reset_topp_3"
@@ -93,6 +95,15 @@ def _meld_oppsettsproblemer(hass: HomeAssistant, entry: ConfigEntry, oppsett: Tr
         placeholders={"hoyeste_kw": _kw_tekst(oppsett.hoyeste_terskel_kw)},
     )
 
+    _sett_repair(
+        hass,
+        entry,
+        noekkel=ISSUE_FASTLEDD_METODE,
+        aktiv=oppsett.metode_ikke_stoettet,
+        severity=ir.IssueSeverity.ERROR,
+        placeholders={"dso": oppsett.dso_noekkel, "metode": oppsett.fastledd_metode},
+    )
+
 
 def _kw_tekst(kw: float | None) -> str:
     """kW-verdien slik den skal staa i en melding: uten desimaler naar den er hel."""
@@ -108,6 +119,7 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     ogsaa naar HA starter uten at noen entry er satt opp enda.
     """
     await async_register_frontend(hass)
+    await async_setup_lastvern(hass)
     return True
 
 
