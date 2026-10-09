@@ -10,7 +10,7 @@ Assistant. Resten står bare her. Overskriften får utgivelsesdatoen sin den
 dagen versjonen faktisk går ut; fram til da sier den «Ikke sluppet», og
 release-flyten nekter å slippe en versjon uten dato.
 
-## [0.4.0] - Ikke sluppet
+## [0.4.0] - 2026-10-09
 
 Første release. Ingenting har vært ute før denne, så listen under er hva du
 får, ikke hva som er endret siden sist. Har du kjørt integrasjonen fra `main`

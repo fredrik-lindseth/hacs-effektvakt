@@ -4,13 +4,11 @@
 
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.4.0%20pre--release-orange" alt="0.4.0 pre-release, unpublished"></a>
+  <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest"><img src="https://img.shields.io/github/v/release/fredrik-lindseth/hacs-effektvakt" alt="Release"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml/badge.svg" alt="HACS Validation"></a>
   <a href="https://app.codecov.io/gh/fredrik-lindseth/hacs-effektvakt"><img src="https://codecov.io/gh/fredrik-lindseth/hacs-effektvakt/branch/main/graph/badge.svg" alt="Codecov"></a>
 </p>
-
-**0.4.0 is in development and has not been released.** The repository currently has no tags, GitHub releases or HACS release package. Installation below is manual from source; configuration and storage formats may still change. See the [CHANGELOG](CHANGELOG.md).
 
 Effektvakt projects your average consumption for the current hour and warns when it could push you into a more expensive grid capacity tier. It is a Home Assistant integration for electricity customers in Norway.
 
@@ -44,11 +42,19 @@ Built-in tables use household tariffs. If a holiday home has a different tariff,
 
 The setup, entities and card support Norwegian and English. Detailed documentation linked below is currently in Norwegian.
 
-## Installation before the first release
+## Installation
 
-Requires Home Assistant 2025.1.0 or newer. Download or clone this repository and copy the entire `custom_components/effektvakt` directory to `/config/custom_components/effektvakt`. Restart Home Assistant.
+Requires Home Assistant 2025.1.0 or newer.
 
-The repository's HACS configuration requires a published `effektvakt.zip` and hides the default branch. Until that release exists, adding the repository to HACS does not provide an installable version. HACS installation will be documented when the first release package is published.
+### HACS
+
+1. In HACS, open the menu and choose **Custom repositories**.
+2. Add `https://github.com/fredrik-lindseth/hacs-effektvakt` with type **Integration**.
+3. Download **Effektvakt** and restart Home Assistant.
+
+### Manual installation
+
+Download `effektvakt.zip` from the [latest release](https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest) and extract it into `/config/custom_components/effektvakt`. Restart Home Assistant.
 
 Then go to **Settings > Devices & Services > Add Integration > Effektvakt**. Choose your grid company and power sensor; the remaining settings have defaults. See the [setup guide](docs/oppsett.md).
 

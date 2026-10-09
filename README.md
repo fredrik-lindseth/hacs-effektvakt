@@ -4,13 +4,11 @@ Norsk · [English](README.en.md)
 
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.4.0%20pre--release-orange" alt="0.4.0 pre-release, ikke sluppet"></a>
+  <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest"><img src="https://img.shields.io/github/v/release/fredrik-lindseth/hacs-effektvakt" alt="Release"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml/badge.svg" alt="HACS Validation"></a>
   <a href="https://app.codecov.io/gh/fredrik-lindseth/hacs-effektvakt"><img src="https://codecov.io/gh/fredrik-lindseth/hacs-effektvakt/branch/main/graph/badge.svg" alt="Codecov"></a>
 </p>
-
-**0.4.0 er under utvikling og ikke sluppet.** Repoet har foreløpig ingen tagger, GitHub-releases eller HACS-releasepakke. Installasjonen nedenfor er manuell fra kildekoden; oppsett og lagringsformat kan fortsatt endres. Se [CHANGELOG](CHANGELOG.md).
 
 Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis timen er på vei til å dytte deg opp i et dyrere kapasitetstrinn i nettleien. Integrasjon for Home Assistant, laget for norske strømkunder.
 
@@ -44,11 +42,19 @@ De innebygde tabellene gjelder husholdning. Har fritidsboligen en annen tariff, 
 
 Oppsett, entiteter og kort støtter norsk og engelsk. Detaljdokumentasjonen nedenfor er foreløpig på norsk.
 
-## Installasjon før første release
+## Installasjon
 
-Krever Home Assistant 2025.1.0 eller nyere. Last ned eller klon kildekoden fra dette repoet, og kopier hele `custom_components/effektvakt` til `/config/custom_components/effektvakt`. Start Home Assistant på nytt.
+Krever Home Assistant 2025.1.0 eller nyere.
 
-Repoets HACS-oppsett krever en publisert `effektvakt.zip` og skjuler standardgrenen. Før en slik release finnes, gir det ingen installerbar versjon å legge repoet til i HACS. HACS-installasjon dokumenteres når den første releasepakken er publisert.
+### HACS
+
+1. Åpne menyen i HACS og velg **Custom repositories**.
+2. Legg til `https://github.com/fredrik-lindseth/hacs-effektvakt` med typen **Integration**.
+3. Last ned **Effektvakt** og start Home Assistant på nytt.
+
+### Manuell installasjon
+
+Last ned `effektvakt.zip` fra [siste release](https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest) og pakk den ut i `/config/custom_components/effektvakt`. Start Home Assistant på nytt.
 
 Deretter **Settings > Devices & Services > Add Integration > Effektvakt**. Du velger nettselskap, peker på power-sensoren din, og resten har standardverdier som duger. Stegene er beskrevet i [docs/oppsett.md](docs/oppsett.md).
 

@@ -4,10 +4,9 @@ Home Assistant-integrasjon som projiserer time-snittet ditt og sier fra før
 timen dytter deg opp i et dyrere kapasitetstrinn i nettleien. Norske
 strømkunder, NVE-modellen for kapasitetsledd.
 
-Integrasjonen er ikke sluppet. Ingen tagger, ingen releases, CHANGELOG sier
-«Pre-release», og Fredrik er eneste bruker. Brytende endringer koster ingenting
-akkurat nå: bytt datamodell, entitets-id-er og lagringsformat mens det er
-gratis, framfor å bygge migreringsstier for brukere som ikke finnes.
+Fra 0.4.0 distribueres integrasjonen som releasepakke gjennom HACS.
+Bevar eksisterende oppsett, entitets-id-er og lagret tilstand ved oppdatering.
+Endringer i datamodell og lagringsformat krever en testet migrering.
 
 ## Ansvarsområde
 
@@ -164,9 +163,8 @@ en ny gren, og filen kan doble seg uten å bli vanskeligere. Det samme gjelder
 Timingen hører til avgjørelsen. To ting gjør en deling dyr: tester som
 importerer interne navn (`tests/test_faceplate.py` importerer over tretti
 private funksjoner fra `faceplate.py`), og brukere med data på disk.
-Integrasjonen er ikke sluppet, så det andre koster ingenting i dag og koster
-en migreringssti etter 0.4.0. Skal en fil deles, del den før den blir dyr å
-dele, ikke når den er blitt ubehagelig å lese.
+Fra 0.4.0 må endringer bevare brukernes lagrede data. Vurder migreringen
+før en deling, og del når ansvarsområdene krever det.
 
 Skal du dele, gjør det i to commiter: først flyttingen med properties som
 delegerer, slik at suiten er grønn uten at en eneste testfil er endret, så
