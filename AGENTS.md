@@ -348,8 +348,10 @@ Skriv for den flaten: korte punkter om funksjoner, synlige rettelser og hva
 brukeren må gjøre. Første release beskriver hva brukeren får; senere releaser
 beskriver forskjellen fra forrige versjon.
 
-- Merk bare brukerrelevante punkter med `<!--kort-->`, normalt 5–10 korte punkter.
-- Skriv nødvendige handlinger under `### Dette må du gjøre selv`.
+- Merk bare brukerrelevante punkter med `<!--kort-->`. Lengden følger endringene, uten et fast antall punkter.
+- Anta at leseren allerede har installert integrasjonen. Installasjon og valgfritt oppsett hører hjemme i README. `### Dette må du gjøre selv` er bare for nødvendige handlinger ved oppgradering.
+- Skriv hele avsnitt og listepunkter på én linje, uten manuell linjebryting. Bruk vanlige ord og konkrete endringer, uten fet ledetekst, reklamespråk eller mekanisk like punkter.
+- Sjekk tidligere manifestversjoner i git før du omtaler en utgivelse som den første. Manglende GitHub-releaser betyr ikke at tidligere versjoner mangler.
 - Legg testtall, CI, refaktorering, datakildepinner og annen utviklerinformasjon
   i full CHANGELOG eller utviklerdokumentasjonen, uten kortmerke.
 - Release-bodyen skal ikke fylles med commit-logg, SHA-er eller byggedetaljer.

@@ -1,8 +1,10 @@
 # Release-noter
 
+Leseren har allerede installert integrasjonen. Beskriv endringene fra forrige versjon og bare handlingene som er nødvendige for oppgraderingen. Installasjon, dashbordoppsett og valgfrie blueprints står i README. Skriv hele avsnitt og listepunkter på én linje uten manuell linjebryting. Bruk vanlige ord og konkrete endringer. Sjekk tidligere manifestversjoner i git før du kaller en release den første.
+
 GitHub-release-bodyen vises i HACS inne i Home Assistant. Første release
 beskriver hva brukeren får. Senere releaser beskriver funksjoner og synlige
-rettelser siden forrige versjon. Hold noten til normalt 5–10 korte punkter.
+rettelser siden forrige versjon. Lengden følger endringene.
 
 Kilden er den daterte versjonsseksjonen i `CHANGELOG.md`. Merk bare
 brukerrelevante punkter med `<!--kort-->`. Nødvendige handlinger står under
