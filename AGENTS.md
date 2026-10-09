@@ -9,6 +9,26 @@ Integrasjonen er ikke sluppet. Ingen tagger, ingen releases, CHANGELOG sier
 akkurat nå: bytt datamodell, entitets-id-er og lagringsformat mens det er
 gratis, framfor å bygge migreringsstier for brukere som ikke finnes.
 
+## Ansvarsområde
+
+Effektvakt hjelper brukeren å redusere strømforbruk og kostnader gjennom
+varsling, planlegging og styring av laster. Kapasitetsovervåking er grunnlaget
+for dagens funksjoner. Eventuell prisplanlegging hører hjemme her og må ta
+hensyn til kapasitet, komfort, lastens behov og frister.
+
+Nord Pool kan levere markedspriser. Strømkalkulator kan levere beregnede
+kostnader med norsk nettleie, avgifter og støtteordninger. Ikke kopier
+Strømkalkulators avregnings- og støtteregler inn i Effektvakt; hold et
+eventuelt samarbeid valgfritt og bruk tydelig merkede prisforutsetninger.
+
+Skill mellom spart energi (kWh), spart energikostnad (kr) og unngått
+kapasitetsledd (kr). Flytting av forbruk til rimeligere intervaller sparer
+ikke nødvendigvis energi. Planlegging må bevare hysterese, watchdog og
+reglene for gjeninnkobling av lastene.
+
+Private arbeidsnotater og intern oppgavesporing skal ikke inn i offentlige
+filer, tester eller commit-meldinger.
+
 ## Samtidighet: flere agenter i samme arbeidstre
 
 Flere agenter committer i det samme arbeidstreet samtidig. Det har alt gått
@@ -313,20 +333,6 @@ merkes av folk som ikke sitter i denne økten.
 - Trengs en deploy likevel, er det `rsync` av `custom_components/effektvakt/`
   til `/config/custom_components/effektvakt/` og en omstart. Legg tilbake
   etterpå hvis versjonen ikke var ment å bli stående.
-
-## Issue-tracking
-
-Namespace i dcat er `hacs-effektvakt`, avledet av repo-navnet. Repoet har
-verken `.dogcatrc` eller `.dogcats/`, så dcat faller tilbake til
-`default_storage` i `~/.config/dogcat/config.toml`. Det virker, og det er med
-vilje: ingen issue-data skal committes hit.
-
-`dcat ready` viser backloggen. GitHub Issues er kun for eksterne
-brukerrapporter; de besvares og lukkes der, men arbeidet de utløser føres i
-dcat.
-
-Fra et git-worktree kjøres dcat alltid med `-C <hovedutsjekk>`, ellers avledes
-namespacet av worktree-katalogens navn.
 
 ## Dokumentasjon
 
