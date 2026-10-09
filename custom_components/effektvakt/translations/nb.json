@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Velg nettselskap",
-        "description": "Effektvakt bruker kapasitetstrinn fra ditt nettselskap for å forutse trinn-overskridelser.",
+        "description": "Effektvakt bruker kapasitetstrinn fra ditt nettselskap for å forutse trinn-overskridelser. De innebygde tabellene bruker husholdningstariff. Har fritidsboligen en annen tariff, velg Egendefinert og legg inn nettselskapets topp-3-trinn.",
         "data": {
           "dso": "Nettselskap"
         }

@@ -58,6 +58,7 @@ from .modell import (
     compute_elapsed_h,
     compute_kostnad,
     compute_projected_avg,
+    fastledd_innenfor_kildegrunnlag,
     topp_n_sum,
     vurder_kuttkriterium,
 )
@@ -257,6 +258,24 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             elapsed_h=elapsed_h,
         )
 
+        if not fastledd_innenfor_kildegrunnlag(
+            daily_max_kw=self._regnskap.daily_max_kw,
+            today=now.date(),
+            projected_kw=projected_avg,
+            maks_kw=self.trinn_oppsett.kjent_fastledd_maks_kw,
+            maks_inkludert=self.trinn_oppsett.kjent_fastledd_maks_kw_inkludert,
+        ):
+            self._hysterese_state.pending_nivå = None
+            self._hysterese_state.pending_since = None
+            self._last_successful_update = now
+            await self._persist()
+            return self._uten_beregningsgrunnlag(
+                now=now,
+                current_kw=current_kw,
+                elapsed_h=elapsed_h,
+                problem="fastledd_utenfor_kildegrunnlag",
+            )
+
         terskel = beregn_terskel(
             trinn=self.kapasitetstrinn,
             daily_max_kw=self._regnskap.daily_max_kw,
@@ -355,7 +374,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             **kostnad_felter,
         }
 
-    def _uten_beregningsgrunnlag(self, *, now: datetime, current_kw: float | None, elapsed_h: float) -> dict:
+    def _uten_beregningsgrunnlag(
+        self, *, now: datetime, current_kw: float | None, elapsed_h: float, problem: str | None = None
+    ) -> dict:
         """Behold kjent energi og historikk, publiser ukjente råd som None."""
         topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
         ukjente = (
@@ -385,9 +406,10 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             **dict.fromkeys((*ukjente, *KOSTNAD_FELT_NAVN)),
             "maalegrunnlag_gyldig": current_kw is not None,
             "beregning_gyldig": False,
-            "maalegrunnlag_problem": "effekt_ukjent_eller_utdatert"
-            if current_kw is None
-            else "kapasitetstrinn_mangler",
+            "kjent_fastledd_maks_kw": self.trinn_oppsett.kjent_fastledd_maks_kw,
+            "kjent_fastledd_maks_kw_inkludert": self.trinn_oppsett.kjent_fastledd_maks_kw_inkludert,
+            "maalegrunnlag_problem": problem
+            or ("effekt_ukjent_eller_utdatert" if current_kw is None else "kapasitetstrinn_mangler"),
             "current_kw": rund(current_kw),
             "actual_kwh_this_hour": round(self._regnskap.current_hour_kwh, 3),
             "kwh_maalt_fra_minutt": self._regnskap.maalt_fra_minutt(),

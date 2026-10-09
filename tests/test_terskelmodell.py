@@ -35,7 +35,7 @@ def test_bkk_trinn_er_som_forventet():
 
 # --- x* alene, med terskelen gitt ------------------------------------------
 #
-# De tre vektorene fra hacs-effektvakt-2p7wpch, alle mot BKKs 5 kW-trinn.
+# Tre regresjonstilfeller for topp-3-modellen, alle mot BKKs 5 kW-trinn.
 # Mot koden slik den sto til september 2026 ga de 5,90, 5,50 og 5,00: max av
 # terskelen og topp-2-snittet, altså motsatt vei av regelen.
 

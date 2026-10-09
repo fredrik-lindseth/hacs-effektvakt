@@ -76,6 +76,9 @@ underveis, er det «Fikset» som gjelder deg.
 
 ### Fikset
 
+- Oppdatert kapasitetstrinn fra 1. oktober 2026 for Asker, Barents, Glitre, Kystnett, Midtnett og Norgesnett fra kildeverifiserte fri-nettleie-data.
+- Etna gir ukjent økonomi og styringsråd over 25 kW, og Nettselskapet fra og med 75 kW, fordi tariffgrunnlaget da er utenfor kildebekreftet omfang. <!--kort-->
+
 Feilrettingene under gjelder både beregninger og trygg gjeninnkobling.
 De gjelder deg hvis du har kjørt integrasjonen fra `main`.
 

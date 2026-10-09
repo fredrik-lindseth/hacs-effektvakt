@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Select grid company",
-        "description": "Effektvakt uses your grid company's capacity tiers to predict tier crossings.",
+        "description": "Effektvakt uses your grid company's capacity tiers to predict tier crossings. Built-in tables use household tariffs. If your holiday home has a different tariff, select Custom and enter the grid company’s top-three capacity tiers.",
         "data": {
           "dso": "Grid company"
         }

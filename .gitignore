@@ -21,7 +21,7 @@ esphome/secrets.yaml
 esphome/.esphome/
 # Utsjekken `just dso-hent` legger igjen, kilden til `just dso-sjekk`.
 _fri-nettleie/
-# Artefakter fra E2E-kjøringer (hacs-effektvakt-3vcv78h).
+# Artefakter fra E2E-kjøringer.
 tests_e2e/artifacts/
 .claude/worktrees/
 _private/

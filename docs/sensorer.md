@@ -118,7 +118,7 @@ De to øverste nivåene krever i tillegg at timen faktisk koster penger. Koster 
 
 Følgen er at `like_under_terskel` bare opptrer på vei ned: hysteresen går innom den når risikoen faller fra `over_terskel`. Den kan ikke lenger oppstå direkte av margin og buffer.
 
-Tilstanden er verdien i venstre kolonne. Det er den automasjoner, maler og `dcat`-vennlige logger sammenligner mot. Teksten i midten er oversettelsen HA viser, på norsk og engelsk.
+Tilstanden er verdien i venstre kolonne. Det er den automasjoner, maler og logger sammenligner mot. Teksten i midten er oversettelsen HA viser, på norsk og engelsk.
 
 Verdiene het `none`, `low`, `medium` og `high` fram til september 2026. Gamle verdier lagret i config entryen eller i hysterese-tilstanden oversettes automatisk, men historikk i recorder står igjen med de gamle navnene, så en graf over månedsskiftet ser delt ut.
 

@@ -19,7 +19,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 # Dokumentene et menneske faktisk klikker seg gjennom.
-DOKUMENTER = (REPO / "README.md", REPO / "AGENTS.md", *sorted((REPO / "docs").rglob("*.md")))
+DOKUMENTER = (REPO / "README.md", REPO / "README.en.md", REPO / "AGENTS.md", *sorted((REPO / "docs").rglob("*.md")))
 
 # `[tekst](sti)` og `![alt](sti)`, med valgfri tittel etter stien.
 MARKDOWN_LENKE = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")

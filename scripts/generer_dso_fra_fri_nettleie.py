@@ -162,7 +162,7 @@ def generer(meta: dict[str, Any], rader: dict[str, dict[str, Any]]) -> str:
         "",
         "from __future__ import annotations",
         "",
-        "from typing import Final, TypedDict",
+        "from typing import Final, NotRequired, TypedDict",
         "",
         "",
         "class DSOInfo(TypedDict):",
@@ -171,6 +171,8 @@ def generer(meta: dict[str, Any], rader: dict[str, dict[str, Any]]) -> str:
         "    navn: str",
         "    prisomrade: str",
         "    fastledd_metode: str",
+        "    kjent_fastledd_maks_kw: NotRequired[float]",
+        "    kjent_fastledd_maks_kw_inkludert: NotRequired[bool]",
         "    kapasitetstrinn: list[tuple[float, float]]  # (kW-terskel, kr/mnd)",
         "",
         "",
@@ -182,6 +184,10 @@ def generer(meta: dict[str, Any], rader: dict[str, dict[str, Any]]) -> str:
         linjer.append(f'        "navn": "{rad["navn"]}",')
         linjer.append(f'        "prisomrade": "{rad["prisomrade"]}",')
         linjer.append(f'        "fastledd_metode": "{rad["fastledd_metode"]}",')
+        if "kjent_fastledd_maks_kw" in rad:
+            linjer.append(f'        "kjent_fastledd_maks_kw": {rad["kjent_fastledd_maks_kw"]},')
+        if "kjent_fastledd_maks_kw_inkludert" in rad:
+            linjer.append(f'        "kjent_fastledd_maks_kw_inkludert": {rad["kjent_fastledd_maks_kw_inkludert"]},')
         linjer.append('        "kapasitetstrinn": [')
         for kw, pris in rad["kapasitetstrinn"]:
             linjer.append(f"            ({_trinn_literal(kw)}, {pris}),")
@@ -225,6 +231,10 @@ def bygg_rader(
             "kapasitetstrinn": trinn,
             "fastledd_metode": metode,
         }
+        if "kjent_fastledd_maks_kw" in kilde:
+            rader[nokkel]["kjent_fastledd_maks_kw"] = float(kilde["kjent_fastledd_maks_kw"])
+        if "kjent_fastledd_maks_kw_inkludert" in kilde:
+            rader[nokkel]["kjent_fastledd_maks_kw_inkludert"] = kilde["kjent_fastledd_maks_kw_inkludert"]
     return rader, utelatt, ikke_nve
 
 

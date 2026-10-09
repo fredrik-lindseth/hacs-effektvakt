@@ -570,3 +570,20 @@ def vurder_kuttkriterium(
         unngaaelig_besparelse_kr=unngaaelig,
         kutt_mulig=kutt_mulig,
     )
+
+
+def fastledd_innenfor_kildegrunnlag(
+    *,
+    daily_max_kw: Mapping[date, float],
+    today: date,
+    projected_kw: float,
+    maks_kw: float | None,
+    maks_inkludert: bool = True,
+) -> bool:
+    """Sjekk projisert topp-3-grunnlag, ikke enkeltlastens øyeblikkseffekt."""
+    if maks_kw is None:
+        return True
+    projiserte = dict(daily_max_kw)
+    projiserte[today] = max(projiserte.get(today, 0.0), projected_kw)
+    grunnlag = topp_n_sum(projiserte.values(), n=3) / 3
+    return grunnlag <= maks_kw if maks_inkludert else grunnlag < maks_kw

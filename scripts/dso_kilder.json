@@ -2,9 +2,10 @@
   "_meta": {
     "kilde": "https://github.com/kraftsystemet/fri-nettleie",
     "lisens": "CC-BY-4.0",
-    "commit": "da8a6886137bbf7fd4925cfd4458a3f04302f615",
-    "hentet": "2026-09-22",
-    "tariff_dato": "2026-09-22"
+    "commit": "a1c856dedc3dfebe5d6a4ecef130326586f19d93",
+    "hentet": "2026-10-09",
+    "tariff_dato": "2026-10-01",
+    "kilde_merknad": "Norgesnetts oktoberpriser er verifisert mot offisiell prisliste. Pinnen inkluderer rettingen i https://github.com/kraftsystemet/fri-nettleie/pull/444 mens den venter på merge."
   },
   "nettselskap": {
     "area_nett_omrade1": {
@@ -107,7 +108,8 @@
       "navn": "Etna Nett",
       "prisomrade": "NO1",
       "slug": "etna",
-      "mva": 0.25
+      "mva": 0.25,
+      "kjent_fastledd_maks_kw": 25
     },
     "everket": {
       "navn": "Everket",
@@ -257,7 +259,9 @@
       "navn": "Nettselskapet",
       "prisomrade": "NO3",
       "slug": "nettselskapet",
-      "mva": 0.25
+      "mva": 0.25,
+      "kjent_fastledd_maks_kw": 75,
+      "kjent_fastledd_maks_kw_inkludert": false
     },
     "noranett": {
       "navn": "Noranett",

@@ -1,11 +1,16 @@
 # Effektvakt
 
+Norsk · [English](README.en.md)
+
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"></a>
-  <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/releases"><img src="https://img.shields.io/github/release/fredrik-lindseth/hacs-effektvakt.svg" alt="GitHub release"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.4.0%20pre--release-orange" alt="0.4.0 pre-release, ikke sluppet"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml"><img src="https://github.com/fredrik-lindseth/hacs-effektvakt/actions/workflows/validate.yml/badge.svg" alt="HACS Validation"></a>
+  <a href="https://app.codecov.io/gh/fredrik-lindseth/hacs-effektvakt"><img src="https://codecov.io/gh/fredrik-lindseth/hacs-effektvakt/branch/main/graph/badge.svg" alt="Codecov"></a>
 </p>
+
+**0.4.0 er under utvikling og ikke sluppet.** Repoet har foreløpig ingen tagger, GitHub-releases eller HACS-releasepakke. Installasjonen nedenfor er manuell fra kildekoden; oppsett og lagringsformat kan fortsatt endres. Se [CHANGELOG](CHANGELOG.md).
 
 Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis timen er på vei til å dytte deg opp i et dyrere kapasitetstrinn i nettleien. Integrasjon for Home Assistant, laget for norske strømkunder.
 
@@ -23,6 +28,10 @@ Effektvakt leser power- og energy-sensoren din hvert 15-60 sekund og projiserer 
 
 Bare denne topp-3-metoden er støttet. Sør Aurdal Energi (månedsmaks) og Tinfos (uverifisert metode) er sperret for styringsråd; se [tariffgrunnlaget](docs/dso.md). Manglende eller mer enn to minutter gamle effektmålinger gir ukjent råd, ikke ledig kapasitet. Tid og timegrenser regnes i UTC, slik at de to 02-timene om høsten holdes atskilt.
 
+Effektvakt eier varsling og styring av laster for å redusere forbruk og kostnader. Dagens funksjoner gjelder kapasitet; prisplanlegging fra Nord Pool er ikke implementert. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) beregner nettleie, avgifter og støtteordninger. Unngått kapasitetstrinn er spart kostnad, og betyr ikke i seg selv færre kWh.
+
+De innebygde tabellene gjelder husholdning. Har fritidsboligen en annen tariff, bruk egendefinerte topp-3-trinn fra nettselskapets prisliste.
+
 ## Hva du får
 
 - Projisert time-snitt, margin til neste trinn og topp-3-snitt for måneden, som sensorer
@@ -33,9 +42,13 @@ Bare denne topp-3-metoden er støttet. Sør Aurdal Energi (månedsmaks) og Tinfo
 - Et Lovelace-kort som tegner skiven fra dine egne kapasitetstrinn
 - Watchdog som setter sensorene til `unknown` hvis coordinatoren henger
 
-## Installasjon
+Oppsett, entiteter og kort støtter norsk og engelsk. Detaljdokumentasjonen nedenfor er foreløpig på norsk.
 
-Legg til repoet som custom repository i HACS, `fredrik-lindseth/hacs-effektvakt` med kategori **Integration**, klikk **Download** og start Home Assistant på nytt. Manuelt gjøres det samme ved å kopiere `custom_components/effektvakt` til `/config/custom_components/`.
+## Installasjon før første release
+
+Krever Home Assistant 2025.1.0 eller nyere. Last ned eller klon kildekoden fra dette repoet, og kopier hele `custom_components/effektvakt` til `/config/custom_components/effektvakt`. Start Home Assistant på nytt.
+
+Repoets HACS-oppsett krever en publisert `effektvakt.zip` og skjuler standardgrenen. Før en slik release finnes, gir det ingen installerbar versjon å legge repoet til i HACS. HACS-installasjon dokumenteres når den første releasepakken er publisert.
 
 Deretter **Settings > Devices & Services > Add Integration > Effektvakt**. Du velger nettselskap, peker på power-sensoren din, og resten har standardverdier som duger. Stegene er beskrevet i [docs/oppsett.md](docs/oppsett.md).
 
@@ -47,7 +60,7 @@ Integrasjonen har med et eget Lovelace-kort som gjenskaper de gamle analoge effe
   <img src="docs/bilder/dashboard.png" alt="Dashbordet med skive, kort for resten av timen, kutt-kilder og ukesgraf" width="900">
 </p>
 
-Rød viser er projisert time-snitt, den tynne svarte er effekten akkurat nå, og trekanten utenfor buen er topp-3-snittet for måneden. Den går aldri ned igjen, for det er den du kommer til å betale for uansett hva du gjør resten av måneden.
+Rød viser er projisert time-snitt, den tynne svarte er effekten akkurat nå, og trekanten utenfor buen er topp-3-snittet for måneden. Fullførte topper blir stående i månedens tariffgrunnlag.
 
 Kortene ved siden av svarer på det du faktisk lurer på:
 
@@ -61,7 +74,20 @@ Og ukesgrafen viser de faktiske timesnittene, altså tallene nettselskapet faktu
   <img src="docs/bilder/timesnitt-uke.png" alt="Søylegraf med timesnitt for de siste sju dagene" width="640">
 </p>
 
-Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full forklaring av merkene på skiven.
+Se [docs/dashboard-kort.md](docs/dashboard-kort.md) for oppsett, stiler og full forklaring av merkene på skiven. Bildene viser norsk grensesnitt; kortets tekster følger språkvalget i Home Assistant.
+
+## Kvalitet og utvikling
+
+CI kjører samme porter som lokalt:
+
+```bash
+just test
+just test-ha target=minimum
+just test-ha target=current
+just coverage
+```
+
+`just test` kjører enhetstester, lint, formattering, mypy og vulture. Ekte HA testes både på lovet minimum og aktuell versjon. `just coverage` kombinerer enhetstester og ekte HA-tester og krever minst 95 % samlet linjedekning. Begge dekningsrapportene lastes opp til [Codecov](https://app.codecov.io/gh/fredrik-lindseth/hacs-effektvakt); merket over viser tjenestens tilgjengelige rapport. HACS-validering og hassfest kjøres også i CI. Se [utviklerguiden](docs/development.md) for miljøene og kommandoene.
 
 ## Dokumentasjon
 

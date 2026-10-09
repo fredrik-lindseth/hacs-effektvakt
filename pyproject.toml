@@ -20,7 +20,7 @@ license = "MIT"
 # det hele tatt; tests/conftest.py stubber HA bort, og en ekte homeassistant i
 # samme miljø ville kollidert med stubbene. `ha-minimum` og `ha-current` er de
 # to ekte-HA-miljøene, låst til hver sin plugin-versjon som selv pinner HA
-# eksakt. De tas i bruk av tests_ha/ (hacs-effektvakt-1vfeemq); gruppene står
+# eksakt. De tas i bruk av tests_ha/; gruppene står
 # her nå så uv.lock har begge grenene ferdig løst.
 unit = [
     "pytest>=8.0.0",

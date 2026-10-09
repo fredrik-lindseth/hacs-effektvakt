@@ -2,8 +2,7 @@
 
 Fram til september 2026 gjorde `lookup_tiers` dette oppslaget på den projiserte
 timen og ga «neste trinn» derfra. Da flyttet referansen seg hver gang en enkelt
-time spratt opp eller falt, og marginen målte mot noe annet enn brukeren trodde
-(hacs-effektvakt-5ksx8m6). Nå gjøres oppslaget på topp-3-snittet, og
+time spratt opp eller falt, og marginen målte mot noe annet enn brukeren trodde. Nå gjøres oppslaget på topp-3-snittet, og
 `beregn_terskel` og `compute_kostnad` deler den samme funksjonen.
 """
 

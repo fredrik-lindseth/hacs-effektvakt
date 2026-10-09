@@ -5,6 +5,11 @@
 `custom_components/effektvakt/dso.py` har kapasitetstrinn og priser for 71 norske
 nettselskap. Filen er generert og skal ikke redigeres for hånd.
 
+De innebygde tabellene gjelder husholdningstariffen. Kortet velger ikke
+fritidsboligtariff automatisk. Har fritidsboligen en annen topp-3-tabell, som
+Midtnetts FB22, velg egendefinerte trinn fra nettselskapets prisliste.
+Egendefinerte trinn støtter bare topp-3-metoden.
+
 Hver DSO ser slik ut:
 
 ```python
@@ -139,3 +144,11 @@ uten å regenerere.
 - øverste trinn er `inf`, ikke et tak som 999 kW
 - BKK står med 155, 250 og 415 kr for 2, 5 og 10 kW, som er den ene tabellen vi
   har kontrollert mot faktura
+
+## Øvre kildegrense
+
+Nettselskapets [privatprisliste fra 1. juli 2026](https://nettselskapet.as/strompris)
+ender ved 50–75 kW. Risiko, kostnad og kuttråd blir ukjent når projisert
+topp-3-grunnlag når 75 kW. Prislisten avklarer ikke om øvre grense er
+inkludert, så eksakt 75 gir også ukjent råd. Etna har tilsvarende kildegrense på 25 kW. Egendefinerte tabeller
+får ingen kataloggrense.

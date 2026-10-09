@@ -5,14 +5,14 @@
 """Kapasitetstrinn per nettselskap.
 
 Satser fra https://github.com/kraftsystemet/fri-nettleie (CC-BY-4.0),
-commit da8a6886137bbf7fd4925cfd4458a3f04302f615, tariff gyldig 2026-09-22.
+commit a1c856dedc3dfebe5d6a4ecef130326586f19d93, tariff gyldig 2026-10-01.
 
 Nøkler, navn og prisområde kommer fra scripts/dso_kilder.json.
 """
 
 from __future__ import annotations
 
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypedDict
 
 
 class DSOInfo(TypedDict):
@@ -21,6 +21,8 @@ class DSOInfo(TypedDict):
     navn: str
     prisomrade: str
     fastledd_metode: str
+    kjent_fastledd_maks_kw: NotRequired[float]
+    kjent_fastledd_maks_kw_inkludert: NotRequired[bool]
     kapasitetstrinn: list[tuple[float, float]]  # (kW-terskel, kr/mnd)
 
 
@@ -89,16 +91,16 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "prisomrade": "NO1",
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
-            (2.0, 215.0),
-            (5.0, 270.0),
-            (10.0, 395.0),
-            (15.0, 825.0),
-            (20.0, 1030.0),
-            (25.0, 1300.0),
-            (50.0, 1840.0),
-            (75.0, 2900.0),
-            (100.0, 3890.0),
-            (float("inf"), 6250.0),
+            (2.0, 225.0),
+            (5.0, 320.0),
+            (10.0, 500.0),
+            (15.0, 850.0),
+            (20.0, 1090.0),
+            (25.0, 1350.0),
+            (50.0, 2130.0),
+            (75.0, 3150.0),
+            (100.0, 4200.0),
+            (float("inf"), 7300.0),
         ],
     },
     "barents_nett": {
@@ -106,12 +108,12 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "prisomrade": "NO4",
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
-            (2.0, 517.0),
-            (5.0, 569.0),
-            (10.0, 620.0),
-            (15.0, 673.0),
-            (20.0, 776.0),
-            (float("inf"), 931.0),
+            (2.0, 491.0),
+            (5.0, 541.0),
+            (10.0, 589.0),
+            (15.0, 639.0),
+            (20.0, 737.0),
+            (float("inf"), 884.0),
         ],
     },
     "bindal_kraftnett": {
@@ -292,6 +294,7 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "navn": "Etna Nett",
         "prisomrade": "NO1",
         "fastledd_metode": "TRE_DØGNMAX_MND",
+        "kjent_fastledd_maks_kw": 25.0,
         "kapasitetstrinn": [
             (2.0, 350.0),
             (5.0, 525.0),
@@ -376,16 +379,16 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "prisomrade": "NO1",
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
-            (2.0, 160.0),
-            (5.0, 232.5),
-            (10.0, 390.0),
-            (15.0, 730.0),
-            (20.0, 965.0),
-            (25.0, 1210.0),
-            (50.0, 1885.0),
-            (75.0, 2990.0),
-            (100.0, 3990.0),
-            (float("inf"), 6665.0),
+            (2.0, 165.0),
+            (5.0, 270.0),
+            (10.0, 455.0),
+            (15.0, 765.0),
+            (20.0, 1025.0),
+            (25.0, 1275.0),
+            (50.0, 2062.5),
+            (75.0, 3075.0),
+            (100.0, 4105.0),
+            (float("inf"), 7190.0),
         ],
     },
     "griug": {
@@ -528,16 +531,16 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "prisomrade": "NO4",
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
-            (5.0, 493.0),
-            (10.0, 890.0),
-            (15.0, 1286.0),
-            (20.0, 1682.0),
-            (25.0, 2079.0),
-            (50.0, 3268.0),
-            (75.0, 5250.0),
-            (100.0, 7231.0),
-            (150.0, 10204.0),
-            (float("inf"), 14168.0),
+            (5.0, 508.0),
+            (10.0, 916.0),
+            (15.0, 1324.0),
+            (20.0, 1733.0),
+            (25.0, 2141.0),
+            (50.0, 3366.0),
+            (75.0, 5407.0),
+            (100.0, 7448.0),
+            (150.0, 10510.0),
+            (float("inf"), 14593.0),
         ],
     },
     "lede": {
@@ -686,11 +689,11 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
             (5.0, 275.0),
-            (10.0, 413.0),
+            (10.0, 412.5),
             (15.0, 625.0),
-            (20.0, 938.0),
+            (20.0, 937.5),
             (25.0, 1250.0),
-            (50.0, 1746.0),
+            (50.0, 1746.25),
             (75.0, 2620.0),
             (100.0, 3250.0),
             (float("inf"), 3750.0),
@@ -717,6 +720,8 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "navn": "Nettselskapet",
         "prisomrade": "NO3",
         "fastledd_metode": "TRE_DØGNMAX_MND",
+        "kjent_fastledd_maks_kw": 75.0,
+        "kjent_fastledd_maks_kw_inkludert": False,
         "kapasitetstrinn": [
             (2.0, 162.5),
             (5.0, 300.0),
@@ -855,16 +860,16 @@ KAPASITETSTRINN_PER_DSO: Final[dict[str, DSOInfo]] = {
         "prisomrade": "NO1",
         "fastledd_metode": "TRE_DØGNMAX_MND",
         "kapasitetstrinn": [
-            (2.0, 140.0),
-            (5.0, 232.5),
-            (10.0, 390.0),
-            (15.0, 695.0),
-            (20.0, 935.0),
-            (25.0, 1145.0),
-            (50.0, 1812.5),
-            (75.0, 2812.5),
-            (100.0, 3812.5),
-            (float("inf"), 6112.5),
+            (2.0, 165.0),
+            (5.0, 270.0),
+            (10.0, 455.0),
+            (15.0, 765.0),
+            (20.0, 1025.0),
+            (25.0, 1275.0),
+            (50.0, 2062.5),
+            (75.0, 3075.0),
+            (100.0, 4105.0),
+            (float("inf"), 7190.0),
         ],
     },
     "r_nett": {

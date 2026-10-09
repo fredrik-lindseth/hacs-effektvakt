@@ -39,6 +39,8 @@ class TrinnOppsett:
     hoyeste_terskel_kw: float | None
     fastledd_metode: str = "TRE_DØGNMAX_MND"
     metode_ikke_stoettet: bool = False
+    kjent_fastledd_maks_kw: float | None = None
+    kjent_fastledd_maks_kw_inkludert: bool = True
 
 
 def les_trinn(*, dso_id: Any, custom: Any) -> TrinnOppsett:
@@ -63,6 +65,8 @@ def les_trinn(*, dso_id: Any, custom: Any) -> TrinnOppsett:
     return TrinnOppsett(
         trinn=list(info["kapasitetstrinn"]) if info["fastledd_metode"] == "TRE_DØGNMAX_MND" else [],
         fastledd_metode=info["fastledd_metode"],
+        kjent_fastledd_maks_kw=info.get("kjent_fastledd_maks_kw"),
+        kjent_fastledd_maks_kw_inkludert=info.get("kjent_fastledd_maks_kw_inkludert", True),
         metode_ikke_stoettet=info["fastledd_metode"] != "TRE_DØGNMAX_MND",
         dso_noekkel=noekkel,
         dso_ukjent=False,
