@@ -1,159 +1,178 @@
-# Dashbordet fra skjermbildene i README, klart til å limes inn.
-#
-# Innstillinger → Dashbord → nytt dashbord → blyanten oppe til høyre →
-# de tre prikkene → «Rediger i YAML», og lim inn hele denne filen.
-#
-# Alt bortsett fra én entitet virker som det står: kortene leser sensorene og
-# attributtene Effektvakt lager selv, og ingen entitets-id-er i malene er
-# knyttet til et bestemt hus. Den ene du må bytte er energisensoren i
-# ukesgrafen nederst, og den er merket med BYTT_MEG.
-#
-# Kortet i seg selv er dokumentert i docs/dashboard-kort.md, sensorene og
-# attributtene malene leser i docs/sensorer.md.
+# Lim inn som et helt dashbord i «Rediger i YAML». Kortet følger integrasjonen.
+# Bytt BYTT_MEG til din kumulative importmåler i kWh med langtidsstatistikk,
+# eller fjern ukesgrafen. Se docs/input-sensorer.md.
+# Entitetsnavnene gjelder ett oppsett med standardnavn. Har du omdøpt dem
+# eller flere oppsett, tilpass alle referansene til samme Effektvakt-oppsett.
+# Valgfrie sensorer vises bare når de finnes og har en kjent verdi.
 
 title: Effektvakt
 views:
   - title: Oversikt
-    # Masonry legger de to stablene ved siden av hverandre på en bred skjerm og
-    # under hverandre på telefon, slik skjermbildet i README viser.
     cards:
       - type: vertical-stack
         cards:
           - type: custom:effektvakt-card
             entity: sensor.effektvakt_projisert_time_snitt
             tittel: Effektvakt
-
-          # Timesnitt per time siste uke, altså tallene nettselskapet
-          # fakturerer etter. `stat_types: change` på `period: hour` gir kWh
-          # forbrukt i hver klokketime, og kWh i en time er det samme tallet
-          # som kW i snitt den timen.
-          #
-          # BYTT_MEG: dette må være din egen kumulative energisensor i kWh,
-          # den samme du ga Effektvakt under oppsett. Effektvakt lager ikke en
-          # slik sensor selv, og den heter noe forskjellig for hver AMS-leser
-          # (`sensor.<ams_navn>_active_energy_import` og
-          # `sensor.<ams_navn>_tpi` er vanlige). Se docs/input-sensorer.md.
-          - type: statistics-graph
-            title: Timesnitt siste uke
-            chart_type: bar
-            period: hour
-            days_to_show: 7
-            stat_types:
-              - change
-            entities:
-              - entity: sensor.BYTT_MEG_energi_total
-                name: Bytt til din egen energisensor (kWh, kumulativ)
-
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.BYTT_MEG_energi_total
+                state_not: unknown
+              - condition: state
+                entity: sensor.BYTT_MEG_energi_total
+                state_not: unavailable
+            card:
+              type: statistics-graph
+              title: Timesforbruk siste uke (kWh)
+              chart_type: bar
+              period: hour
+              days_to_show: 7
+              stat_types: [change]
+              entities:
+                - entity: sensor.BYTT_MEG_energi_total
+                  name: Import fra strømmåleren
       - type: vertical-stack
         cards:
-          # «X min igjen av timen». Alt kortet sier kommer fra attributter på
-          # projeksjons- og kostnadssensoren, så det er ingen entitets-id-er
-          # her som må rettes.
-          #
-          # `kan_legge_paa_resten_av_timen_kw` er marginen regnet om til last
-          # du kan slå på nå og la stå timen ut. Kl. 18:50 med 1 kW margin er
-          # svaret 6 kW, ikke 1.
-          #
-          # Setningen om trinnet under er gatet på `trinn_under_realistisk`.
-          # Under BKKs 2 til 5 kW ligger 0 til 2 kW, og ingen bolig lander der,
-          # så uten den porten hadde «ute av rekkevidde» stått permanent.
           - type: markdown
             content: |-
-              {%- set p = 'sensor.effektvakt_projisert_time_snitt' -%}
-              {%- set k = 'sensor.effektvakt_kostnad_neste_trinn' -%}
-              {%- macro kw(v) -%}
-              {{ v | round(1) | string | replace('.0', '') | replace('.', ',') }}
-              {%- endmacro -%}
-              {%- set igjen = state_attr(p, 'minutter_igjen_av_timen') -%}
-              {%- set paa = state_attr(p, 'kan_legge_paa_resten_av_timen_kw') -%}
-              {%- set tak = state_attr(p, 'maal_terskel_kw') -%}
-              {%- set timen = states(k) -%}
-              {%- if igjen is none -%}
-              ## Ingen måling ennå
-
-              Effektvakt har ikke noen time å vise ennå. Det tar et minutt eller to etter omstart.
-              {%- else -%}
+              {% set p = 'sensor.effektvakt_projisert_time_snitt' %}
+              {% set k = 'sensor.effektvakt_kostnad_neste_trinn' %}
+              {% macro kw(v) %}{{ v | round(1) | string | replace('.0', '') | replace('.', ',') }}{% endmacro %}
+              {% set igjen = state_attr(p, 'minutter_igjen_av_timen') %}
+              {% set paa = state_attr(p, 'kan_legge_paa_resten_av_timen_kw') %}
+              {% set tak = state_attr(p, 'time_tak_kw') %}
+              {% set timen = states(k) %}
+              {% if state_attr(p, 'beregning_gyldig') is not true or igjen is none %}
+              ## Venter på beregningsgrunnlag
+              Målinger eller tariffgrunnlag mangler. Ingen sikre råd om margin eller kostnad ennå.
+              {% else %}
               ## {{ igjen }} min igjen av timen
-
-              {% if paa is not none and tak is not none -%}
-              Du kan legge på **{{ kw(paa) }} kW** resten av timen uten å passere {{ kw(tak) }} kW.
-              {%- else -%}
-              Det finnes ikke noe dyrere trinn å holde seg under: enten ligger måneden på øverste trinn, eller så er nettselskapet ukjent.
-              {%- endif %}
-
-              {% if timen in ['unknown', 'unavailable'] -%}
-              Uten kapasitetstrinn å regne mot kan Effektvakt ikke si hva timen koster.
-              {%- elif timen | float(0) > 0 -%}
-              Denne timen koster **{{ timen | float | round | int }} kr** mer i måneden.
-              {%- else -%}
-              Denne timen koster ingenting ekstra.
-              {%- endif %}
-              {%- if state_attr(k, 'trinn_under_realistisk') %}
-
-              {% if state_attr(k, 'trinn_under_oppnaelig') -%}
-              Holder du deg under {{ kw(state_attr(k, 'trinn_under_terskel_kw')) }} kW resten av måneden, sparer du {{ state_attr(k, 'besparelse_trinn_under_kr') | round | int }} kr i måneden.
-              {%- else -%}
-              Trinnet under er ute av rekkevidde for denne måneden uansett hva du gjør nå.
-              {%- endif -%}
-              {%- endif -%}
-              {%- endif -%}
-
-          # «Hva kan kuttes nå». Kortet går gjennom `kutt_kilder` på
-          # kutt-sensoren, så det viser akkurat de lastene du har satt opp,
-          # med navnene de har i Home Assistant. Ingenting å rette her heller.
-          #
-          # «av» betyr at lasten ikke teller med i summen akkurat nå, enten
-          # fordi den står stille eller fordi den ligger under terskelen sin.
-          # «vet ikke» er en sensor som er `unavailable` eller `unknown`, og
-          # det er noe annet enn null watt.
+              {% if paa is not none and tak is not none %}
+              {% if paa > 0 %}
+              Du kan legge på **{{ kw(paa) }} kW** resten av timen innenfor timens tak på {{ kw(tak) }} kW.
+              {% else %}
+              Ingen ekstra last innenfor timens tak på {{ kw(tak) }} kW.
+              {% endif %}
+              {% else %}
+              Måneden ligger allerede på øverste kapasitetstrinn.
+              {% endif %}
+              {% if not is_number(timen) %}
+              Timens tariffvirkning er ukjent.
+              {% elif timen | float > 0 %}
+              Denne timen kan øke månedens kapasitetsledd med **{{ timen | float | round | int }} kr** hvis den avsluttes som anslått.
+              {% else %}
+              Denne timen øker ikke kapasitetsleddet med dagens anslag.
+              {% endif %}
+              {% if state_attr(k, 'trinn_under_realistisk') %}
+              {% if state_attr(k, 'trinn_under_oppnaelig') %}
+              Trinnet under er fortsatt mulig og {{ state_attr(k, 'besparelse_trinn_under_kr') | round | int }} kr billigere. Det krever at månedens topp-3-snitt ender under {{ kw(state_attr(k, 'trinn_under_terskel_kw')) }} kW.
+              {% else %}
+              Trinnet under er ute av rekkevidde denne måneden.
+              {% endif %}
+              {% endif %}
+              {% endif %}
           - type: markdown
             content: |-
-              {%- set s = 'sensor.effektvakt_tilgjengelig_kutt' -%}
-              {%- set kilder = state_attr(s, 'kutt_kilder') -%}
+              {% set p = 'sensor.effektvakt_projisert_time_snitt' %}
+              {% set status = state_attr(p, 'maal_status') %}
+              {% set maal = state_attr(p, 'valgt_maal_kw') %}
+              ## Månedsmål
+              {% if status == 'aktiv' and maal is number %}
+              Målet er **{{ maal | string | replace('.', ',') }} kW** og er fortsatt innen rekkevidde.
+              {% elif status == 'tapt' %}
+              Registrerte topper har gjort månedsmålet uoppnåelig. Det styrer ikke nye kutt.
+              {% elif status == 'ikke_valgt' %}
+              Ingen eget månedsmål valgt. Effektvakt vurderer neste kapasitetstrinn.
+              {% else %}
+              Månedsmålet kan ikke vurderes ennå.
+              {% endif %}
+              {% if is_state('switch.effektvakt_automatikk', 'off') %}
+              Hovedbryteren er av. Tilknyttede blueprints gjør ingen nye kutt.
+              {% elif is_state('switch.effektvakt_automatikk', 'on') %}
+              Hovedbryteren er på. Lastkutt krever også en aktiv automasjon fra en blueprint.
+              {% else %}
+              Hovedbryterens tilstand er ukjent.
+              {% endif %}
+          - type: markdown
+            content: |-
+              {% set s = 'sensor.effektvakt_tilgjengelig_kutt' %}
+              {% set kilder = state_attr(s, 'kutt_kilder') %}
               ## Hva kan kuttes nå
               {% if kilder is none %}
-              Effektvakt har ingen måling å vise ennå.
-              {%- elif kilder | count == 0 %}
-              Ingen kuttbare laster er satt opp ennå. Legg dem til under Innstillinger → Enheter og tjenester → Effektvakt → Konfigurer.
-              {%- else -%}
-              {%- for kilde in kilder %}
-              **{{ kilde.navn or kilde.entity_id }}**: {% if kilde.effekt_w is none %}vet ikke{% elif kilde.teller_med %}{{ (kilde.effekt_w / 1000) | round(1) | string | replace('.', ',') }} kW{% else %}av{% endif %}
+              Ingen målte kuttkilder tilgjengelige. Registrer laster med effektsensor under Effektvakt → Konfigurer. Manuelle profiler vises i anslaget under.
+              {% else %}
+              {% for kilde in kilder %}
+              **{{ kilde.navn or kilde.entity_id }}**: {% if kilde.kuttet %}kuttet av Effektvakt{% elif kilde.effekt_w is none %}ukjent måling{% elif kilde.teller_med %}{{ (kilde.effekt_w / 1000) | round(1) | string | replace('.', ',') }} kW{% else %}under terskelen{% endif %}
               {% endfor %}
-              Til sammen **{{ states(s) | float(0) | round(1) | string | replace('.', ',') }} kW** å kutte.
-              {%- endif -%}
-
-  # Rådataene bak kortene over. Nyttig når noe ser rart ut, og ikke noe README
-  # viser bilder av.
+              {% if is_number(states(s)) %}
+              Målt tilgjengelig kutt: **{{ states(s) | float | round(1) | string | replace('.', ',') }} kW**.
+              {% if kilder | selectattr('effekt_w', 'none') | list | count > 0 %}
+              Noen laster mangler måling og er ikke med i summen.
+              {% endif %}
+              {% else %}
+              Summen er ukjent.
+              {% endif %}
+              {% endif %}
+          - type: markdown
+            content: |-
+              {% set s = 'sensor.effektvakt_estimert_kuttenergi_resten_av_timen' %}
+              {% set profiler = state_attr(s, 'lastprofiler') %}
+              ## Profilanslag resten av timen
+              {% if profiler is none %}
+              Ingen profilgrunnlag tilgjengelig. Lastprofiler er valgfrie i oppsettet.
+              {% else %}
+              {% if is_number(states(s)) %}
+              Estimert kuttenergi: **{{ states(s) | float | round(2) | string | replace('.', ',') }} kWh**.
+              {% else %}
+              Samlet anslag er ukjent; en eller flere profiler mangler grunnlag.
+              {% endif %}
+              {% for navn, profil in profiler.items() %}
+              **{{ navn }}**: {% if profil.arbeidssyklus_pct is number %}{{ profil.arbeidssyklus_pct | round(1) | string | replace('.', ',') }} % arbeidssyklus{% else %}ukjent profil{% endif %}{% if profil.planleggingsestimat %}, manuelt planleggingsanslag{% endif %}.
+              {% endfor %}
+              Dette er et anslag på utsatt forbruk, ikke målt sparing. Manuelle profiler uten effektmåling gir ikke automatiske kuttbidrag.
+              {% endif %}
   - title: Sensorer
     cards:
       - type: entities
         title: Effektvakt
         entities:
-          - entity: sensor.effektvakt_risiko_niva
-            name: Risiko-nivå
-          - entity: sensor.effektvakt_projisert_time_snitt
-            name: Projisert time-snitt
-          - entity: sensor.effektvakt_margin_til_neste_trinn
-            name: Margin til neste trinn
-          - entity: sensor.effektvakt_topp_3_snitt_denne_maned
-            name: Topp-3 hittil i måned
-          - entity: sensor.effektvakt_tilgjengelig_kutt
-            name: Tilgjengelig kutt
-          - entity: sensor.effektvakt_kostnad_neste_trinn
-            name: Hva timen koster
-          - entity: binary_sensor.effektvakt_kutt_ned_anbefalt
-            name: Kutt anbefalt
-          - entity: switch.effektvakt_automatikk
-            name: Automatikk
-
+          - sensor.effektvakt_risiko_niva
+          - sensor.effektvakt_projisert_time_snitt
+          - sensor.effektvakt_margin_til_neste_trinn
+          - sensor.effektvakt_topp_3_snitt_denne_maned
+          - sensor.effektvakt_kostnad_neste_trinn
+          - binary_sensor.effektvakt_kutt_ned_anbefalt
+          - switch.effektvakt_automatikk
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.effektvakt_tilgjengelig_kutt
+            state_not: unknown
+          - condition: state
+            entity: sensor.effektvakt_tilgjengelig_kutt
+            state_not: unavailable
+        card:
+          type: entities
+          entities:
+            - sensor.effektvakt_tilgjengelig_kutt
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.effektvakt_estimert_kuttenergi_resten_av_timen
+            state_not: unknown
+          - condition: state
+            entity: sensor.effektvakt_estimert_kuttenergi_resten_av_timen
+            state_not: unavailable
+        card:
+          type: entities
+          entities:
+            - sensor.effektvakt_estimert_kuttenergi_resten_av_timen
       - type: history-graph
         title: Risiko siste 24t
         hours_to_show: 24
-        entities:
-          - sensor.effektvakt_risiko_niva
-
+        entities: [sensor.effektvakt_risiko_niva]
       - type: history-graph
         title: Margin siste 24t
         hours_to_show: 24
-        entities:
-          - sensor.effektvakt_margin_til_neste_trinn
+        entities: [sensor.effektvakt_margin_til_neste_trinn]

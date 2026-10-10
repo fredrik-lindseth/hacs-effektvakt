@@ -18,7 +18,7 @@ blueprint:
       name: Kostnad-sensor
       description: >
         Kronene i varselet hentes herfra, fra attributtet
-        kostnad_denne_timen_kr.
+        kostnad_denne_timen_kr, eller kostnad_neste_trinn_kr før timen flytter trinnet.
       default: sensor.effektvakt_kostnad_neste_trinn
       selector:
         entity:
@@ -82,7 +82,7 @@ mode: queued
 action:
   - variables:
       kr_denne_timen: "{{ state_attr(kostnad_sensor, 'kostnad_denne_timen_kr') | int(0) }}"
-      kr_neste_trinn: "{{ states(kostnad_sensor) | int(0) }}"
+      kr_neste_trinn: "{{ state_attr(kostnad_sensor, 'kostnad_neste_trinn_kr') | int(0) }}"
       aktive_kilder: >
         {{ (state_attr(tilgjengelig_kutt_sensor, 'kutt_kilder') or [])
            | selectattr('teller_med') | list }}
@@ -106,7 +106,7 @@ action:
         {% if kr_denne_timen > 0 -%}
           Denne timen låser inn {{ kr_denne_timen }} kr ekstra på nettleien denne måneden.
         {%- elif kr_neste_trinn > 0 -%}
-          Fortsetter timen slik, koster trinnet over {{ kr_neste_trinn }} kr mer i måneden.
+          Trinnet over koster {{ kr_neste_trinn }} kr mer i måneden.
         {%- else -%}
           Timen er på vei mot neste kapasitetstrinn.
         {%- endif %} {% if storste_navn != '' -%}

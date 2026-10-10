@@ -13,8 +13,13 @@ Punktene som er merket `<!--kort-->` er de som havner i den korte release-noten,
 - Verktøy for å hente effekthistorikk fra Home Assistant, analysere lastenes målte påandel, effekt og sykluslengder og simulere lastkutt med utsatt forbruk som må inn igjen. De kjøres lokalt fra repoet og endrer ikke styringen i Home Assistant. [Eksport og analyse](docs/lastprofiler.md#eksporter-historikken-fra-home-assistant) og [sparepotensial og forutsetninger](docs/sparepotensial.md).
 - Historikkprofilene hentes fra recorder i bakgrunnen ved oppstart og hver time. Egne utkoblinger holdes utenfor læringen, også etter omstart. Profilene viser målevindu, datadekning og antall støttende sykluser; manglende historikk gir ukjent anslag.
 
+### Rettet
+
+- Varsel-blueprinten viser prisforskjellen til neste kapasitetstrinn også når den aktuelle timen ennå ikke øker nettleien. Importer «Kun varsel» på nytt for å bruke rettelsen. <!--kort-->
+
 ### Dokumentasjon
 
+- Dashbordeksemplet viser månedsmål og profilanslag, håndterer valgfrie sensorer og skiller manglende grunnlag fra øverste kapasitetstrinn. Blueprint-guiden presiserer aktivering og hovedbryter.
 - Veiledningene er forkortet, med bevarte formler, sensorattributter, blueprint-eksempler og styringsgrenser. Utviklerguiden, PR-malen og kortets ressursbeskrivelse følger dagens test- og registreringsflyt.
 - Årsregneeksempel med andel av kapasitet og samlet kostnad, og scenarioer for vask i lavpristiden, spotpris og høyere Norgespris. FAQ forklarer betydningen av elbil, oppvarming og solceller.
 - README er kortet ned, med spareeksemplet og installasjonen først. Lastprofiler, regnestykkene og simuleringen har egne norske veiledninger, med en etterprøvbar eksempelrapport for den som vil undersøke sitt eget anlegg.

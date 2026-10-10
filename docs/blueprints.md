@@ -1,6 +1,6 @@
 # Blueprints
 
-Fire blueprints følger med. Opprett en automasjon fra valgt blueprint og tilpass entiteter og tidsgrenser.
+Fire blueprints følger med. Importer den du vil bruke, opprett en automasjon fra den og velg dine entiteter. Å registrere kuttbare laster i Effektvakt oppretter ingen automasjoner. Start gjerne med «Kun varsel» før du aktiverer lastkutt.
 
 ## Installer
 
@@ -31,7 +31,7 @@ Slår av én switch når kutt anbefales. Velg lasten og grensene etter hva den t
 | ---------------------- | -------------------------------------------- | ------------------------------------------- |
 | `binary_sensor_entity` | `binary_sensor.effektvakt_kutt_ned_anbefalt` | Effektvakt-sensoren                         |
 | `switch_entity`        | (ingen)                                      | Switchen som slås av                        |
-| `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over. Tom = kutt alltid   |
+| `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over. Tom: hovedbryteren brukes ikke   |
 | `max_off_minutes`      | 60                                           | Kortere grense kan slippe før timeskiftet  |
 | `min_on_minutes`       | 5                                            | Minste påtid før lasten kan kuttes på nytt  |
 
@@ -101,6 +101,8 @@ use_blueprint:
 ```
 
 ## kun_varsel.yaml
+
+Velg en notify-tjeneste som finnes hos deg; `notify` er bare standardnavnet. Kutt-sensoren finnes bare med målte laster. Uten den blir forslaget generelt.
 
 Sender varsel ved `like_under_terskel` eller `over_terskel`, uten laststyring. Beløpet er timens tariffvirkning, eller prisen på neste trinn hvis timen ennå ikke flytter trinnet. Forslaget velger den største målte lasten som bidrar nå. Varsler kommer også med hovedbryteren av.
 
