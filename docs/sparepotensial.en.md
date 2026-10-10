@@ -6,6 +6,22 @@
 
 The historical monthly top-three averages were 5.823 kW in December 2025 and 5.702 kW in February 2026. At NOK 415 per month above 5 kW and NOK 250 at or below 5 kW, lowering both averages by 1 kW gives 4.823 and 4.702 kW and saves NOK 165 each: NOK 330 in total. Lowering them by 600 W gives 5.223 and 5.102 kW, which remain in the same tier. The underlying readings are described in the [fixture documentation](../tests/fixtures/README.md).
 
+## What could it mean over a year?
+
+Annual consumption alone says little about the capacity tier: simultaneous demand determines the peaks. This synthetic BKK example assumes five months in the 5–10 kW tier and seven in the 2–5 kW tier. The annual capacity charge is `5 × 415 + 7 × 250 = NOK 3,825`.
+
+| Months moved to the cheaper tier | Annual saving | Share of capacity charges |
+| ---: | ---: | ---: |
+| 2 | NOK 330 | 8.6% |
+| 4 | NOK 660 | 17.3% |
+| 5 | NOK 825 | 21.6% |
+
+At 16,000 kWh/year, half in each grid tariff period, Norgespris at NOK 0.50/kWh and BKK's 2026 energy rates, electricity plus grid charges total about NOK 17,379/year before supplier markups and fixed fees: `8,000 + 8,000 × (0.4613 + 0.2329) + 3,825`. Saving NOK 330–660 represents about 1.9–3.8% of that cost. Consumption must remain within the monthly Norgespris limit, and the allocation between tariff periods is unchanged.
+
+All five months require the relevant peaks to fall below the threshold without creating new ones when loads resume. Multiplying by twelve only fits a home that would otherwise pay the higher tier in all twelve months. Savings could also be zero. [BKK's current rates](https://www.bkk.no/en/grid-tariffs-for-private-customers).
+
+EV charging can provide more flexibility than small appliances. Solar helps capacity when generation coincides with peak demand; winter peaks after sunset get no such help. See the [FAQ in Norwegian](faq.md#hvor-mye-sparer-jeg-egentlig-på-dette), [laundry and dishwashing](scenario-nattvask.en.md) and [Norgespris scenarios](scenario-norgespris.en.md).
+
 ## A monthly target
 
 In the development version, choose **Monthly target** under **Configure**, such as 5 kW. It is protected from the first day and can trigger earlier and more frequent reductions, even before the hour locks in a higher charge. **Off** uses the default assessment.

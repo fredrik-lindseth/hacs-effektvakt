@@ -6,6 +6,22 @@
 
 Månedens historiske topp-3-snitt var 5,823 kW i desember 2025 og 5,702 kW i februar 2026. Med 415 kr per måned over 5 kW og 250 kr på eller under 5 kW gir 1 kW reduksjon snittene 4,823 og 4,702 kW og 165 kr spart i hver måned: til sammen 330 kr. 600 W reduksjon gir 5,223 og 5,102 kW, fortsatt i samme trinn. Timesdataene er beskrevet i [fixtur-dokumentasjonen](../tests/fixtures/README.md).
 
+## Hva kan det bli på et år?
+
+Årsforbruk alene sier lite om kapasitetstrinnet: samtidigheten bestemmer toppene. Følgende er et syntetisk BKK-eksempel, med fem måneder i 5–10 kW-trinnet og sju i 2–5 kW-trinnet. Kapasitetsleddet er da `5 × 415 + 7 × 250 = 3 825 kr/år`.
+
+| Måneder flyttet til billigere trinn | Spart per år | Andel av kapasitetsleddet |
+| ---: | ---: | ---: |
+| 2 | 330 kr | 8,6 % |
+| 4 | 660 kr | 17,3 % |
+| 5 | 825 kr | 21,6 % |
+
+Med 16 000 kWh/år, halvparten i hver tariffperiode, Norgespris på 50 øre/kWh og BKKs 2026-energiledd blir kraft og nettleie omtrent 17 379 kr/år før leverandørpåslag og fastbeløp: `8 000 + 8 000 × (0,4613 + 0,2329) + 3 825`. Da tilsvarer 330–660 kr omtrent 1,9–3,8 % av denne kostnaden. Regnestykket forutsetter forbruk innen Norgespris-taket hver måned og uendret fordeling mellom tariffperiodene.
+
+Alle fem måneder krever at de avgjørende toppene faktisk kommer under grensen uten nye topper ved gjeninnkobling. Å gange månedsgevinsten med tolv passer bare når alle tolv måneder ellers ville blitt fakturert i det dyrere trinnet. Resultatet kan også bli null. [BKKs gjeldende satser](https://www.bkk.no/en/grid-tariffs-for-private-customers).
+
+Elbillading kan gi større fleksibilitet enn småapparater. Solceller hjelper kapasiteten når produksjonen sammenfaller med topptimene; vintertopper etter solnedgang får ingen slik hjelp. Se [FAQ](faq.md#hvor-mye-sparer-jeg-egentlig-på-dette), [vask og oppvask](scenario-nattvask.md) og [Norgespris-scenarioene](scenario-norgespris.md).
+
 ## Et mål for måneden
 
 I utviklingsversjonen velger du **Mål for måneden** under **Konfigurer**, for eksempel 5 kW. Målet forsvares fra første dag og kan gi tidligere og flere kutt, også før timen låser inn dyrere nettleie. **Av** bruker standardvurderingen.

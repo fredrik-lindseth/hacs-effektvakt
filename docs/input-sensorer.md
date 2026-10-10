@@ -36,3 +36,7 @@ En manuell [lastprofil](lastprofiler.md) kan brukes uten effektsensor til planle
 ## Validering ved oppsett
 
 Oppsettet kontrollerer at sensoren finnes, har godkjent enhet og viser et endelig tall. Ugyldig sensor blokkerer lagring; et peak/max/average-navn gir advarsel.
+
+## Solceller
+
+Effektsensoren skal vise uttak fra nettet etter egenproduksjon, ikke husets bruttoforbruk. Er produksjonen allerede med i nettmålingen, skal den ikke trekkes fra igjen. Bruk en egen kumulativ importenergiteller for energiavstemmingen; en nettoteller som synker ved eksport passer ikke som `total_increasing`. Eksport på et annet tidspunkt opphever ikke månedens importtopper. Se [FAQ](faq.md#påvirker-solceller-dette).

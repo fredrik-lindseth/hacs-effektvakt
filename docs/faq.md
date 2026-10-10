@@ -22,7 +22,9 @@ Det avhenger av tank, temperatur og tapping. Velg maksimal utkobling etter ditt 
 
 ## Hvor mye sparer jeg egentlig på dette?
 
-Bare kutt som flytter månedens fakturerte kapasitetstrinn reduserer kapasitetsleddet. [BKK-eksemplet](sparepotensial.md#regnestykket-fra-bkk) gir 330 kr i mulig reduksjon over to måneder ved 1 kW lavere topp-3-snitt. Det er beregnet potensial, ikke målt sparing.
+Hos BKK gir et trinnskifte fra 5–10 til 2–5 kW 165 kr mindre nettleie per måned. Lykkes du i to, fire eller fem måneder, blir det 330, 660 eller 825 kr/år. Du sparer kapasitetsledd bare når månedens fakturerte trinn faktisk blir lavere. Se [årsregnestykket og forutsetningene](sparepotensial.md#hva-kan-det-bli-på-et-år).
+
+Det avgjørende er hvor nær trinngrensen du ligger, og om du kan flytte forbruk fra topptimene uten å lage nye topper. Elbil, elektrisk oppvarming, bereder, kulde og komfortkrav påvirker dette. Et hus som allerede ligger trygt i sitt billigste aktuelle trinn, kan få null gevinst i kapasitetsleddet selv med høyt årsforbruk. Norgespris endrer kraftprisen, ikke besparelsen ved et bestemt kapasitetstrinn.
 
 ## Hvor mye effekt får jeg faktisk kuttet ved å slå av VVB?
 
@@ -30,7 +32,15 @@ Når elementet varmer, viser effektsensoren det momentane bidraget. Energi som k
 
 ## Hva med elbil-lader?
 
-Lading kan gi stort bidrag når den pågår. Bruk laderens støttede styring og behold nok ladetid før bilen skal brukes.
+En lader på 7,4 kW som går i en halvtime, bidrar med 3,7 kWh til den timen. Å flytte ladingen kan derfor bety mer for toppene enn å slå av små laster, men den nye timen må ha plass og bilen må bli klar i tide. Bruk laderens støttede styring; Effektvakt har ikke en egen ladeplanlegger.
+
+Som et separat regneeksempel gir 3 000 kWh lading flyttet helt fra BKKs dagtariff til natt/helg omtrent 685 kr/år i lavere energiledd, med 2026-satsene. Dette krever at energien faktisk lå i dagtariffen før; eksisterende nattlading gir ikke samme nye gevinst. Kapasitetstrinnet må vurderes i tillegg. Se [tariffene og tidsflytting](scenario-nattvask.md).
+
+## Påvirker solceller dette?
+
+Ja. Egenproduksjon brukt i huset reduserer kjøpet fra nettet. Med 6 kW forbruk og 2 kW solproduksjon blir nettuttaket 4 kW mens begge holder seg på disse nivåene. For kapasitetstrinnet teller timegjennomsnittet og månedens tre høyeste dager: solcellene må produsere i de relevante timene for å senke trinnet. Sommertilgang hjelper ikke mot en vintertopp etter solnedgang.
+
+Effektvakt trenger måling av uttak fra nettet, ikke husets bruttoforbruk. Ikke trekk produksjonen fra en gang til hvis måleren allerede viser nettuttaket; se [sensorkravene](input-sensorer.md). Når du flytter forbruk til soltimer, må spart kjøp også sammenlignes med verdien av eksporten du går glipp av. Natt er derfor ikke alltid billigst for en plusskunde. [NVE om egenforbruk og plusskunder](https://www.nve.no/reguleringsmyndigheten/kunde/stroemnettet/prosumenter-og-plusskunder/).
 
 ## Hvilke laster bør jeg kutte, i prioritert rekkefølge?
 

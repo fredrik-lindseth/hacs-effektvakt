@@ -12,6 +12,12 @@ Norsk · [English](README.en.md)
 
 Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis timen er på vei til å dytte deg opp i et dyrere kapasitetstrinn i nettleien. Integrasjon for Home Assistant, laget for norske strømkunder.
 
+## Hva kan du spare?
+
+Hos BKK koster trinnet 5–10 kW 165 kr mer i måneden enn 2–5 kW. Klarer du å unngå det dyrere trinnet i to til fire måneder, betyr det **330–660 kr mindre nettleie i året**, uten nødvendigvis å bruke mindre strøm. Med fem slike måneder er potensialet 825 kr. Elbillading, bereder og oppvarming gir mulighet til å flytte forbruket; hvor mye du får igjen, avhenger av toppene og hva huset tåler å utsette.
+
+Dette er betingede regneeksempler, ikke målt sparing. I et eksempelhus med 16 000 kWh/år utgjør 330–660 kr omtrent 2–4 % av samlet kraftkostnad og nettleie. Se [årsregnestykket](docs/sparepotensial.md#hva-kan-det-bli-på-et-år), [vask i lavpristiden](docs/scenario-nattvask.md) og [Norgespris mot spotpris](docs/scenario-norgespris.md).
+
 ## Et regneeksempel fra BKK
 
 1 kW lavere topp-3-snitt ville redusert kapasitetsleddet med 165 kr i desember 2025 og 165 kr i februar 2026 i et BKK-anlegg: til sammen 330 kr. 600 W ville ikke vært nok til å nå det billigere trinnet. Dette er et beregnet potensial fra historiske timesdata; lasten må gå lenge nok, og utsatt oppvarming må få plass senere. Se [regnestykket og simuleringen](docs/sparepotensial.md) og [en eksempelrapport for lastprofiler](docs/research/lastprofil-rapport.md).
@@ -67,6 +73,8 @@ CI tester lovet minimum og aktuell Home Assistant-versjon, validerer HACS og has
 | Dokument                                           | Innhold                            |
 | -------------------------------------------------- | ---------------------------------- |
 | [Sparepotensial](docs/sparepotensial.md) | Månedsmål og historisk simulering |
+| [Vask og oppvask i lavpristiden](docs/scenario-nattvask.md) | Forbruk, tidspunkt og nettleie |
+| [Norgespris eller spotpris](docs/scenario-norgespris.md) | Prisordninger og høyere Norgespris |
 | [Lastprofiler](docs/lastprofiler.md) | Metode, lokal analyse og tolkning |
 | [Målerapport](docs/research/lastprofil-rapport.md) | Kunstig eksempel og rapportmal |
 | [docs/oppsett.md](docs/oppsett.md)                 | Konfigurasjonsflyten steg for steg |

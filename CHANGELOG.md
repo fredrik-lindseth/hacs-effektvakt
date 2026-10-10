@@ -15,6 +15,7 @@ Punktene som er merket `<!--kort-->` er de som havner i den korte release-noten,
 
 ### Dokumentasjon
 
+- Årsregneeksempel med andel av kapasitet og samlet kostnad, og scenarioer for vask i lavpristiden, spotpris og høyere Norgespris på norsk og engelsk. FAQ forklarer betydningen av elbil, oppvarming og solceller.
 - README er kortet ned, med spareeksemplet og installasjonen først. Lastprofiler, regnestykkene og simuleringen har egne veiledninger på norsk og engelsk, med en etterprøvbar eksempelrapport for den som vil undersøke sitt eget anlegg.
 
 ## [0.4.0] - 2026-10-09

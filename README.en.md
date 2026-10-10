@@ -12,9 +12,15 @@
 
 Effektvakt projects your average consumption for the current hour and warns when it could push you into a more expensive grid capacity tier. It is a Home Assistant integration for electricity customers in Norway.
 
+## What could you save?
+
+At BKK, the 5–10 kW capacity tier costs NOK 165 more per month than the 2–5 kW tier. Avoiding the higher tier in two to four months means **NOK 330–660 less in annual grid charges**, without necessarily using less electricity. Five such months would mean NOK 825. EV charging, water heating and space heating provide flexibility; the result depends on your peaks and how much demand you can defer.
+
+These are conditional calculations, not measured savings. For an example home using 16,000 kWh/year, NOK 330–660 is about 2–4% of combined electricity and grid costs. See the [annual calculation](docs/sparepotensial.en.md#what-could-it-mean-over-a-year), [laundry during cheaper grid periods](docs/scenario-nattvask.en.md) and [Norgespris versus spot prices](docs/scenario-norgespris.en.md).
+
 ## A savings example from BKK
 
-Reducing the monthly top-three average by 1 kW would have lowered a BKK household's capacity charge by NOK 165 in December 2025 and NOK 165 in February 2026: NOK 330 in total. A 600 W reduction would not have reached the cheaper tier. This is conditional potential calculated from historical readings; the load must run for long enough, and deferred heating must fit into later hours. See the [calculation and simulation](docs/sparepotensial.en.md) and the [an example load-profile report](docs/research/lastprofil-rapport.en.md).
+Reducing the monthly top-three average by 1 kW would have lowered a BKK household's capacity charge by NOK 165 in December 2025 and NOK 165 in February 2026: NOK 330 in total. A 600 W reduction would not have reached the cheaper tier. This is conditional potential calculated from historical readings; the load must run for long enough, and deferred heating must fit into later hours. See the [calculation and simulation](docs/sparepotensial.en.md) and [an example load-profile report](docs/research/lastprofil-rapport.en.md).
 
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt dashboard card: an analogue demand monitor with a kW scale, monthly capacity prices and three indicators" width="420">
@@ -67,6 +73,8 @@ CI tests the promised minimum and current Home Assistant versions, checks HACS a
 | Document | Contents |
 | --- | --- |
 | [Savings potential](docs/sparepotensial.en.md) | Monthly target and historical simulation |
+| [Laundry during cheaper grid periods](docs/scenario-nattvask.en.md) | Consumption, timing and grid charges |
+| [Norgespris or spot prices](docs/scenario-norgespris.en.md) | Price schemes and a higher Norgespris |
 | [Load profiles](docs/lastprofiler.en.md) | Method, local analysis and interpretation |
 | [Measurement report](docs/research/lastprofil-rapport.en.md) | Synthetic example and reporting guide |
 | [Setup](docs/oppsett.md) | Configuration step by step |
