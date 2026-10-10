@@ -12,6 +12,14 @@ Norsk · [English](README.en.md)
 
 Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis timen er på vei til å dytte deg opp i et dyrere kapasitetstrinn i nettleien. Integrasjon for Home Assistant, laget for norske strømkunder.
 
+## Et regneeksempel fra BKK
+
+I timesdata fra et BKK-anlegg var månedens topp-3-snitt 5,823 kW i desember 2025 og 5,702 kW i februar 2026. Begge månedene kostet kapasitetstrinnet 415 kr. Hvis laststyring hadde redusert topp-3-snittene med 1 kW, ville de blitt 4,823 og 4,702 kW. Da ville kapasitetsleddet kostet 250 kr per måned: 165 kr mindre i hver måned, til sammen 330 kr.
+
+600 W reduksjon i topp-3-snittene ville gitt 5,223 og 5,102 kW. Det er fortsatt over 5 kW og gir ingen reduksjon i kapasitetsleddet. Hvor mye last du kan kutte, og hvor lenge, avgjør om du kommer ned et trinn.
+
+Dette er et beregnet potensial fra [historiske timesdata](tests/fixtures/README.md), ikke en målt besparelse fra automatisk styring. Lasten må faktisk være på og kunne kobles ut lenge nok. Utsatt oppvarming eller lading må også få plass senere uten å lage nye topper. Effektvakt viser når et lastkutt kan påvirke kapasitetsleddet og lar deg varsle eller styre lastene med blueprints.
+
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt-kortet: en gjenskapt analog effektvakt med kW-skala, kapasitetstrinn med månedspris, og tre visere" width="420">
 </p>

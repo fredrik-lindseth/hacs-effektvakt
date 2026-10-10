@@ -12,6 +12,14 @@
 
 Effektvakt projects your average consumption for the current hour and warns when it could push you into a more expensive grid capacity tier. It is a Home Assistant integration for electricity customers in Norway.
 
+## A savings example from BKK
+
+Historical hourly readings from a BKK household show monthly top-three averages of 5.823 kW in December 2025 and 5.702 kW in February 2026. The capacity charge was NOK 415 in each month. If load control had reduced the monthly top-three averages by 1 kW, they would have fallen to 4.823 and 4.702 kW. The capacity charge would then have been NOK 250 per month: NOK 165 less in each month, or NOK 330 in total.
+
+A 600 W reduction in the monthly top-three averages would have left averages of 5.223 and 5.102 kW. Both remain above 5 kW, with no reduction in the capacity charge. The amount of load you can switch off and how long it can stay off determine whether you can reach a lower tier.
+
+This is calculated potential from [historical hourly readings](tests/fixtures/README.md), rather than measured savings from automated control. The load must actually be running and be available to switch off for long enough. Deferred heating or charging must fit into later hours without creating new peaks. Effektvakt shows when reducing a load could affect the capacity charge, with blueprints for notifications or load control.
+
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt dashboard card: an analogue demand monitor with a kW scale, monthly capacity prices and three indicators" width="420">
 </p>
