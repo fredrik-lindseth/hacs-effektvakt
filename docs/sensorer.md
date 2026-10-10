@@ -1,6 +1,6 @@
 # Sensorer
 
-Effektvakt oppretter ett device med 6 sensorer, 1 binary sensor og 1 switch. Sensorene deler et sett felles attributter.
+Entitetene deler én enhet og felles beregningsattributter. Tilgjengelig kutt og profilestimat opprettes bare når oppsettet gir grunnlag for dem.
 
 ## Oversikt
 
@@ -49,8 +49,6 @@ Skal du legge til en entitet: unique_id og entity_id skal ha samme nøkkel som `
 
 **Hva den måles mot** står i attributtene, for referansen flytter seg gjennom måneden. `maal_terskel_kw` er terskelen til det billigste trinnet måneden fortsatt kan ende på, `dagstak_kw` er hva dagen i dag tåler gitt de to høyeste andre dagene, og `time_tak_kw` er det samme med dagens eget dagsmaks lagt inn. Hele regnestykket står i [beregninger.md](beregninger.md#terskelmodellen).
 
-Navnet stemmer fortsatt: marginen er avstanden til det trinnet måneden faktisk kan ende på, og krysser du den, er det neste trinn du havner på. Fram til september 2026 var det ikke sant. Da målte sensoren mot `max(neste terskel, snitt av topp-2 dager)`, et tall uten betydning, og en lav projeksjon kunne gjøre «neste trinn» til et trinn brukeren for lengst hadde passert.
-
 **Pålitelighet**: Avhenger av projisert time-snitt, og er mer usikker tidlig i timen. `unknown` kan bety manglende eller utdaterte effektmålinger, ukjent eller sperret tariffmetode, eller at måneden alt ligger på øverste trinn. Se `beregning_gyldig` og `maalegrunnlag_problem` før du tolker en ukjent margin.
 
 ---
@@ -63,9 +61,7 @@ Navnet stemmer fortsatt: marginen er avstanden til det trinnet måneden faktisk 
 
 **Oppdateres**: Hver gang en time fullføres, altså ved time-skifte.
 
-**Alltid delt på tre**, også med færre enn tre dager logget. Dager som ikke finnes ennå teller som null. Det gjør tallet monotont: det stiger gjennom måneden og faller aldri fordi en rolig dag kom til. Delte sensoren på antall dager, ville to dager på 6,0 og 4,0 vist 5,0, og falt til 3,67 i det en tredje dag på 1,0 kom inn, som om noe var reddet.
-
-Tallet er samtidig en nedre skranke for hva måneden kan ende på, og det er samme verdi som attributtet `minste_mulige_topp_3_kw` på kostnadssensoren. Det er med vilje: det skal ikke finnes to konkurrerende topp-3 i huset.
+Snittet deles alltid på tre; manglende dager teller som null. Det viser samme nedre skranke som `minste_mulige_topp_3_kw`.
 
 **Merk**: Sensoren viser 0,0 kW helt i starten av en ny måned (ingen dager logget ennå). Det er korrekt oppførsel, og tilbakestillingen skjer automatisk ved månedsskifte.
 
@@ -114,13 +110,11 @@ dag_som_ryker:
 | `like_under_terskel`  | Like under terskelen  | 0 < margin <= sikkerhetsbuffer                    |
 | `over_terskel`        | Over terskelen        | Margin <= 0 (terskelen er overskredet)            |
 
-De to øverste nivåene krever i tillegg at timen faktisk koster penger. Koster den ingenting, står sensoren på `naermer_seg_terskel` selv om projeksjonen ligger over taket. Det er med vilje: projeksjonen tidlig i timen er nesten bare øyeblikkseffekten, og en vannkoker skal ikke slå av berederen på en time som ender langt under. Se [kuttkriteriet i beregninger.md](beregninger.md#kuttkriteriet-flytter-denne-timen-trinnet) for utledningen og for hva ventingen koster.
+Høy rå risiko krever oppfylt [kuttkriterium](beregninger.md#kuttkriteriet-flytter-denne-timen-trinnet). Standardvurderingen krever tariffvirkning; et valgt månedsmål kan også begrunne kutt før timen koster noe.
 
 Følgen er at `like_under_terskel` bare opptrer på vei ned: hysteresen går innom den når risikoen faller fra `over_terskel`. Den kan ikke lenger oppstå direkte av margin og buffer.
 
 Tilstanden er verdien i venstre kolonne. Det er den automasjoner, maler og logger sammenligner mot. Teksten i midten er oversettelsen HA viser, på norsk og engelsk.
-
-Verdiene het `none`, `low`, `medium` og `high` fram til september 2026. Gamle verdier lagret i config entryen eller i hysterese-tilstanden oversettes automatisk, men historikk i recorder står igjen med de gamle navnene, så en graf over månedsskiftet ser delt ut.
 
 **Hysterese**: Oppgang til et mer alvorlig nivå skjer umiddelbart. Nedgang skjer ett trinn av gangen og krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min) før det bekreftes.
 
@@ -199,8 +193,6 @@ Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til 
 
 **Hva**: Kronene den inneværende timen er i ferd med å låse inn. Null nesten alltid, og spiker i det timen faktisk flytter måneden opp et trinn. Ligger måneden an til BKKs 10 kW-trinn til 415 kr, men dagene alene gir 5 kW-trinnet til 250 kr, viser sensoren 165.
 
-Tilstanden var fram til september 2026 hoppet til neste trinn, som står stille hele måneden. En sensor som viser 185 i 30 døgn er en attributtpose og ikke en måling; hoppet ligger nå i attributtet `kostnad_neste_trinn_kr`. Timens kostnad er derimot noe en graf og en automasjon kan gjøre noe med, og blueprintene bruker den alt (`kun_varsel.yaml`).
-
 **Enhet**: kr/mnd. Timens kostnad er også kr/mnd: det er månedsregningen timen flytter, ikke en timepris. Ingen device_class: `MONETARY` krever ISO-valutakode som enhet og en total-state_class, og satser hører hjemme i kr/mnd. Samme regel som i strømkalkulator. State class er `measurement`, så tallet kan grafes over tid.
 
 **Trinnet du ligger an til** er trinnet til `topp_3_projisert_kw`, ikke til topp-3-snittet slik det står nå. Det er topp-3-snittet der dagens dagsmaks er byttet ut med det høyeste av dagens maks så langt og projisert time-snitt nå. Prisen er flat månedspris uten pro rata, så sensoren er like skarp den 1. som den 28.
@@ -241,17 +233,13 @@ kapasitetstrinn:
   - [null, 6900]
 ```
 
-`trinn_under_realistisk` er det som avgjør om «trinnet under er ute av rekkevidde» er verdt å vise i det hele tatt. Under BKKs 2 til 5 kW-trinn ligger 0 til 2 kW, og ingen bolig lander der: `trinn_under_oppnaelig` står på `false` hele året, og en melding gatet på den alene ville stått permanent. En melding som alltid står er ikke informasjon. Belegget er husets eget forbruk, se [beregninger.md](beregninger.md#er-trinnet-under-realistisk).
-
-`trinn_under_oppnaelig` sammenligner `minste_mulige_topp_3_kw` mot terskelen til trinnet under. Skranken teller bare dagsmaks som alt er låst inn, ikke den inneværende timen, nettopp fordi den timen fortsatt kan kuttes. En enkelt dag på 7 kW gir 2,33, og trinnet under er da oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og løpet er kjørt for denne måneden.
-
 ---
 
 ## `binary_sensor.effektvakt_kutt_ned_anbefalt`
 
 **Hva**: `on` når hysteresefull risiko er lik eller høyere enn konfigurert `min_risiko_for_kutt` (standard `like_under_terskel`).
 
-Siden de to øverste risikonivåene krever at timen faktisk koster penger, gjør den også det. Setter du `min_risiko_for_kutt` til `naermer_seg_terskel`, slår sensoren på også for timer som er gratis; det er den aggressive innstillingen, og den er ment slik.
+Kuttkriteriet og et eventuelt månedsmål avgjør rå risiko. Velger du `naermer_seg_terskel` som minste nivå, kan sensoren også slå på for timer uten tariffvirkning.
 
 **Verdier**: `on` (vises som «Kutt anbefalt»), `off` («Ingen handling»), `unknown` (manglende beregningsgrunnlag eller coordinator som har stoppet)
 

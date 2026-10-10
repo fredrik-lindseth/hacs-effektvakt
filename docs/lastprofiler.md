@@ -6,17 +6,13 @@ En lastprofil beskriver hvor ofte en last trekker strøm, effekten mens den er p
 
 ## Effekt, påandel og energi
 
-2 000 W varme med 15 % arbeidssyklus gir 300 W i tidsvektet gjennomsnitt, eller 0,3 kWh per gjennomsnittstime. Er varmen på nå, kan momentant tilgjengelig kutt være 2 kW. Hvor mye kuttet reduserer timens energi avhenger av hvor lenge varmen ellers ville gått og hvor lenge den kan være utkoblet.
+2 000 W med 15 % arbeidssyklus gir 300 W i gjennomsnitt, eller 0,3 kWh per gjennomsnittstime. Momentant kutt kan være 2 kW når lasten er på. Kuttenergien avhenger av hvor lenge den ellers ville gått.
 
-300 W som ellers ville gått i tjue minutter, bidrar med 0,1 kWh. Ville termostaten stoppet etter fem minutter, er bidraget 0,025 kWh. Når vi kjenner hvor lenge lasten har vært på, bruker vi varigheten til sammenlignbare historiske sykluser framfor å anta at den går resten av timen.
-
-Målte watt, en antatt nominell effekt og et profilbasert energianslag har forskjellig grunnlag. En manuell arbeidssyklus kan brukes selv om ukens målinger ikke er representative, men skal vises som en antakelse. Ett fysisk apparat skal bare telles én gang.
-
-Profiler oppdateres hver time. Ved en midlertidig recorder-feil beholdes siste profil med opprinnelig oppdateringstid og feilstatus. Er profilen mer enn 24 timer gammel, brukes den ikke til å beregne kuttenergi eller styringsråd; historikkgrunnlaget vises fortsatt. En manuell profil uten måling gir planlegging og oppretter ikke sensoren for målt tilgjengelig kutt.
+300 W i tjue minutter bidrar med 0,1 kWh; i fem minutter er bidraget 0,025 kWh. Bruk kjent påtid og sammenlignbare sykluser til å anslå restvarighet. Manuell nominell effekt og arbeidssyklus merkes som antakelser. Tell hver fysisk last én gang.
 
 ## Profiler inne i Home Assistant
 
-Utviklingsversjonen har et profilvalg per kuttbar last under Konfigurer. Velg **Av**, **Historikk (siste sju dager)** eller **Manuell**. Automatisk profil bruker de siste sju dagene i recorder-historikken og oppdateres i bakgrunnen hver time. Effektsensoren må være med i recorder-historikken.
+Utviklingsversjonen har et profilvalg per kuttbar last under Konfigurer. Velg **Av**, **Historikk (siste sju dager)** eller **Manuell**. Automatisk profil bruker de siste sju dagene i recorder-historikken og oppdateres i bakgrunnen hver time. Effektsensoren må være med i recorder-historikken. Ved recorder-feil beholdes siste profil med feilstatus og opprinnelig tidspunkt. Profiler eldre enn 24 timer brukes ikke i anslaget.
 
 For en manuell profil oppgir du nominell effekt i W og arbeidssyklus i prosent. Typisk påtid er valgfri. En navngitt manuell last kan legges inn uten effektsensor, for eksempel gulvvarme med kjent installert effekt. Da bidrar den med et anslag for planlegging og telles ikke som målt tilgjengelig kutt. Climate-entiteter kan knyttes til lasten som aktuator; `heat`-modus tolkes aldri som målt aktiv oppvarming.
 
@@ -75,8 +71,6 @@ Varighet beregnes i faktisk tid med tidssone. Ved sommertidsskiftet er to lokale
 
 ## Bruk profilen til å spare
 
-Start med hvor mye energi som må bort fra timen for å beskytte månedsmålet eller unngå et dyrere trinn. Sammenlign dette behovet med lastenes forventede bidrag innenfor tillatt utkobling. Aktuell effekt og forventet gjenværende påtid er viktigere enn døgnsnittet når kuttet skal velges.
+Sammenlign energien som må bort fra timen med bidraget fra aktive laster innenfor tillatt utkobling. Behold temperaturbehov, frister og minste påtid. Koble til riktig aktuator, så egne kutt holdes utenfor læringen.
 
-Profiler skal beskrive naturlig drift. Perioder hvor Effektvakt selv har koblet ut lasten må holdes utenfor læringen; ellers lærer vi at et styrt avbrudd var termostatens normale stopp. Koble lasten til samme aktuator som brukes til styring, og behold temperaturgrenser, maksimal utkobling og minste påtid.
-
-Utsatt varme eller lading må kunne tas igjen uten å lage en ny topp. Et redusert kapasitetstrinn er spart nettleie; flytting av forbruk er ikke i seg selv spart energi. [Simuleringen](sparepotensial.md#regneeksempel-og-simulert-styring) og [målerapporten](research/lastprofil-rapport.md) viser hvorfor begge deler må undersøkes. Verktøyet analyserer data og kobler ikke ut laster.
+Utsatt forbruk må få plass senere uten en ny topp. Flytting av kWh er ikke i seg selv spart energi; redusert kapasitetstrinn er spart nettleie. Se [simuleringen](sparepotensial.md#regneeksempel-og-simulert-styring). Analyseverktøyet kobler ikke ut laster.

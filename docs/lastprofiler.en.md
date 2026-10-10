@@ -6,17 +6,13 @@ A load profile describes how often a load draws power, its power while active an
 
 ## Power, active share and energy
 
-2,000 W of heating with a 15% duty cycle averages 300 W over time, or 0.3 kWh per average hour. When the heating is running, instantaneous available reduction can be 2 kW. Its contribution to the hour depends on how long it would otherwise continue and how long it may remain switched off.
+2,000 W at a 15% duty cycle averages 300 W, or 0.3 kWh per average hour. Instantaneous reduction can be 2 kW while active. Reduction energy depends on how long it would otherwise continue.
 
-300 W that would otherwise run for twenty minutes contributes 0.1 kWh. If the thermostat would stop after five minutes, the contribution is 0.025 kWh. When the elapsed active time is known, comparable historical cycles help estimate remaining operation instead of assuming a full remaining hour.
-
-Measured power, assumed rated power and a profile-based energy estimate have different evidence behind them. A manual duty cycle can be useful when this week's readings are unrepresentative, but must be shown as an assumption. Count each physical appliance once.
-
-Profiles update hourly. A temporary recorder failure retains the last profile with its original update time and error status. Profiles older than 24 hours are excluded from reduction-energy estimates and control advice; their historical basis remains visible. A manual profile without a measurement provides planning estimates and does not create the measured available-reduction sensor.
+300 W for twenty minutes contributes 0.1 kWh; five minutes contributes 0.025 kWh. Use elapsed active time and comparable cycles to estimate remaining duration. Manual rated power and duty cycle are labelled assumptions. Count each physical load once.
 
 ## Profiles inside Home Assistant
 
-The development version adds a profile setting to each controllable load under Configure. Choose **Off**, **History (last seven days)** or **Manual**. Automatic profiles use the last seven days of recorder history and refresh in the background each hour. The power sensor must be included in recorder history.
+The development version adds a profile setting to each controllable load under Configure. Choose **Off**, **History (last seven days)** or **Manual**. Automatic profiles use the last seven days of recorder history and refresh in the background each hour. The power sensor must be included in recorder history. If recorder fails, the last profile keeps its original timestamp and gets an error status. Profiles older than 24 hours are excluded from the estimate.
 
 For a manual profile, enter rated power in W and duty cycle in percent. Typical active duration is optional. A named manual load can be configured without a power sensor, for example for floor heating with known rated power. It contributes an estimate for planning and is not counted as measured instantaneous reduction. Climate entities may be associated as control actuators; `heat` mode is never interpreted as measured active heating.
 
@@ -75,8 +71,6 @@ Durations use elapsed time with time zones. During the autumn daylight-saving tr
 
 ## Use the profile to save money
 
-Start with the energy that must be removed from the hour to protect a monthly target or avoid a higher tier. Compare it with each load's expected contribution within its allowed off-time. Current power and expected remaining active time matter more than daily averages when selecting a reduction.
+Compare the energy needed to protect the hour with active loads' contributions within their allowed off-time. Retain temperature requirements, deadlines and minimum on-time. Associate the correct actuator so controlled reductions are excluded from learning.
 
-Profiles should describe natural operation. Exclude periods when Effektvakt controlled the load; otherwise a controlled interruption can be learned as a natural thermostat stop. Associate the load with the actuator used for control and retain temperature limits, maximum off-time and minimum on-time.
-
-Deferred heating or charging must be recovered without creating another peak. A lower capacity tier saves grid charges; shifting consumption does not itself save energy. The [simulation](sparepotensial.en.md#arithmetic-example-and-simulated-control) and [measurement report](research/lastprofil-rapport.en.md) explain why both must be assessed. The analysis tool does not switch loads.
+Deferred consumption must fit later without another peak. Shifting kWh does not itself save energy; a lower capacity tier saves grid charges. See the [simulation](sparepotensial.en.md#arithmetic-example-and-simulated-control). The analysis tool does not switch loads.

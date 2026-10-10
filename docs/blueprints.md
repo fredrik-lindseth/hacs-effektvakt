@@ -219,26 +219,10 @@ use_blueprint:
 
 ## Gjeninnkoblingsvern
 
-Lastkutt-blueprintene krever `effektvakt.styr_last` fra integrasjonen. Oppdater
-integrasjonen og importer blueprintene på nytt samtidig. Eldre, allerede
-importerte kopier har fortsatt den gamle ventingen og får ikke vernet automatisk.
+Lastkutt-blueprintene krever `effektvakt.styr_last` fra integrasjonen. Oppdater integrasjonen og importer blueprintene på nytt samtidig. Eldre, allerede importerte kopier har fortsatt den gamle ventingen og får ikke vernet automatisk.
 
-Blueprinten ber om kutt eller slipp og vurderer vedvarende risiko hvert minutt.
-Integrasjonens lastvern lagrer originaltilstand, eier og frist før kuttet. Det
-slipper ved neste hele time eller `max_off_minutes`, det som kommer først.
-Gjentatte forespørsler forlenger aldri fristen. Reload av automasjoner avbryter
-ikke vernet. Ved HA-start gjenopprettes tidligere eide kutt så snart aktuatoren
-svarer. En utilgjengelig aktuator prøves igjen når tilstanden endrer seg og hvert
-30. sekund. HA må kjøre og aktuatoren må være tilgjengelig for at en kommando
-skal kunne utføres.
+Blueprinten ber om kutt eller slipp og vurderer vedvarende risiko hvert minutt. Integrasjonens lastvern lagrer originaltilstand, eier og frist før kuttet. Det slipper ved neste hele time eller `max_off_minutes`, det som kommer først. Gjentatte forespørsler forlenger aldri fristen. Reload av automasjoner avbryter ikke vernet. Ved HA-start gjenopprettes tidligere eide kutt så snart aktuatoren svarer. En utilgjengelig aktuator prøves igjen når tilstanden endrer seg og hvert 30. sekund. HA må kjøre og aktuatoren må være tilgjengelig for at en kommando skal kunne utføres.
 
-Minste påtid regnes fra bekreftet gjeninnkobling og lagres på disk. Blink i
-risikosensoren eller en ny automasjonskjøring kan derfor ikke omgå den. Kutt
-kan først begynne igjen ved neste vurdering etter at påtiden er utløpt.
+Minste påtid regnes fra bekreftet gjeninnkobling og lagres på disk. Blink i risikosensoren eller en ny automasjonskjøring kan derfor ikke omgå den. Kutt kan først begynne igjen ved neste vurdering etter at påtiden er utløpt.
 
-En switch som allerede var av, eller et setpunkt som allerede var lavere enn
-kutt-temperaturen, overtas ikke og blir heller ikke gjenopprettet. Et manuelt
-endret setpunkt under kuttet beholdes. To automasjoner kan ikke eie et aktivt
-kutt på samme aktuator samtidig; den andre får en tjenestefeil. Bruk én
-styringsautomasjon per last. Vernet fortsetter å fullføre aktive gjeninnkoblinger
-selv om et Effektvakt-oppsett lastes ut. Nye kutt krever en aktiv automasjon.
+En switch som allerede var av, eller et setpunkt som allerede var lavere enn kutt-temperaturen, overtas ikke og blir heller ikke gjenopprettet. Et manuelt endret setpunkt under kuttet beholdes. To automasjoner kan ikke eie et aktivt kutt på samme aktuator samtidig; den andre får en tjenestefeil. Bruk én styringsautomasjon per last. Vernet fortsetter å fullføre aktive gjeninnkoblinger selv om et Effektvakt-oppsett lastes ut. Nye kutt krever en aktiv automasjon.

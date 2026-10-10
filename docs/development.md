@@ -71,11 +71,7 @@ tests/
 
 ## Kjøre tester
 
-Portene kjøres med [`just`](https://github.com/casey/just) og
-[uv](https://docs.astral.sh/uv/). På macOS: `brew install just`, og uv fra
-installasjonsscriptet deres. Ingenting installeres i system-Python, og
-`pip install -e .` trengs ikke: `tests/conftest.py` legger
-`custom_components/` på `sys.path` selv.
+Portene kjøres med [`just`](https://github.com/casey/just) og [uv](https://docs.astral.sh/uv/). På macOS: `brew install just`, og uv fra installasjonsscriptet deres. Ingenting installeres i system-Python, og `pip install -e .` trengs ikke: `tests/conftest.py` legger `custom_components/` på `sys.path` selv.
 
 ```bash
 just                       # list oppskriftene
@@ -87,13 +83,11 @@ just coverage              # coverage med terskel (feller under 95 %)
 just fmt                   # formater, den eneste oppskriften som skriver
 ```
 
-Oppskriftene er de samme kommandolinjene CI og pre-commit kjører. Er `just
-check` grønn lokalt, er kvalitetsjobben i CI grønn på den samme commiten.
+Oppskriftene er de samme kommandolinjene CI og pre-commit kjører. Er `just check` grønn lokalt, er kvalitetsjobben i CI grønn på den samme commiten.
 
 ### Miljøene
 
-Avhengighetene står som `[dependency-groups]` i `pyproject.toml` og er låst i
-`uv.lock`. Hver gruppe får sitt eget venv, og ingen av dem deler `sys.modules`:
+Avhengighetene står som `[dependency-groups]` i `pyproject.toml` og er låst i `uv.lock`. Hver gruppe får sitt eget venv, og ingen av dem deler `sys.modules`:
 
 | Gruppe       | Miljø              | Python | Innhold                                      |
 | ------------ | ------------------ | ------ | -------------------------------------------- |
@@ -102,9 +96,7 @@ Avhengighetene står som `[dependency-groups]` i `pyproject.toml` og er låst i
 | `ha-minimum` | `.venv-ha-minimum` | 3.13   | ekte HA 2025.1.0, det `hacs.json` lover      |
 | `ha-current` | `.venv-ha-current` | 3.14   | ekte HA 2026.10.0                             |
 
-De to HA-gruppene er løst i `uv.lock` og kjører `tests_ha/`, inkludert blueprintenes kontrollflyt og lastvern med ekte Home Assistant. Verktøyene i
-`kvalitet` er pinnet eksakt til de samme versjonene `.pre-commit-config.yaml`
-bruker; sprik der viser seg som at formateringen endrer seg av seg selv.
+De to HA-gruppene er løst i `uv.lock` og kjører `tests_ha/`, inkludert blueprintenes kontrollflyt og lastvern med ekte Home Assistant. Verktøyene i `kvalitet` er pinnet eksakt til de samme versjonene `.pre-commit-config.yaml` bruker; sprik der viser seg som at formateringen endrer seg av seg selv.
 
 ### DSO-tabellen
 
@@ -124,22 +116,15 @@ pre-commit install --hook-type pre-push
 pre-commit run --files <filene dine>
 ```
 
-Hookene kjører ruff (lint og format), vulture, mypy og de vanlige
-whitespace-, JSON- og YAML-sjekkene. `mypy` er blokkerende, både her og i CI.
-DSO-hooken er `files`-gatet på `dso.py`, generatoren og `dso_kilder.json`, så
-den kjører bare når du rører dem. `pytest` henger på `pre-push` og kaller
-`just test-unit`, altså nøyaktig den samme kommandolinjen som CI.
+Hookene kjører ruff (lint og format), vulture, mypy og de vanlige whitespace-, JSON- og YAML-sjekkene. `mypy` er blokkerende, både her og i CI. DSO-hooken er `files`-gatet på `dso.py`, generatoren og `dso_kilder.json`, så den kjører bare når du rører dem. `pytest` henger på `pre-push` og kaller `just test-unit`, altså nøyaktig den samme kommandolinjen som CI.
 
-Flere agenter jobber i det samme treet, så kjør `pre-commit run --files` med
-dine egne filer framfor `--all-files`.
+Flere agenter jobber i det samme treet, så kjør `pre-commit run --files` med dine egne filer framfor `--all-files`.
 
 ---
 
 ## Oppdatere DSO-data
 
-`custom_components/effektvakt/dso.py` er generert fra tariffilene i
-[kraftsystemet/fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) (CC-BY-4.0), pinnet til
-commiten som står i `scripts/dso_kilder.json`. Slik tar du inn nye satser:
+`custom_components/effektvakt/dso.py` er generert fra tariffilene i [kraftsystemet/fri-nettleie](https://github.com/kraftsystemet/fri-nettleie) (CC-BY-4.0), pinnet til commiten som står i `scripts/dso_kilder.json`. Slik tar du inn nye satser:
 
 ```bash
 # 1. sett _meta.commit og _meta.tariff_dato i scripts/dso_kilder.json
@@ -149,10 +134,7 @@ python3 scripts/generer_dso_fra_fri_nettleie.py
 python3 -m pytest tests/test_dso_data.py
 ```
 
-Scriptet laster ned tariffene selv. Har du en utsjekk av fri-nettleie, gir `--kilde <sti>` samme
-resultat uten nett, og det er den varianten CI bruker. `--check` feller hvis `dso.py` ikke er
-nøyaktig det generatoren ville skrevet. Se [dso.md](dso.md) for formatet og for de to
-nettselskapene som ikke følger NVE-modellen.
+Scriptet laster ned tariffene selv. Har du en utsjekk av fri-nettleie, gir `--kilde <sti>` samme resultat uten nett, og det er den varianten CI bruker. `--check` feller hvis `dso.py` ikke er nøyaktig det generatoren ville skrevet. Se [dso.md](dso.md) for formatet og for de to nettselskapene som ikke følger NVE-modellen.
 
 ---
 
@@ -188,29 +170,18 @@ Teksten ligger som ekte `<text>`-elementer med en fontstakk, ikke som baner. Den
 
 ## Regenerere ikonet
 
-Integrasjonsikonet er én SVG, `images/icon.svg`, og PNG-ene Home Assistant leser er
-generert fra den:
+Integrasjonsikonet er én SVG, `images/icon.svg`, og PNG-ene Home Assistant leser er generert fra den:
 
 ```bash
 python3 scripts/generate_brand_images.py          # skriv PNG-ene
 python3 scripts/generate_brand_images.py --sjekk  # exit 1 hvis de er utdaterte
 ```
 
-Filene havner i `custom_components/effektvakt/brand/` som `icon.png` (256x256) og
-`icon@2x.png` (512x512). HA serverer brand-bilder for custom integrations derfra før den
-går til brands-CDN-en, og betingelsen er at mappen heter `brand` og ligger rett i
-integrasjonsmappen (`integration.has_branding` i HA sin `loader.py`). De samme PNG-ene er
-materialet til PR-en mot `home-assistant/brands`.
+Filene havner i `custom_components/effektvakt/brand/` som `icon.png` (256x256) og `icon@2x.png` (512x512). HA serverer brand-bilder for custom integrations derfra før den går til brands-CDN-en, og betingelsen er at mappen heter `brand` og ligger rett i integrasjonsmappen (`integration.has_branding` i HA sin `loader.py`). De samme PNG-ene er materialet til PR-en mot `home-assistant/brands`.
 
-Rendringen trenger `rsvg-convert` (`brew install librsvg`). Hver PNG bærer SHA-256-en av
-SVG-en den kom fra i en tEXt-chunk, så `tests/test_brand_images.py` kjenner igjen en
-utdatert PNG uten å kunne rendre selv. Den testen er fasit på ikonet: størrelser,
-gjennomsiktighet, trimming, at alle fire kantene er nådd, og at fargetokenet holder 3:1
-mot både hvit og HA sin mørke bakgrunn. Rediger aldri PNG-ene for hånd.
+Rendringen trenger `rsvg-convert` (`brew install librsvg`). Hver PNG bærer SHA-256-en av SVG-en den kom fra i en tEXt-chunk, så `tests/test_brand_images.py` kjenner igjen en utdatert PNG uten å kunne rendre selv. Den testen er fasit på ikonet: størrelser, gjennomsiktighet, trimming, at alle fire kantene er nådd, og at fargetokenet holder 3:1 mot både hvit og HA sin mørke bakgrunn. Rediger aldri PNG-ene for hånd.
 
-Farger skrives bare som klasseregler i `<style>`-blokken i SVG-en, aldri i tegneelementene.
-Ikonet er kabinettet med skivebuen og viseren skåret ut av plata, så ingenting inne i
-motivet trenger å holde kontrast på egen hånd: hullene viser siden bak.
+Farger skrives bare som klasseregler i `<style>`-blokken i SVG-en, aldri i tegneelementene. Ikonet er kabinettet med skivebuen og viseren skåret ut av plata, så ingenting inne i motivet trenger å holde kontrast på egen hånd: hullene viser siden bak.
 
 Skal ikonet endres, døm det i liten størrelse før du tror på det. Kontaktark:
 
@@ -226,10 +197,7 @@ done
 
 ## Prøve Lovelace-kortet
 
-`python3 docs/kort-harness/server.py` kjører kortet i nettleseren uten Home
-Assistant, med skiver generert fra `faceplate.py` og kortfilen lastet rett fra
-`custom_components/effektvakt/www/`. Bruk den framfor å legge testkort i en
-produksjonsinstallasjon. Se `docs/dashboard-kort.md`.
+`python3 docs/kort-harness/server.py` kjører kortet i nettleseren uten Home Assistant, med skiver generert fra `faceplate.py` og kortfilen lastet rett fra `custom_components/effektvakt/www/`. Bruk den framfor å legge testkort i en produksjonsinstallasjon. Se `docs/dashboard-kort.md`.
 
 ---
 
@@ -245,8 +213,7 @@ rsync -av custom_components/effektvakt/ homeassistant:/config/custom_components/
 
 ## CI-workflows
 
-`.github/workflows/ci.yml` kjører på PR mot `main`, på push til `main`, og som
-`workflow_call` fra release-maskineriet. Fire jobber pluss en port:
+`.github/workflows/ci.yml` kjører på PR mot `main`, på push til `main`, og som `workflow_call` fra release-maskineriet. Fire jobber pluss en port:
 
 - **test-unit**: sjekker at replay-fixturene faktisk finnes (de lå som symlink
   og skippet seg selv stille fram til september 2026), kjører `just
@@ -265,12 +232,9 @@ rsync -av custom_components/effektvakt/ homeassistant:/config/custom_components/
   noe er i orden. Det er denne jobben grenbeskyttelsen og release-flyten skal
   kreve grønn.
 
-Mypy er blokkerende. Den var rådgivende med `|| true` fram til september 2026,
-og det den samlet opp i mellomtiden var 26 feil ingen så.
+Mypy er blokkerende. Den var rådgivende med `|| true` fram til september 2026, og det den samlet opp i mellomtiden var 26 feil ingen så.
 
-`.github/workflows/validate.yml` kjører HACS-valideringen og hassfest om igjen
-hver natt, pluss på `workflow_dispatch`. Begge kan bli røde av endringer
-utenfor repoet, og det vil vi vite før neste release.
+`.github/workflows/validate.yml` kjører HACS-valideringen og hassfest om igjen hver natt, pluss på `workflow_dispatch`. Begge kan bli røde av endringer utenfor repoet, og det vil vi vite før neste release.
 
 ---
 
@@ -300,12 +264,7 @@ service: effektvakt.reset_topp_3
 
 ### `effektvakt.styr_last`
 
-Lastkutt-blueprintene bruker denne tjenesten. `lastvern.py` lagrer automasjonen
-som eier kuttet, aktuatorens originaltilstand, frist og minste påtid før
-handling. Kuttet slippes ved neste hele time eller makstiden, og gjenforsøk
-fortsetter hvis aktuatoren ikke svarer. Vernet lever uavhengig av entry- og
-automasjons-reload. Ved HA-start gjenopprettes lagrede kutt så snart lasten
-svarer. Se [blueprints.md](blueprints.md#gjeninnkoblingsvern) for kontrakten.
+Lastkutt-blueprintene bruker denne tjenesten. `lastvern.py` lagrer automasjonen som eier kuttet, aktuatorens originaltilstand, frist og minste påtid før handling. Kuttet slippes ved neste hele time eller makstiden, og gjenforsøk fortsetter hvis aktuatoren ikke svarer. Vernet lever uavhengig av entry- og automasjons-reload. Ved HA-start gjenopprettes lagrede kutt så snart lasten svarer. Se [blueprints.md](blueprints.md#gjeninnkoblingsvern) for kontrakten.
 
 ## Diagnostics
 

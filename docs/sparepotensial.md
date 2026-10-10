@@ -8,21 +8,13 @@ Månedens historiske topp-3-snitt var 5,823 kW i desember 2025 og 5,702 kW i feb
 
 ## Et mål for måneden
 
-I utviklingsversjonen kan du velge **Mål for måneden** under **Konfigurer**. Velg et kapasitetstrinn fra nettselskapets tabell, for eksempel 5 kW. Effektvakt forsvarer da dette målet fra starten av måneden. Det kan gi tidligere og flere kutt enn standardinnstillingen, også når timen ennå ikke kan låse inn dyrere nettleie. Det krever at du vil utsette forbruk for å holde plass til resten av måneden.
+I utviklingsversjonen velger du **Mål for måneden** under **Konfigurer**, for eksempel 5 kW. Målet forsvares fra første dag og kan gi tidligere og flere kutt, også før timen låser inn dyrere nettleie. **Av** bruker standardvurderingen.
 
-Målet endrer ikke regnestykket for fakturert nettleie. Bare dagsmaks som allerede er registrert avgjør om målet fortsatt kan nås. Har tre låste dagsmaks et snitt over målet, får det status `tapt`, og Effektvakt går tilbake til vanlig vurdering av hvilket trinn som fortsatt kan unngås. Målet beholdes i oppsettet og blir prøvd igjen neste måned. Velger du **Av**, brukes standardvurderingen hele tiden.
-
-`maal_kutt_anbefalt` sier at et kutt kan begrense en ny dagsmaks over måltaket. Det lover verken at hele timen kan reddes eller at du sparer et bestemt kronebeløp. `timen_flytter_trinnet` og kostnadsattributtene beskriver fortsatt virkningen på kapasitetstrinnet nå. Les [sensorene](sensorer.md) og behold grensene for maksimal utkobling og minste påtid i [blueprintene](blueprints.md).
+Når låste døgnmaks gir et minste mulig topp-3-snitt over målet, får det status `tapt` og vanlig vurdering overtar. Valget beholdes til neste måned. `maal_kutt_anbefalt` beskriver bidraget til målet; kostnadsattributtene beskriver fortsatt tariffvirkningen nå. Se [sensorene](sensorer.md#valgt-månedsmål) og behold blueprintenes tidsgrenser.
 
 ## Hva et lastkutt kan bidra med
 
-En last på 600 W som ellers ville gått hele timen, bidrar med 0,6 kWh. Er den bare på i ti minutter, bidrar den med 0,1 kWh. Det er forskjellen i energien over hele klokketimen som avgjør hvor mye timegjennomsnittet kan reduseres. Effekten akkurat nå er derfor ikke nok til å anslå nytten.
-
-`scripts/analyser_lastprofil.py` analyserer tidsstemplede wattmålinger fra en lokal JSON-fil. Det viser tidsvektet påandel, effekt når lasten er på, energi, dekning og varigheten til observerte sykluser. Det kan også begrenses til utvalgte toppvinduer. En last som bruker 500 W og er på en fjerdedel av tiden, har 125 W i tidsvektet gjennomsnitt; det er ikke et løfte om 125 W kutt i neste topptime.
-
-Restvarighet beregnes fra hele observerte sykluser som har vart minst like lenge som den aktuelle påperioden. Rapporten viser hvor mange slike sykluser anslaget bygger på. Perioder som treffer starten eller slutten av målevinduet, eller avbrytes av hull, er ufullstendige og holdes utenfor dette anslaget. Ufullstendige perioder kan likevel gi skjevhet mot korte sykluser. Ukjent effekt regnes ikke som null. Tilstander holdes fram til neste rapport med mindre du velger en maksimal holdetid; høy dekning betyr derfor ikke at sensoren rapporterer ferske eller korrekte verdier.
-
-Termostatmodus `heat` betyr ikke at varmen faktisk trekker strøm. Uten wattmåling kan verktøyet ikke finne påandelen. Flere sensorer for samme last må avklares før de summeres, særlig når de rapporterer forskjellige tall. Lys kan gi et lite bidrag nær en grense; gulvvarme og varmtvann må vurderes sammen med temperatur, behov og hvor mye oppvarming som kommer tilbake senere. Det lokale analyseverktøyet kobler ikke ut laster. Utviklingsversjonen kan bruke profiler fra målte aktive laster i kuttvurderingen når du slår på det valgfrie profilvalget; se [lastprofiler i Home Assistant](lastprofiler.md#profiler-inne-i-home-assistant).
+600 W gjennom en time bidrar med 0,6 kWh; i ti minutter er bidraget 0,1 kWh. Varigheten og gjenoppvarmingen avgjør virkningen på timegjennomsnittet. [Lastprofiler](lastprofiler.md) forklarer målt effekt, arbeidssyklus, restvarighet og bruk i HA.
 
 ## Regneeksempel og simulert styring
 

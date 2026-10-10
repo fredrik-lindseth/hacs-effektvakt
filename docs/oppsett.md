@@ -53,9 +53,7 @@ Hvordan risikonivåene regnes ut fra margin og buffer står i [sensorer.md](sens
 
 ## Kuttbare laster
 
-En kuttbar last er noe du kan slå av en halvtime uten at noen merker det: en bereder, en varmepumpe, en billader, varmekabler. Hver last er en effektsensor, en valgfri bryter og en terskel for når lasten regnes som på.
-
-Lastene er det `sensor.effektvakt_tilgjengelig_kutt` summerer, og uten dem opprettes ikke den sensoren i det hele tatt. Legger du inn bryteren også, ser Effektvakt når lasten faktisk ble kuttet, og det er grunnlaget for hendelsesloggen.
+Registrer laster du kan utsette innenfor deres behov og tidsgrenser. Effektsensoren beskriver aktivitet; aktuatoren knytter lasten til styringen. Lastvernet eier gjeninnkobling av overtakelser gjennom `effektvakt.styr_last`.
 
 Legg dem inn under **Configure > Legg til en kuttbar last**. Full forklaring med fornuftige terskler per lasttype står i [laster.md](laster.md).
 

@@ -8,21 +8,13 @@ The historical monthly top-three averages were 5.823 kW in December 2025 and 5.7
 
 ## A monthly target
 
-The development version adds **Monthly target** under **Configure**. Choose a capacity tier from your grid company's table, such as 5 kW. Effektvakt then protects that target from the start of the month. This can trigger earlier and more frequent reductions than the default setting, even before the current hour can lock in a higher charge. It means accepting deferred consumption to leave room for the rest of the month.
+In the development version, choose **Monthly target** under **Configure**, such as 5 kW. It is protected from the first day and can trigger earlier and more frequent reductions, even before the hour locks in a higher charge. **Off** uses the default assessment.
 
-The target does not change the calculation of billed capacity charges. Recorded daily maxima determine whether the target remains achievable. Once three recorded daily maxima average above the target, its status becomes `tapt` (lost), and Effektvakt resumes its usual assessment of which higher tier can still be avoided. The setting remains saved and is tried again next month. Choose **Off** to use the default assessment throughout.
-
-`maal_kutt_anbefalt` indicates that a reduction can limit a new daily maximum above the target ceiling. It does not promise to recover the whole hour or save a particular amount of money. `timen_flytter_trinnet` and the cost attributes continue to describe the current effect on the capacity tier. Keep the maximum off-time and minimum on-time configured in your blueprints.
+Once recorded daily maxima put the minimum achievable top-three average above the target, its status becomes `tapt` (lost) and the default assessment resumes. The choice remains saved for next month. `maal_kutt_anbefalt` describes contribution to the target; cost attributes still describe the tariff impact now. See the [sensor attributes](sensorer.md#valgt-månedsmål) and retain blueprint timing limits.
 
 ## What a load can contribute
 
-A 600 W load that would otherwise run for the entire hour contributes 0.6 kWh. Running for only ten minutes contributes 0.1 kWh. The difference in energy over the whole clock hour determines the reduction in its average power. Current power alone cannot establish that benefit.
-
-`scripts/analyser_lastprofil.py` analyses timestamped watt readings from a local JSON file. It reports time-weighted active share, active power, energy, coverage and observed cycle lengths. Selected peak windows can be analysed separately. A 500 W load active for a quarter of the time averages 125 W; this does not promise 125 W of available reduction in the next peak hour.
-
-Remaining duration is estimated from complete observed cycles that lasted at least as long as the current active period. The report includes the number of supporting cycles. Cycles crossing a window boundary or a data gap are incomplete and excluded from that estimate. This can still bias the sample towards shorter cycles. Unknown power is never treated as zero. Readings are held until the next report unless you choose a maximum hold time; high coverage does not establish that a sensor is fresh or accurate.
-
-A thermostat in `heat` mode does not establish actual heating. Without watt readings, active share cannot be calculated. Multiple sensors for one load must be resolved before summing them, especially when they disagree. Lights can help with a small excess near a tier boundary. Floor heating and hot water need temperature, comfort and subsequent reheating considered together. The local analysis tool does not switch loads. The development version can use profiles from measured active loads in its reduction assessment when the optional profile setting is enabled; see [profiles in Home Assistant](lastprofiler.en.md#profiles-inside-home-assistant).
+600 W for one hour contributes 0.6 kWh; ten minutes contributes 0.1 kWh. Duration and subsequent reheating determine the hourly effect. [Load profiles](lastprofiler.en.md) describes measured power, duty cycle, remaining duration and use in HA.
 
 ## Arithmetic example and simulated control
 

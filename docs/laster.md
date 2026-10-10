@@ -23,7 +23,7 @@ Terskelen skiller «varmer nå» fra standby. Den er per last fordi lastene er u
 | Panelovn               | 600-1 500 W          | 100 W             |
 | Billader               | 3 600-22 000 W       | 1 000 W           |
 
-Et berederelement er enten fullt på eller av, så alt mellom 0 og 1 000 W der er standby og ikke oppvarming. Varmekabler på 550 W ville aldri kommet over en slik terskel, og hadde forsvunnet ut av regnestykket hvis terskelen var felles. Det var nettopp det som skjedde fram til september 2026, da integrasjonen hadde to faste terskler: 1 000 W for «VVB» og 100 W for alt annet.
+Velg terskel over standby og under aktiveffekt.
 
 Terskelen er streng: nøyaktig på terskelen holder ikke, det må være over.
 
@@ -37,7 +37,7 @@ Legg inn den samme bryteren her som blueprinten din styrer. Har lasten en smartp
 
 ## Hva sensoren viser
 
-`sensor.effektvakt_tilgjengelig_kutt` er summen av lastene som trekker over terskelen sin akkurat nå. Har du ingen laster med effektsensor, opprettes ikke sensoren i det hele tatt. Manuelle profiler uten måling vises gjennom sensoren for estimert energi. Det er et ærligere svar enn et tall: fram til september 2026 stod den på 0,3 kW hele døgnet for alle som ikke hadde valgt en strategi, og tallet var en antagelse om en varmtvannsbereder ingen visste om brukeren hadde.
+`sensor.effektvakt_tilgjengelig_kutt` er summen av lastene som trekker over terskelen sin akkurat nå. Har du ingen laster med effektsensor, opprettes ikke sensoren i det hele tatt. Manuelle profiler uten måling vises gjennom sensoren for estimert energi.
 
 Attributtet `kutt_kilder` har én oppføring per konfigurert last, så et dashbord kan vise hva som faktisk er kuttbart framfor bare summen. Feltene er dokumentert i [sensorer.md](sensorer.md#kutt_kilder).
 
@@ -53,7 +53,7 @@ Alle konfigurerte laster står i lista, også de som ikke teller akkurat nå. Fo
 | Panelovn          | 1 200 W          | 100 W   | 1,2 kW          |
 | **Sum**           |                  |         | **4,65 kW**     |
 
-Med 4,65 kW tilgjengelig kutt er det god margin mot de fleste trinngrenser, og du kan bruke sensoren til å avgjøre hvilke laster det faktisk er nødvendig å slå av.
+Summen gjelder mens alle fire laster er aktive. Energi som kan flyttes avhenger også av varighet.
 
 ## Sammenhengen med blueprintene
 
@@ -75,12 +75,8 @@ Det slår bare av lasten hvis Effektvakt anbefaler kutt og det er minst 0,5 kW �
 
 ## Fra strategier til laster
 
-Fram til entry-versjon 2 hadde konfigurasjonen i stedet en kutt-strategi (`blind`, `vvb_status`, `vvb_pluss_ekstra`), ett felt for VVB-effektsensor og ett for ekstra sensorer. Strategien styrte bare hva `tilgjengelig_kutt` viste, ingen blueprint leste den, og med `blind` var sensoren en konstant 0,3 kW.
-
-Oppsett fra den tiden migreres automatisk ved første oppstart: VVB-sensoren blir en last med 1 000 W terskel, hver ekstra sensor blir en last med 100 W, og strategien forsvinner uten erstatning. Sensorene beholdes uansett hvilken strategi som stod valgt, siden en sensor du har pekt på er en last du har. Migreringen setter ingen bryter, for det fantes ikke noe å migrere fra: skal Effektvakt se kuttene dine, må du legge inn bryteren selv under Configure.
+Oppsett fra før entry-versjon 2 migreres automatisk: VVB-sensoren blir en last med 1 000 W terskel, ekstra sensorer får 100 W, og strategien fjernes. Ingen aktuator kunne migreres; legg inn samme bryter eller climate-entitet som styringen bruker under Konfigurer.
 
 ## Lastprofiler
 
-Utviklingsversjonen lar deg velge automatisk eller manuell profil per last. En automatisk profil lærer effekt, arbeidssyklus og påperioder fra effekthistorikken. En manuell profil bruker nominell effekt og antatt arbeidssyklus, med valgfri typisk påtid. Den kan brukes uten effektsensor til planlegging, men øker ikke målt tilgjengelig kutt.
-
-Profilens maksimale kuttvarighet må stemme med lasten og blueprintens utkoblingsgrense. Beregnet kuttenergi resten av timen vises i en egen kWh-sensor og i `lastprofil` per last. Se [metode og bruk](lastprofiler.md) og [sensorattributtene](sensorer.md#lastprofiler-og-estimert-kuttenergi).
+Velg historikk eller manuell profil per last. Manuell profil uten wattmåling gir bare et planleggingsanslag. Maksimal kuttvarighet må stemme med blueprintens grense. Se [metode og bruk](lastprofiler.md) og [sensorattributtene](sensorer.md#lastprofiler-og-estimert-kuttenergi).

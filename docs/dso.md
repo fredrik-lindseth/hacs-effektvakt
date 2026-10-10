@@ -2,13 +2,9 @@
 
 ## Innhold
 
-`custom_components/effektvakt/dso.py` har kapasitetstrinn og priser for 71 norske
-nettselskap. Filen er generert og skal ikke redigeres for hånd.
+`custom_components/effektvakt/dso.py` har kapasitetstrinn og priser for 71 norske nettselskap. Filen er generert og skal ikke redigeres for hånd.
 
-De innebygde tabellene gjelder husholdningstariffen. Kortet velger ikke
-fritidsboligtariff automatisk. Har fritidsboligen en annen topp-3-tabell, som
-Midtnetts FB22, velg egendefinerte trinn fra nettselskapets prisliste.
-Egendefinerte trinn støtter bare topp-3-metoden.
+De innebygde tabellene gjelder husholdningstariffen. Kortet velger ikke fritidsboligtariff automatisk. Har fritidsboligen en annen topp-3-tabell, som Midtnetts FB22, velg egendefinerte trinn fra nettselskapets prisliste. Egendefinerte trinn støtter bare topp-3-metoden.
 
 Hver DSO ser slik ut:
 
@@ -28,42 +24,23 @@ Hver DSO ser slik ut:
 },
 ```
 
-Trinnlisten er sortert stigende på kW-terskel, og terskelen er øvre grense for
-trinnet. Siste element har `float("inf")` og er det øverste trinnet.
+Trinnlisten er sortert stigende på kW-terskel, og terskelen er øvre grense for trinnet. Siste element har `float("inf")` og er det øverste trinnet.
 
-Bare `TRE_DØGNMAX_MND` er støttet av den operative topp-3-modellen.
-`MND_MAX` og `UKJENT` beholdes i kildetabellen med sine priser og metode,
-men kan ikke velges i nytt oppsett og gir ingen operative kapasitetstrinn
-i eksisterende oppsett. Egendefinerte trinn forutsetter topp-3-metoden.
+Bare `TRE_DØGNMAX_MND` er støttet av den operative topp-3-modellen. `MND_MAX` og `UKJENT` beholdes i kildetabellen med sine priser og metode, men kan ikke velges i nytt oppsett og gir ingen operative kapasitetstrinn i eksisterende oppsett. Egendefinerte trinn forutsetter topp-3-metoden.
 
-Sør Aurdal Energi bruker månedsmaks, ikke topp-3. Deres [offisielle tariff
-fra 1. september 2026](https://sae.no/uploads/Kundeinformasjon/2026_09_Kundeinformasjon_tariffer.pdf),
-side 2, oppgir 562,50 kr til og med 5 kW og 650 kr til og med 8 kW.
+Sør Aurdal Energi bruker månedsmaks, ikke topp-3. Deres [offisielle tariff fra 1. september 2026](https://sae.no/uploads/Kundeinformasjon/2026_09_Kundeinformasjon_tariffer.pdf), side 2, oppgir 562,50 kr til og med 5 kW og 650 kr til og med 8 kW.
 
 ---
 
 ## Hvor tallene kommer fra
 
-Satsene hentes fra [kraftsystemet/fri-nettleie](https://github.com/kraftsystemet/fri-nettleie),
-en dugnadsbasert samling av norske nettleie-tariffer i YAML, lisensiert
-[CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). Det er samme kilde
-hacs-strømkalkulator validerer sine egne satser mot, så vi går rett til den i
-stedet for å kopiere fra et annet repo på disk.
+Satsene hentes fra [kraftsystemet/fri-nettleie](https://github.com/kraftsystemet/fri-nettleie), en dugnadsbasert samling av norske nettleie-tariffer i YAML, lisensiert [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). Det er samme kilde hacs-strømkalkulator validerer sine egne satser mot, så vi går rett til den i stedet for å kopiere fra et annet repo på disk.
 
-Nøklene (`bkk`, `tensio_tn` og resten) ligger i brukernes config entries og kan
-ikke endres. Derfor er det `scripts/dso_kilder.json` som bestemmer hvilke
-nettselskap som finnes. Der står nøkkel, visningsnavn, prisområde, hvilken
-fri-nettleie-fil satsene hentes fra, og om husholdninger i området har
-mva-fritak (Nord-Norge og tiltakssonen har det). Generatoren henter bare prisene.
+Nøklene (`bkk`, `tensio_tn` og resten) ligger i brukernes config entries og kan ikke endres. Derfor er det `scripts/dso_kilder.json` som bestemmer hvilke nettselskap som finnes. Der står nøkkel, visningsnavn, prisområde, hvilken fri-nettleie-fil satsene hentes fra, og om husholdninger i området har mva-fritak (Nord-Norge og tiltakssonen har det). Generatoren henter bare prisene.
 
-fri-nettleie oppgir nedre kW-grense og kr/år eks. mva. Vi lagrer øvre kW-grense
-og kr/mnd inkl. mva, så øvre grense for et trinn er nedre grense for det neste,
-og prisen deles på 12 og ganges med mva-faktoren. Tariffgrunnlaget beholder
-ørene; bare presentasjonen kan runde beløp.
+fri-nettleie oppgir nedre kW-grense og kr/år eks. mva. Vi lagrer øvre kW-grense og kr/mnd inkl. mva, så øvre grense for et trinn er nedre grense for det neste, og prisen deles på 12 og ganges med mva-faktoren. Tariffgrunnlaget beholder ørene; bare presentasjonen kan runde beløp.
 
-Kjøringen er pinnet til en commit og en tariff-dato i `_meta` i
-`scripts/dso_kilder.json`. Da gir `--check` samme svar neste år som i dag,
-og tabellen endrer seg bare når et menneske flytter pinnen.
+Kjøringen er pinnet til en commit og en tariff-dato i `_meta` i `scripts/dso_kilder.json`. Da gir `--check` samme svar neste år som i dag, og tabellen endrer seg bare når et menneske flytter pinnen.
 
 ---
 
@@ -77,64 +54,42 @@ Nettleien endres typisk ved nyttår, og ellers når et nettselskap legger om.
 3. Les gjennom diffen i `dso.py`, kjør `python3 -m pytest tests/test_dso_data.py`,
    og commit begge filene.
 
-Scriptet laster ned tariffene fra den pinnede commiten. Har du en utsjekk
-liggende, gir `--kilde ~/src/fri-nettleie` samme resultat uten nett. CI bruker
-den varianten, med en `actions/checkout` av commiten fra `_meta`.
+Scriptet laster ned tariffene fra den pinnede commiten. Har du en utsjekk liggende, gir `--kilde ~/src/fri-nettleie` samme resultat uten nett. CI bruker den varianten, med en `actions/checkout` av commiten fra `_meta`.
 
-Kommer det et nytt nettselskap, legges det inn som en rad i
-`scripts/dso_kilder.json`. Scriptet sier fra om hvilke filer i fri-nettleie som
-ikke er dekket av tabellen.
+Kommer det et nytt nettselskap, legges det inn som en rad i `scripts/dso_kilder.json`. Scriptet sier fra om hvilke filer i fri-nettleie som ikke er dekket av tabellen.
 
 ---
 
 ## Nettselskap som ikke følger NVE-modellen
 
-Effektvakt regner etter NVE-modellen: kapasitetsleddet bestemmes av snittet av
-de tre høyeste timene fra ulike dager i måneden. fri-nettleie kaller den
-`TRE_DØGNMAX_MND`, og 69 av de 71 bruker den.
+Effektvakt regner etter NVE-modellen: kapasitetsleddet bestemmes av snittet av de tre høyeste timene fra ulike dager i måneden. fri-nettleie kaller den `TRE_DØGNMAX_MND`, og 69 av de 71 bruker den.
 
-To gjør det ikke, og for dem er trinnprisene riktige mens *hvilket* trinn du
-havner på regnes ut på en annen måte:
+To gjør det ikke, og for dem er trinnprisene riktige mens *hvilket* trinn du havner på regnes ut på en annen måte:
 
 | Nettselskap         | Metode    | Betyr                                      |
 | ------------------- | --------- | ------------------------------------------ |
 | `sor_aurdal_energi` | `MND_MAX` | Høyeste enkelttime i måneden, ikke snitt av tre |
 | `tinfos`            | `UKJENT`  | Verken tinfos.no eller fri-nettleie sier hvilken kW-verdi trinnet slås opp med |
 
-Generatoren lister dem ved hver kjøring. Metoder som ikke er kW-trinn i det hele
-tatt (`OV_TREFASE` med ampere på tersklene, `FEM_VEKTET_ÅR` uten trinn) tas ikke
-inn i tabellen; ingen av nettselskapene våre bruker dem i dag.
+Generatoren lister dem ved hver kjøring. Metoder som ikke er kW-trinn i det hele tatt (`OV_TREFASE` med ampere på tersklene, `FEM_VEKTET_ÅR` uten trinn) tas ikke inn i tabellen; ingen av nettselskapene våre bruker dem i dag.
 
 ---
 
 ## Egendefinert DSO
 
-Velger du **Egendefinert** i config flow, legger du inn trinnene selv. Formatet
-er en liste med par: `[[2, 155], [5, 250], [null, 415]]`. De lagres i
-`entry.data["kapasitetstrinn_custom"]` og overstyrer oppslaget i `dso.py`.
+Velger du **Egendefinert** i config flow, legger du inn trinnene selv. Formatet er en liste med par: `[[2, 155], [5, 250], [null, 415]]`. De lagres i `entry.data["kapasitetstrinn_custom"]` og overstyrer oppslaget i `dso.py`.
 
-**Øverste trinn skrives med `null` som terskel.** Da gjelder det uten øvre
-grense, slik de innebygde tabellene slutter på `(inf, pris)`. Uendelig lagres
-som `null` fordi entry-data skal være gyldig JSON; `oppsett.les_trinn`
-oversetter tilbake. Sløyfer du det, vet ikke Effektvakt hva et forbruk over det
-høyeste tallet ditt koster, og melder god margin uansett hvor høyt det går.
-Integrasjonen reiser en repair-sak når tabellen mangler et åpent topptrinn.
+**Øverste trinn skrives med `null` som terskel.** Da gjelder det uten øvre grense, slik de innebygde tabellene slutter på `(inf, pris)`. Uendelig lagres som `null` fordi entry-data skal være gyldig JSON; `oppsett.les_trinn` oversetter tilbake. Sløyfer du det, vet ikke Effektvakt hva et forbruk over det høyeste tallet ditt koster, og melder god margin uansett hvor høyt det går. Integrasjonen reiser en repair-sak når tabellen mangler et åpent topptrinn.
 
-Det er nyttig hvis nettselskapet ditt mangler i lista, bruker andre trinn enn vi
-har registrert, eller du vil teste med avvikende trinn.
+Det er nyttig hvis nettselskapet ditt mangler i lista, bruker andre trinn enn vi har registrert, eller du vil teste med avvikende trinn.
 
-Trinnene kan bare settes i oppsettsflyten, ikke under Configure. Skal de endres,
-må oppsettet fjernes og legges inn på nytt.
+Trinnene kan bare settes i oppsettsflyten, ikke under Configure. Skal de endres, må oppsettet fjernes og legges inn på nytt.
 
 ---
 
 ## Hva CI sjekker
 
-`scripts/generer_dso_fra_fri_nettleie.py --check` kjøres i CI og som
-pre-commit-hook når `dso.py`, generatoren eller kildetabellen endres. Den feller
-bygget hvis `dso.py` ikke er nøyaktig det generatoren ville skrevet fra den
-pinnede commiten, altså ved håndredigering eller ved at noen har flyttet pinnen
-uten å regenerere.
+`scripts/generer_dso_fra_fri_nettleie.py --check` kjøres i CI og som pre-commit-hook når `dso.py`, generatoren eller kildetabellen endres. Den feller bygget hvis `dso.py` ikke er nøyaktig det generatoren ville skrevet fra den pinnede commiten, altså ved håndredigering eller ved at noen har flyttet pinnen uten å regenerere.
 
 `tests/test_dso_data.py` sjekker i tillegg at
 
@@ -147,8 +102,4 @@ uten å regenerere.
 
 ## Øvre kildegrense
 
-Nettselskapets [privatprisliste fra 1. juli 2026](https://nettselskapet.as/strompris)
-ender ved 50–75 kW. Risiko, kostnad og kuttråd blir ukjent når projisert
-topp-3-grunnlag når 75 kW. Prislisten avklarer ikke om øvre grense er
-inkludert, så eksakt 75 gir også ukjent råd. Etna har tilsvarende kildegrense på 25 kW. Egendefinerte tabeller
-får ingen kataloggrense.
+Nettselskapets [privatprisliste fra 1. juli 2026](https://nettselskapet.as/strompris) ender ved 50–75 kW. Risiko, kostnad og kuttråd blir ukjent når projisert topp-3-grunnlag når 75 kW. Prislisten avklarer ikke om øvre grense er inkludert, så eksakt 75 gir også ukjent råd. Etna har tilsvarende kildegrense på 25 kW. Egendefinerte tabeller får ingen kataloggrense.
