@@ -1,7 +1,5 @@
 # Lastprofiler
 
-[English](lastprofiler.en.md)
-
 En lastprofil beskriver hvor ofte en last trekker strøm, effekten mens den er på og hvor lenge den pleier å fortsette. Vi bruker siste uke som et beste anslag for neste uke og oppdaterer anslaget med nyere observasjoner. Profilen gjør det lettere å velge et kutt som bidrar nok i timen uten å slå av mer enn nødvendig.
 
 ## Effekt, påandel og energi

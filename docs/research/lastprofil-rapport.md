@@ -1,7 +1,5 @@
 # Eksempelrapport for en lastprofil
 
-[English](lastprofil-rapport.en.md)
-
 Denne rapporten bruker kunstige data fra [metodikkens eksempelfil](../lastprofiler.md#kjør-analysen-selv). Den viser hvordan du kan dokumentere en analyse av eget anlegg uten å publisere råhistorikk. Tallene beskriver ingen bestemt husholdning.
 
 ## Målevindu og grunnlag

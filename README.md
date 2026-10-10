@@ -32,7 +32,7 @@ Effektvakt projiserer timegjennomsnittet og sammenligner det med månedens kapas
 
 Beregningen støtter tariffer med de tre høyeste timegjennomsnittene fra ulike dager. Husholdningstariffer følger med; egendefinerte trinn må bruke samme metode. Manglende eller gamle effektmålinger gir ukjent råd. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) beregner nettleie, avgifter og støtteordninger. Et unngått kapasitetstrinn sparer kroner uten nødvendigvis å redusere kWh. Prisplanlegging fra Nord Pool er ikke implementert.
 
-Oppsett, entiteter og kort støtter norsk og engelsk. Veiledningene om sparepotensial og lastprofiler finnes på begge språk; øvrig detaljdokumentasjon er på norsk.
+Oppsett, entiteter og kort støtter norsk og engelsk. Detaljdokumentasjonen er på norsk.
 
 ## Installasjon
 

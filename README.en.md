@@ -16,11 +16,11 @@ Effektvakt projects your average consumption for the current hour and warns when
 
 At BKK, the 5–10 kW capacity tier costs NOK 165 more per month than the 2–5 kW tier. Avoiding the higher tier in two to four months means **NOK 330–660 less in annual grid charges**, without necessarily using less electricity. Five such months would mean NOK 825. EV charging, water heating and space heating provide flexibility; the result depends on your peaks and how much demand you can defer.
 
-These are conditional calculations, not measured savings. For an example home using 16,000 kWh/year, NOK 330–660 is about 2–4% of combined electricity and grid costs. See the [annual calculation](docs/sparepotensial.en.md#what-could-it-mean-over-a-year), [laundry during cheaper grid periods](docs/scenario-nattvask.en.md) and [Norgespris versus spot prices](docs/scenario-norgespris.en.md).
+These are conditional calculations, not measured savings. For an example home using 16,000 kWh/year, NOK 330–660 is about 2–4% of combined electricity and grid costs. See the [annual calculation](docs/sparepotensial.md#hva-kan-det-bli-på-et-år), [laundry during cheaper grid periods](docs/scenario-nattvask.md) and [Norgespris versus spot prices](docs/scenario-norgespris.md).
 
 ## A savings example from BKK
 
-Reducing the monthly top-three average by 1 kW would have lowered a BKK household's capacity charge by NOK 165 in December 2025 and NOK 165 in February 2026: NOK 330 in total. A 600 W reduction would not have reached the cheaper tier. This is conditional potential calculated from historical readings; the load must run for long enough, and deferred heating must fit into later hours. See the [calculation and simulation](docs/sparepotensial.en.md) and [an example load-profile report](docs/research/lastprofil-rapport.en.md).
+Reducing the monthly top-three average by 1 kW would have lowered a BKK household's capacity charge by NOK 165 in December 2025 and NOK 165 in February 2026: NOK 330 in total. A 600 W reduction would not have reached the cheaper tier. This is conditional potential calculated from historical readings; the load must run for long enough, and deferred heating must fit into later hours. See the [calculation and simulation](docs/sparepotensial.md) and [an example load-profile report](docs/research/lastprofil-rapport.md).
 
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt dashboard card: an analogue demand monitor with a kW scale, monthly capacity prices and three indicators" width="420">
@@ -32,7 +32,7 @@ Effektvakt projects the current hourly average and compares it with your monthly
 
 The calculation supports tariffs based on the three highest hourly averages from different days. Household tariffs are built in; custom tiers must use the same method. Missing or stale power readings give unknown advice. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) calculates grid charges, taxes and support schemes. Avoiding a capacity tier saves money without necessarily reducing kWh. Nord Pool price scheduling is not implemented.
 
-Setup, entities and the card support Norwegian and English. Savings and load-profile guides are available in both languages; other detailed guides are in Norwegian.
+Setup, entities and the card support Norwegian and English. Detailed guides are in Norwegian.
 
 ## Installation
 
@@ -62,7 +62,7 @@ Add `custom:effektvakt-card` to your dashboard; see the [card setup](docs/dashbo
   <img src="docs/bilder/dashboard.png" alt="Dashboard with the demand dial, remaining-hour cards and weekly chart" width="900">
 </p>
 
-Register your controllable loads under Configure and import the [blueprints](docs/blueprints.md) for notifications or automatic reductions. Set maximum off-time and minimum on-time to suit each load. The [load-profile guide](docs/lastprofiler.en.md) explains how to estimate what a load can contribute during the rest of the hour.
+Register your controllable loads under Configure and import the [blueprints](docs/blueprints.md) for notifications or automatic reductions. Set maximum off-time and minimum on-time to suit each load. The [load-profile guide](docs/lastprofiler.md) explains how to estimate what a load can contribute during the rest of the hour.
 
 ## Quality and development
 
@@ -72,11 +72,11 @@ CI tests the promised minimum and current Home Assistant versions, checks HACS a
 
 | Document | Contents |
 | --- | --- |
-| [Savings potential](docs/sparepotensial.en.md) | Monthly target and historical simulation |
-| [Laundry during cheaper grid periods](docs/scenario-nattvask.en.md) | Consumption, timing and grid charges |
-| [Norgespris or spot prices](docs/scenario-norgespris.en.md) | Price schemes and a higher Norgespris |
-| [Load profiles](docs/lastprofiler.en.md) | Method, local analysis and interpretation |
-| [Measurement report](docs/research/lastprofil-rapport.en.md) | Synthetic example and reporting guide |
+| [Savings potential](docs/sparepotensial.md) | Monthly target and historical simulation |
+| [Laundry during cheaper grid periods](docs/scenario-nattvask.md) | Consumption, timing and grid charges |
+| [Norgespris or spot prices](docs/scenario-norgespris.md) | Price schemes and a higher Norgespris |
+| [Load profiles](docs/lastprofiler.md) | Method, local analysis and interpretation |
+| [Measurement report](docs/research/lastprofil-rapport.md) | Synthetic example and reporting guide |
 | [Setup](docs/oppsett.md) | Configuration step by step |
 | [Sensors](docs/sensorer.md) | Sensors and attributes |
 | [Calculations](docs/beregninger.md) | Formulas and calculation logic |

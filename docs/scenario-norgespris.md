@@ -1,7 +1,5 @@
 # Uten Norgespris – eller med høyere Norgespris
 
-[English](scenario-norgespris.en.md)
-
 Ved 16 000 kWh i året betyr 10 øre høyere Norgespris **1 600 kr mer i året**. Uten Norgespris avhenger forskjellen av prisene akkurat når strømmen brukes, etter strømstøtte.
 
 ## Samme forbruk, ulike priser

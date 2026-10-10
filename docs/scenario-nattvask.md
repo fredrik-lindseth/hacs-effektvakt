@@ -1,7 +1,5 @@
 # Hva sparer du på å flytte vask og oppvask?
 
-[English](scenario-nattvask.en.md)
-
 Med forbruket i eksemplet under kan du spare omtrent 88 kr i året i BKKs energiledd ved å flytte all vask og oppvask fra hverdag dagtid til lavpristid. Helg på dagtid gir samme tariffgevinst som natt.
 
 ## Regnestykket

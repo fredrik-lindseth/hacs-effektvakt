@@ -1,7 +1,5 @@
 # Sparepotensial og lastprofiler
 
-[English](sparepotensial.en.md)
-
 ## Regnestykket fra BKK
 
 Månedens historiske topp-3-snitt var 5,823 kW i desember 2025 og 5,702 kW i februar 2026. Med 415 kr per måned over 5 kW og 250 kr på eller under 5 kW gir 1 kW reduksjon snittene 4,823 og 4,702 kW og 165 kr spart i hver måned: til sammen 330 kr. 600 W reduksjon gir 5,223 og 5,102 kW, fortsatt i samme trinn. Timesdataene er beskrevet i [fixtur-dokumentasjonen](../tests/fixtures/README.md).

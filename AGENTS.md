@@ -363,6 +363,8 @@ Detaljer og kontrollkommandoer: [docs/release-notes.md](docs/release-notes.md).
 
 ## Dokumentasjon
 
+README vedlikeholdes på norsk og engelsk. Oppsett, sensortekster og kort i Home Assistant skal også støtte begge språk. Detaljveiledninger, scenarioer og rapporter i `docs/` skrives bare på norsk; engelsk README lenker til disse. Ikke opprett parallelle engelske dokumenter.
+
 `docs/development.md` er utvikler-guiden og har repo-strukturen,
 eksport-scriptene, ikon-regenereringen og tjenestene i full lengde. Lenk dit
 framfor å duplisere.
