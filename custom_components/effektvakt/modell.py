@@ -7,7 +7,8 @@ Nettselskapet fakturerer snittet av de tre høyeste time-snittene fra tre ulike
 dager i måneden. Spørsmålet «hvor høy kan timen vi står i bli» har derfor tre
 ledd:
 
-1. Hvilket trinn kan måneden fortsatt ende på? Det billigste som er igjen, gitt
+1. Hvilket trinn forsvares? Et valgt, fortsatt oppnaaelig maal, ellers det
+   billigste som er igjen, gitt
    dagsmaksene som alt er låst inn. Terskelen til det trinnet er T.
 2. Hvor høy kan dagen i dag bli uten å dra snittet over T? Snittet av de tre
    høyeste er `(a + b + x) / 3`, der `a` og `b` er de to høyeste ANDRE dagene,
@@ -238,6 +239,19 @@ class Terskel:
     dagens_maks_kw: float
     topp_2_andre_dager_kw: float
     minste_mulige_topp_3_kw: float
+    maal_status: str = "ikke_valgt"
+
+
+def gyldig_maaltrinn(*, trinn: Trinn, valgt_maal_kw: float | None) -> bool:
+    """Et eksplisitt maal maa vaere et endelig, prisbelagt katalogtrinn."""
+    return (
+        valgt_maal_kw is not None
+        and isinstance(valgt_maal_kw, float | int)
+        and not isinstance(valgt_maal_kw, bool)
+        and math.isfinite(valgt_maal_kw)
+        and valgt_maal_kw > 0
+        and any(terskel == valgt_maal_kw for terskel, _ in trinn[:-1])
+    )
 
 
 def beregn_terskel(
@@ -247,10 +261,12 @@ def beregn_terskel(
     today: date,
     projected_kw: float,
     elapsed_h: float = 0.0,
+    valgt_maal_kw: float | None = None,
 ) -> Terskel:
     """Regn ut taket for timen vi står i, og marginen opp til det.
 
-    Måltrinnet er det billigste måneden fortsatt kan ende på, altså trinnet
+    Et gyldig valgt maal brukes saa lenge de laaste dagsmaksene tillater det.
+    Ellers er måltrinnet det billigste måneden fortsatt kan ende på, altså trinnet
     `minste_mulige_topp_3_kw` havner i. Det følger ikke projeksjonen, så
     referansen flytter seg ikke under føttene på brukeren i det en enkelt time
     spretter opp: hadde den gjort det, ville varselet forsvunnet i samme
@@ -259,6 +275,11 @@ def beregn_terskel(
     dagens_maks = daily_max_kw.get(today, 0.0)
     topp_2_andre = topp_2_andre_dager(daily_max_kw, today=today)
     minste_mulige = snitt_av_topp_3(daily_max_kw)
+    gyldig_maal = gyldig_maaltrinn(trinn=trinn, valgt_maal_kw=valgt_maal_kw)
+    maal_status = "ikke_valgt" if valgt_maal_kw is None else "ugyldig"
+    if gyldig_maal:
+        assert valgt_maal_kw is not None
+        maal_status = "aktiv" if minste_mulige <= valgt_maal_kw else "tapt"
 
     uten_tak = Terskel(
         maal_terskel_kw=None,
@@ -271,11 +292,14 @@ def beregn_terskel(
         dagens_maks_kw=dagens_maks,
         topp_2_andre_dager_kw=topp_2_andre,
         minste_mulige_topp_3_kw=minste_mulige,
+        maal_status=maal_status,
     )
     if not trinn:
         return uten_tak
 
     idx = trinn_indeks(minste_mulige, trinn)
+    if maal_status == "aktiv":
+        idx = next(i for i, (terskel, _) in enumerate(trinn) if terskel == valgt_maal_kw)
     if idx == len(trinn) - 1:
         # Øverste trinn. Det finnes ikke noe dyrere å unngå, så en høy time
         # koster ikke mer enn en lav.
@@ -297,6 +321,7 @@ def beregn_terskel(
         dagens_maks_kw=dagens_maks,
         topp_2_andre_dager_kw=topp_2_andre,
         minste_mulige_topp_3_kw=minste_mulige,
+        maal_status=maal_status,
     )
 
 
@@ -491,7 +516,7 @@ def kortvarig_paaslag_kw(*, elapsed_h: float) -> float:
 
 @dataclass(frozen=True)
 class Kuttkriterium:
-    """Svaret på «koster denne timen noe når vi ikke tror på en kortvarig topp».
+    """Kan et kutt unngaa kostnad naa eller beskytte et valgt maanedsmaal.
 
     `oppfylt` gater kutt. Resten er mellomregning og den besparelsen et
     tilgjengelig kutt fortsatt kan gi, eksponert for aa forklare raadet.
@@ -503,6 +528,7 @@ class Kuttkriterium:
     mulig_besparelse_kr: float = 0.0
     unngaaelig_besparelse_kr: float = 0.0
     kutt_mulig: bool = False
+    bevarer_maanedsmaal: bool = False
 
 
 def vurder_kuttkriterium(
@@ -514,13 +540,21 @@ def vurder_kuttkriterium(
     actual_kwh_this_hour: float,
     elapsed_h: float,
     tilgjengelig_kutt_kw: float | None = None,
+    valgt_maal_kw: float | None = None,
+    tilgjengelig_kuttenergi_kwh: float | None = None,
 ) -> Kuttkriterium:
-    """Flytter denne timen kapasitetstrinnet, også uten en kortvarig topp?
+    """Kan kutt unngaa et kapasitetstrinn eller beskytte et valgt maanedsmaal?
 
-    Kriteriet for å kutte er kroner, ikke geometri: `kostnad_denne_timen_kr` er
+    Uten valgt maal er kriteriet kroner: `kostnad_denne_timen_kr` er
     prisen timen er i ferd med å låse inn, og er den null, er timen gratis
     uansett hvor dramatisk projeksjonen ser ut. Topp-3-regelen gjør at de fleste
     timer er nettopp det.
+
+    Et aktivt valgt maal tillater ogsaa kutt som begrenser en ny dagsmaks
+    over maalet, uten umiddelbar kronegevinst. Det er brukerens eksplisitte
+    valg om aa utsette forbruk for aa holde plass til resten av maaneden.
+    Tilgjengelig effekt antas aa kunne kuttes resten av timen; varighet og
+    gjenoppvarming maa vurderes separat.
 
     Prisen regnes av `varig_projeksjon_kw`, som er projeksjonen minus
     `kortvarig_paaslag_kw`. Gulvet er kilowattimene timen alt har brukt: de kan
@@ -542,6 +576,13 @@ def vurder_kuttkriterium(
         if tilgjengelig_kutt_kw is None
         else max(actual_kwh_this_hour, projected_kw - max(0.0, tilgjengelig_kutt_kw) * rest_h)
     )
+    if tilgjengelig_kuttenergi_kwh is not None:
+        # Profilenergi avgjoer bidraget, fysisk kW avgjoer fortsatt om lasten
+        # er liten. Kort forventet drift gjoer ikke en stor last til en liten.
+        energi = max(0.0, tilgjengelig_kuttenergi_kwh)
+        if tilgjengelig_kutt_kw is not None:
+            energi = min(energi, max(0.0, tilgjengelig_kutt_kw) * rest_h)
+        etter_kutt = max(actual_kwh_this_hour, projected_kw - energi)
     uten = compute_kostnad(trinn=trinn, daily_max_kw=daily_max_kw, today=today, projected_kw=projected_kw)
     med = compute_kostnad(trinn=trinn, daily_max_kw=daily_max_kw, today=today, projected_kw=etter_kutt)
     mulig = uten.kostnad_denne_timen_kr if uten is not None else 0.0
@@ -562,13 +603,38 @@ def vurder_kuttkriterium(
         )
         vedvarende = maalt is not None and maalt.kostnad_denne_timen_kr > 0
     kutt_mulig = unngaaelig > 0 and rest_h > 0
+    bevarer_maal = False
+    if gyldig_maaltrinn(trinn=trinn, valgt_maal_kw=valgt_maal_kw):
+        terskel = beregn_terskel(
+            trinn=trinn,
+            daily_max_kw=daily_max_kw,
+            today=today,
+            projected_kw=projected_kw,
+            elapsed_h=elapsed_h,
+            valgt_maal_kw=valgt_maal_kw,
+        )
+        # Et valgt maal er en uttrykkelig avveining: kutt kan bevare
+        # maanedsbudsjettet selv om timen ikke laaser inn flere kroner naa.
+        # Allerede laast dagsmaks og brukt energi kan ikke kuttes bort.
+        dagsmaks = daily_max_kw.get(today, 0.0)
+        bevarer_maal = (
+            terskel.maal_status == "aktiv"
+            and terskel.margin_kw is not None
+            and terskel.margin_kw < 0
+            and tilgjengelig_kutt_kw is not None
+            and tilgjengelig_kutt_kw > 0
+            and rest_h > 0
+            and max(dagsmaks, etter_kutt) < max(dagsmaks, projected_kw)
+        )
     return Kuttkriterium(
-        oppfylt=kutt_mulig and (vedvarende or (kostnad is not None and kostnad.kostnad_denne_timen_kr > 0)),
+        oppfylt=bevarer_maal
+        or (kutt_mulig and (vedvarende or (kostnad is not None and kostnad.kostnad_denne_timen_kr > 0))),
         varig_projeksjon_kw=varig,
         kortvarig_paaslag_kw=paaslag,
         mulig_besparelse_kr=mulig,
         unngaaelig_besparelse_kr=unngaaelig,
-        kutt_mulig=kutt_mulig,
+        kutt_mulig=kutt_mulig or bevarer_maal,
+        bevarer_maanedsmaal=bevarer_maal,
     )
 
 

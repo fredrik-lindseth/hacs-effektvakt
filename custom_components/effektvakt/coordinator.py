@@ -19,6 +19,7 @@ from .avlesning import (
     read_switch_on,
 )
 from .const import (
+    CONF_BRUK_LASTPROFILER,
     CONF_DSO,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
@@ -27,6 +28,7 @@ from .const import (
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
+    CONF_VALGT_MAAL_KW,
     DEFAULT_AUTOMATIKK_AKTIV,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
     DEFAULT_RISIKO_HOLDETID_MINUTTER,
@@ -49,6 +51,8 @@ from .laster import (
     les_laster,
     oppdater_kuttsporing,
 )
+from .lastprofiler import Lastprofiler
+from .lastvern import DATA_LASTVERN, Lastvern
 from .modell import (
     KOSTNAD_FELT_NAVN,
     beregn_resten_av_timen,
@@ -71,6 +75,8 @@ if TYPE_CHECKING:
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+
+    from .profilhistorikk import Profilhistorikk
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,6 +137,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.power_sensor: str | None = entry.data.get(CONF_POWER_SENSOR)
         self.energy_sensor: str | None = entry.data.get(CONF_ENERGY_SENSOR)
+        self.valgt_maal_kw: float | None = entry.data.get(CONF_VALGT_MAAL_KW)
         self.safety_buffer_kw: float = float(entry.data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW))
         # Bakoverkompatibilitet for risiko-verdier: en config entry fra før
         # omdøpingen har "medium" lagret, og det er ikke lenger et nivå.
@@ -143,6 +150,9 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         # sensoren for tilgjengelig kutt i det hele tatt, framfor aa vise et
         # anslag ingen har gitt integrasjonen grunnlag for.
         self.laster = les_laster(entry.data.get(CONF_LASTER))
+        self.bruk_lastprofiler = bool(entry.data.get(CONF_BRUK_LASTPROFILER, False))
+        self._lastprofiler = Lastprofiler()
+        self.profilhistorikk: Profilhistorikk | None = None
 
         self.trinn_oppsett = les_trinn(
             dso_id=entry.data.get(CONF_DSO),
@@ -244,6 +254,25 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         tilgjengelig_kutt_kw = compute_tilgjengelig_kutt_kw(avlesninger)
 
         elapsed_h = compute_elapsed_h(now)
+        egne_kutt: set[str] = set()
+        sperret: set[str] = set()
+        vern = self.hass.data.get(DATA_LASTVERN)
+        if isinstance(vern, Lastvern):
+            for last in self.laster:
+                if last.bryter and last.bryter in vern.kutt:
+                    egne_kutt.add(last.noekkel)
+                if last.bryter and vern.tidligst_kutt.get(last.bryter, 0) > now.timestamp():
+                    sperret.add(last.noekkel)
+        profil_felter = self._lastprofiler.beregn(
+            avlesninger,
+            now=now,
+            resttid_s=max(0, 3600 - now.minute * 60 - now.second - now.microsecond / 1e6),
+            profiler=self.profilhistorikk.profiler if self.profilhistorikk else {},
+            oppdatert=self.profilhistorikk.oppdatert if self.profilhistorikk else None,
+            status=self.profilhistorikk.status if self.profilhistorikk else "ikke_hentet",
+            egne_kutt=egne_kutt,
+            sperret=sperret,
+        )
         if current_kw is None or not self.kapasitetstrinn:
             # En ugyldig avlesning er ikke null forbruk. Hysteresen får heller
             # ikke bruke målehullet som dokumentasjon på fallende risiko.
@@ -282,6 +311,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             today=now.date(),
             projected_kw=projected_avg,
             elapsed_h=elapsed_h,
+            valgt_maal_kw=self.valgt_maal_kw,
         )
         kriterium = vurder_kuttkriterium(
             trinn=self.kapasitetstrinn,
@@ -291,6 +321,8 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             actual_kwh_this_hour=self._regnskap.current_hour_kwh,
             elapsed_h=elapsed_h,
             tilgjengelig_kutt_kw=tilgjengelig_kutt_kw,
+            tilgjengelig_kuttenergi_kwh=profil_felter["profilraad_energi_kwh"] if self.bruk_lastprofiler else None,
+            valgt_maal_kw=self.valgt_maal_kw,
         )
         resten_av_timen = beregn_resten_av_timen(margin_kw=terskel.margin_kw, elapsed_h=elapsed_h)
         topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
@@ -359,7 +391,10 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "dag_som_ryker": None if topp_3.dag_som_ryker is None else asdict(topp_3.dag_som_ryker),
             "risiko_niva": self._hysterese_state.nivå,
             "raw_risiko_niva": rå,
-            "timen_flytter_trinnet": kriterium.oppfylt,
+            "timen_flytter_trinnet": kriterium.oppfylt and kriterium.mulig_besparelse_kr > 0,
+            "valgt_maal_kw": self.valgt_maal_kw,
+            "maal_status": terskel.maal_status,
+            "maal_kutt_anbefalt": kriterium.bevarer_maanedsmaal,
             "mulig_besparelse_kr": kriterium.mulig_besparelse_kr,
             "unngaaelig_besparelse_kr": kriterium.unngaaelig_besparelse_kr,
             "kutt_mulig": kriterium.kutt_mulig,
@@ -367,7 +402,17 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "kortvarig_paaslag_kw": round(kriterium.kortvarig_paaslag_kw, 3),
             "last_update": now.isoformat(),
             "tilgjengelig_kutt_kw": rund(tilgjengelig_kutt_kw),
-            "kutt_kilder": [asdict(k) for k in kutt_kilder],
+            "kutt_kilder": [
+                asdict(k)
+                | (
+                    {"lastprofil": profil_felter["lastprofiler"][a.oppsett.noekkel]}
+                    if a.oppsett.noekkel in profil_felter["lastprofiler"]
+                    else {}
+                )
+                for k, a in zip(kutt_kilder, avlesninger, strict=True)
+            ],
+            **profil_felter,
+            "bruk_lastprofiler": self.bruk_lastprofiler,
             "kuttet_naa_kw": rund(
                 sum(s.kuttet_effekt_w or 0.0 for s in self._kuttsporing.values()) / 1000.0,
             ),
@@ -380,6 +425,7 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         """Behold kjent energi og historikk, publiser ukjente råd som None."""
         topp_3 = beregn_topp_3_oversikt(self._regnskap.daily_max_kw, today=now.date())
         ukjente = (
+            "estimert_kuttenergi_resten_av_timen_kwh",
             "projected_avg_kw",
             "margin_kw",
             "time_tak_kw",
@@ -399,11 +445,14 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "mulig_besparelse_kr",
             "unngaaelig_besparelse_kr",
             "kutt_mulig",
+            "maal_status",
+            "maal_kutt_anbefalt",
             "tilgjengelig_kutt_kw",
             "kuttet_naa_kw",
         )
         return {
             **dict.fromkeys((*ukjente, *KOSTNAD_FELT_NAVN)),
+            "valgt_maal_kw": self.valgt_maal_kw,
             "maalegrunnlag_gyldig": current_kw is not None,
             "beregning_gyldig": False,
             "kjent_fastledd_maks_kw": self.trinn_oppsett.kjent_fastledd_maks_kw,
@@ -420,6 +469,11 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
             "topp_3_inkluderer_i_dag": topp_3.i_dag_teller_med,
             "dag_som_ryker": None if topp_3.dag_som_ryker is None else asdict(topp_3.dag_som_ryker),
             "kutt_kilder": [],
+            "lastprofiler": {},
+            "bruk_lastprofiler": self.bruk_lastprofiler,
+            "profiler_antall": 0,
+            "profiler_ukjente": 0,
+            "laster_uten_profil": len(self.laster),
             "last_update": now.isoformat(),
         }
 
@@ -431,13 +485,17 @@ class EffektvaktCoordinator(DataUpdateCoordinator):
         """
         avlesninger = []
         for last in self.laster:
-            kw = read_power_kw(self.hass, last.effekt_sensor, now=dt_util_now())
+            kw = read_power_kw(self.hass, last.effekt_sensor, now=dt_util_now()) if last.effekt_sensor else None
             avlesninger.append(
                 LastAvlesning(
                     oppsett=last,
                     effekt_w=None if kw is None else kw * 1000.0,
-                    bryter_paa=read_switch_on(self.hass, last.bryter),
-                    friendly_name=read_friendly_name(self.hass, last.effekt_sensor),
+                    bryter_paa=read_switch_on(self.hass, last.bryter)
+                    if not (last.bryter or "").startswith("climate.")
+                    else None,
+                    friendly_name=read_friendly_name(self.hass, last.effekt_sensor)
+                    if last.effekt_sensor
+                    else last.navn,
                 )
             )
         return avlesninger

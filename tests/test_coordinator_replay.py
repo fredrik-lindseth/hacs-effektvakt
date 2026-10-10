@@ -1,4 +1,8 @@
-"""Replay-test mot fixturene i tests/fixtures/ (NVE-modell: én topp-time per dag)."""
+"""Idealiserte terskelscenarioer mot fixturene, uten energitilbakeføring.
+
+Dette er ikke replay av dagens styring. Kausal historikk og tilbakeføring
+testes i test_simulering.py og rapporteres av scripts/simuler_sparing.py.
+"""
 
 from __future__ import annotations
 
@@ -35,11 +39,11 @@ def _aggregate_daily_max(hours: list[dict]) -> dict[date, float]:
 
 
 def _simulate_with_kutt(hours: list[dict], trinn: list[tuple[float, int]], kutt_kwh: float = 0.5) -> dict[date, float]:
-    """Anta Effektvakt fikk styre. Reduserer kwh med kutt_kwh i timer hvor risiko ville vært >= medium.
+    """Trekk antatt energi fra timer nær terskelen, uten å modellere aktuatorer.
 
     kutt_kwh modellerer tre scenarier:
       0.15  - blind VVB (duty-cycle ~15%, 2 kW x 30 min x 0.15 = 0.15 kWh)
-      1.0   - VVB med status-sensor (garantert 2 kW x 30 min = 1.0 kWh)
+      1.0   - antatt 2 kW i 30 minutter = 1.0 kWh
       2.5   - VVB med status + billader-pause (1.0 + 1.6 kWh ≈ 2.5 kWh)
     """
     daily_max_so_far: dict[date, float] = {}
@@ -91,8 +95,8 @@ def test_replay_skadebegrensning_over_5_måneder():
     Måneder med høyt forbruk godt over en tier-grense (f.eks. jan/feb/des med
     topp ~6 kWh i 5-10 kW-trinnet) vil sjelden vise målbar top-3-forbedring.
     Lastkutt hjelper kun når den aktuelle timen ER daglig topp. Det er forventet.
-    Testen sjekker at systemet er ikke-negativt (invariant) og demonstrerer
-    faktisk nytte i måneder nær en tier-grense.
+    Testen sjekker at dette idealiserte fradraget gir ikke-negativ endring.
+    Den sier ikke om virkelig styring gir lavere nettleie.
     """
     trinn = KAPASITETSTRINN_PER_DSO["bkk"]["kapasitetstrinn"]
 
@@ -114,8 +118,7 @@ def test_replay_skadebegrensning_over_5_måneder():
     for navn, forbedring in forbedringer:
         assert forbedring >= 0.0, f"{navn}: styring forverret top-3-snittet med {forbedring:.3f} kW"
 
-    # Krav: minst én måned med >= 0.3 kW forbedring -- demonstrerer at logikken
-    # faktisk hjelper i måneder nær en tier-grense.
+    # Minst én måned må ha topper som påvirkes av det antatte fradraget.
     over_0_3 = sum(1 for _, f in forbedringer if f >= 0.3)
     assert over_0_3 >= 1, (
         f"Forventet minst 1 måned med >= 0.3 kW forbedring, fikk {over_0_3}. "
@@ -136,7 +139,7 @@ _KUTT_SCENARIER = [
     pytest.param(
         1.0,
         "VVB med status-sensor",
-        0.3,  # garantert 1 kWh per event er nok til å skyve daglig topp
+        0.3,  # antatt 1 kWh per event flytter noen dagstopper i dette scenarioet
         1,
         0,
         id="vvb_med_status",
@@ -166,8 +169,8 @@ def test_replay_kutt_scenarier(
 ) -> None:
     """Tre VVB-scenarier mot reelle BKK-fixturer.
 
-    Dokumenterer at blind lastkutt (duty-cycle-vektet) er tilnærmet verdiløst,
-    mens status-sensor eller billader-kombinasjon gir målbar kapasitetsreduksjon.
+    Sammenligner antatte energifradrag. Lasttilgjengelighet, faktisk varighet
+    og gjeninnkobling må dokumenteres separat før utfallet kan brukes som råd.
     """
     trinn = KAPASITETSTRINN_PER_DSO["bkk"]["kapasitetstrinn"]
 
@@ -197,7 +200,7 @@ def test_replay_kutt_scenarier(
 
         if forbedring >= min_forbedring and min_forbedring > 0.0:
             måneder_over_krav += 1
-        if post_idx > rå_idx:  # høyere idx = lavere trinn (færre kW)
+        if 0 <= post_idx < rå_idx:  # lavere indeks betyr billigere kapasitetstrinn
             måneder_med_trinn_bevaring += 1
 
     print(f"  Måneder >= {min_forbedring} kW forbedring: {måneder_over_krav} (krav: {min_måneder})")

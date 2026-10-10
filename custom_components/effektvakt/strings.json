@@ -48,26 +48,33 @@
           "innstillinger": "Innstillinger",
           "legg_til_last": "Legg til en kuttbar last",
           "velg_last": "Endre eller fjern en kuttbar last",
-          "ferdig": "Ferdig"
+          "ferdig": "Ferdig",
+          "maaltrinn": "Mål for månedens kapasitetstrinn"
         }
       },
       "innstillinger": {
         "title": "Effektvakt-innstillinger",
-        "description": "Endre disse når du har sett hvordan Effektvakt oppfører seg hos deg. Feltene viser det som gjelder nå.",
+        "description": "Endre disse når du har sett hvordan Effektvakt oppfører seg hos deg. Feltene viser det som gjelder nå. Når lastprofiler er på, vurderes målte aktive laster med forventet gjenværende energi. Profiler uten aktuell effektmåling gir bare planleggingsanslag. Av beholder vanlig vurdering.",
         "data": {
           "safety_buffer_kw": "Sikkerhetsmargin (kW)",
           "min_risiko_for_kutt": "Kutt fra og med dette nivået",
-          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)"
+          "risiko_holdetid_minutter": "Holdetid på risiko-sensor ved nedgang (min)",
+          "bruk_lastprofiler": "Bruk lastprofiler i kuttvurderingen"
         }
       },
       "legg_til_last": {
         "title": "Ny kuttbar last",
-        "description": "En last er en effektsensor, en valgfri bryter og en terskel. Terskelen er hvor mye lasten må trekke før den regnes som på: rundt 1000 W for et berederelement, lavere for varmekabler. Legger du inn bryteren, ser Effektvakt når lasten faktisk ble kuttet.",
+        "description": "Velg Av for vanlig vurdering, Historikk for en profil fra siste sju dager eller Manuell for et anslag. Manuell profil krever aktiveffekt og arbeidssyklus; uten effektsensor må du også skrive et unikt navn. Koble til bryteren eller climate-enheten blueprinten styrer, så egne kutt holdes utenfor læringen. Maksimal utkobling i anslaget må samsvare med blueprinten; feltet endrer ikke grensene der.",
         "data": {
           "effekt_sensor": "Effektsensor",
           "navn": "Navn (valgfritt, ellers brukes sensorens eget navn)",
-          "bryter": "Bryter som slår lasten av (valgfri)",
-          "terskel_w": "Terskel for «på» (W)"
+          "bryter": "Styringsenhet (valgfri)",
+          "terskel_w": "Terskel for «på» (W)",
+          "profil": "Lastprofil",
+          "nominell_w": "Effekt når på (W)",
+          "arbeidssyklus_pct": "Arbeidssyklus (%)",
+          "typisk_paa_minutter": "Typisk påperiode (minutter)",
+          "maks_kutt_minutter": "Maksimal utkobling i profilanslaget (minutter)"
         }
       },
       "velg_last": {
@@ -79,20 +86,36 @@
       },
       "rediger_last": {
         "title": "Endre {navn}",
-        "description": "Endre lasten, eller kryss av for å fjerne den.",
+        "description": "Velg Av for vanlig vurdering, Historikk for en profil fra siste sju dager eller Manuell for et anslag. Manuell profil krever aktiveffekt og arbeidssyklus; uten effektsensor må du også skrive et unikt navn. Koble til bryteren eller climate-enheten blueprinten styrer, så egne kutt holdes utenfor læringen. Maksimal utkobling i anslaget må samsvare med blueprinten; feltet endrer ikke grensene der.",
         "data": {
           "effekt_sensor": "Effektsensor",
           "navn": "Navn (valgfritt, ellers brukes sensorens eget navn)",
-          "bryter": "Bryter som slår lasten av (valgfri)",
+          "bryter": "Styringsenhet (valgfri)",
           "terskel_w": "Terskel for «på» (W)",
-          "slett": "Fjern denne lasten"
+          "slett": "Fjern denne lasten",
+          "profil": "Lastprofil",
+          "nominell_w": "Effekt når på (W)",
+          "arbeidssyklus_pct": "Arbeidssyklus (%)",
+          "typisk_paa_minutter": "Typisk påperiode (minutter)",
+          "maks_kutt_minutter": "Maksimal utkobling i profilanslaget (minutter)"
+        }
+      },
+      "maaltrinn": {
+        "title": "Prioriter et lavere nettleietrinn",
+        "description": "Velg et mål for måneden. Effektvakt kan da anbefale lastkutt tidligere og oftere, også før timen øker regningen. Lengste avtid bestemmer du fortsatt i blueprintene. Tilgjengelig effekt er et anslag, og utsatt oppvarming kan lage nye topper. Slår du dette av, brukes de vanlige rådene. Et mål som allerede er tapt i den lagrede historikken, forfølges ikke videre.",
+        "data": {
+          "valgt_maal_kw": "Mål for månedens kapasitetstrinn"
         }
       }
     },
     "error": {
       "sensor_not_found": "Sensoren finnes ikke",
       "power_unit_invalid": "Effektsensoren må ha enhet W eller kW",
-      "last_finnes_allerede": "Den effektsensoren er allerede i bruk av en annen last"
+      "last_finnes_allerede": "Den effektsensoren er allerede i bruk av en annen last",
+      "maaltrinn_invalid": "Velg et endelig kapasitetstrinn fra tariffen som er valgt.",
+      "profil_invalid": "Oppgi endelige tall innenfor grensene.",
+      "profil_navn_kreves": "Manuell profil uten effektsensor trenger et unikt navn.",
+      "profil_felt_kreves": "Manuell profil krever aktiveffekt og arbeidssyklus."
     }
   },
   "entity": {
@@ -129,6 +152,9 @@
       },
       "topp_3_snitt_denne_maned": {
         "name": "Topp-3 snitt denne måneden"
+      },
+      "estimert_kuttenergi_resten_av_timen": {
+        "name": "Estimert kuttenergi resten av timen"
       }
     },
     "switch": {
@@ -162,6 +188,18 @@
     "dso": {
       "options": {
         "custom": "Egendefinert"
+      }
+    },
+    "valgt_maal_kw": {
+      "options": {
+        "av": "Av — vanlige råd"
+      }
+    },
+    "profil": {
+      "options": {
+        "av": "Av",
+        "auto": "Historikk (siste sju dager)",
+        "manuell": "Manuell"
       }
     }
   },

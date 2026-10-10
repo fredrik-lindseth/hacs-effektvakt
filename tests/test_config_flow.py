@@ -146,6 +146,11 @@ def test_lastskjemaet_spoer_om_sensor_navn_bryter_og_terskel():
         CONF_LAST_NAVN,
         CONF_LAST_BRYTER,
         CONF_LAST_TERSKEL_W,
+        "profil",
+        "nominell_w",
+        "arbeidssyklus_pct",
+        "typisk_paa_minutter",
+        "maks_kutt_minutter",
     }
 
 
@@ -161,7 +166,7 @@ def test_lastskjemaet_viser_den_lagrede_lasten():
         CONF_LAST_TERSKEL_W: 1000.0,
     }
     svar = _svar_uten_endringer(last_skjema(lagret))
-    assert svar == lagret
+    assert svar == {**lagret, "profil": "av"}
 
 
 def test_slettevalget_kommer_bare_naar_lasten_finnes_fra_foer():

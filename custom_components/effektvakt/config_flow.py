@@ -13,19 +13,26 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BRUK_LASTPROFILER,
     CONF_CONFIRM_PEAK_SENSOR,
     CONF_DSO,
     CONF_ENERGY_SENSOR,
     CONF_KAPASITETSTRINN_CUSTOM,
     CONF_LAST_BRYTER,
+    CONF_LAST_DUTY_PCT,
     CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_MAKS_KUTT_MIN,
     CONF_LAST_NAVN,
+    CONF_LAST_NOMINELL_W,
+    CONF_LAST_PAA_MIN,
+    CONF_LAST_PROFIL,
     CONF_LAST_TERSKEL_W,
     CONF_LASTER,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_POWER_SENSOR,
     CONF_RISIKO_HOLDETID_MINUTTER,
     CONF_SAFETY_BUFFER_KW,
+    CONF_VALGT_MAAL_KW,
     DEFAULT_DSO,
     DEFAULT_LAST_TERSKEL_W,
     DEFAULT_MIN_RISIKO_FOR_KUTT,
@@ -44,6 +51,8 @@ from .const import (
 )
 from .dso import KAPASITETSTRINN_PER_DSO
 from .laster import LastOppsett, last_til_lagring, les_laster
+from .modell import gyldig_maaltrinn
+from .oppsett import les_trinn
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -129,6 +138,9 @@ def innstillinger_skjema(data: Mapping[str, Any]) -> vol.Schema:
     """
     return vol.Schema(
         {
+            vol.Optional(
+                CONF_BRUK_LASTPROFILER, default=bool(data.get(CONF_BRUK_LASTPROFILER, False))
+            ): selector.BooleanSelector(),
             vol.Required(
                 CONF_SAFETY_BUFFER_KW,
                 default=data.get(CONF_SAFETY_BUFFER_KW, DEFAULT_SAFETY_BUFFER_KW),
@@ -171,7 +183,7 @@ def last_skjema(last: Mapping[str, Any] | None = None, *, kan_slettes: bool = Fa
     """
     lagret = last or {}
     felter: dict[Any, Any] = {
-        vol.Required(
+        vol.Optional(
             CONF_LAST_EFFEKT_SENSOR,
             description={"suggested_value": lagret.get(CONF_LAST_EFFEKT_SENSOR)},
         ): selector.EntitySelector(
@@ -185,7 +197,7 @@ def last_skjema(last: Mapping[str, Any] | None = None, *, kan_slettes: bool = Fa
             CONF_LAST_BRYTER,
             description={"suggested_value": lagret.get(CONF_LAST_BRYTER)},
         ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["switch", "input_boolean"]),
+            selector.EntitySelectorConfig(domain=["switch", "input_boolean", "climate"]),
         ),
         vol.Required(
             CONF_LAST_TERSKEL_W,
@@ -200,6 +212,24 @@ def last_skjema(last: Mapping[str, Any] | None = None, *, kan_slettes: bool = Fa
             ),
         ),
     }
+    felter[vol.Required(CONF_LAST_PROFIL, default=lagret.get(CONF_LAST_PROFIL, "av"))] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=["av", "auto", "manuell"],
+            translation_key=CONF_LAST_PROFIL,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+    for key, maks, unit in (
+        (CONF_LAST_NOMINELL_W, 100000, "W"),
+        (CONF_LAST_DUTY_PCT, 100, "%"),
+        (CONF_LAST_PAA_MIN, 1440, "min"),
+        (CONF_LAST_MAKS_KUTT_MIN, 240, "min"),
+    ):
+        felter[vol.Optional(key, description={"suggested_value": lagret.get(key)})] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=maks, step=0.1, unit_of_measurement=unit, mode=selector.NumberSelectorMode.BOX
+            )
+        )
     if kan_slettes:
         felter[vol.Optional(CONF_SLETT_LAST, default=False)] = selector.BooleanSelector()
     return vol.Schema(felter)
@@ -219,22 +249,64 @@ def valider_last(
     ville `tilgjengelig_kutt` talt den samme effekten to ganger, og
     kuttsporingen hatt to laster med samme nøkkel.
     """
-    sensor = str(svar[CONF_LAST_EFFEKT_SENSOR])
-    opptatt = {last.effekt_sensor for last in lagrede if last.effekt_sensor != erstatter}
-    if sensor in opptatt:
-        return None, {CONF_LAST_EFFEKT_SENSOR: "last_finnes_allerede"}
-
+    sensor = str(svar.get(CONF_LAST_EFFEKT_SENSOR) or "").strip()
     navn = str(svar.get(CONF_LAST_NAVN) or "").strip()
     bryter = str(svar.get(CONF_LAST_BRYTER) or "").strip()
-    return (
-        LastOppsett(
-            effekt_sensor=sensor,
-            navn=navn or None,
-            bryter=bryter or None,
-            terskel_w=float(svar.get(CONF_LAST_TERSKEL_W, DEFAULT_LAST_TERSKEL_W)),
-        ),
-        {},
-    )
+    profil = svar.get(CONF_LAST_PROFIL, "av")
+    errors: dict[str, str] = {}
+    tall: dict[str, float | None] = {}
+    for key, maks in (
+        (CONF_LAST_NOMINELL_W, 100000),
+        (CONF_LAST_DUTY_PCT, 100),
+        (CONF_LAST_PAA_MIN, 1440),
+        (CONF_LAST_MAKS_KUTT_MIN, 240),
+    ):
+        verdi = svar.get(key)
+        if verdi is None or verdi == "":
+            tall[key] = None
+            continue
+        try:
+            nummer = float(verdi)
+        except (TypeError, ValueError):
+            nummer = float("nan")
+        if isinstance(verdi, bool) or not math.isfinite(nummer) or nummer < 0 or nummer > maks:
+            errors[key] = "profil_invalid"
+        else:
+            tall[key] = nummer
+    if profil not in ("av", "auto", "manuell"):
+        errors[CONF_LAST_PROFIL] = "profil_invalid"
+    if not sensor and profil != "manuell":
+        errors[CONF_LAST_EFFEKT_SENSOR] = "sensor_not_found"
+    if not sensor and not navn:
+        errors[CONF_LAST_NAVN] = "profil_navn_kreves"
+    if profil == "manuell":
+        for key in (CONF_LAST_NOMINELL_W, CONF_LAST_DUTY_PCT):
+            if tall.get(key) is None:
+                errors[key] = "profil_felt_kreves"
+        if tall.get(CONF_LAST_NOMINELL_W) == 0:
+            errors[CONF_LAST_NOMINELL_W] = "profil_invalid"
+    for key in (CONF_LAST_NOMINELL_W, CONF_LAST_PAA_MIN, CONF_LAST_MAKS_KUTT_MIN):
+        if tall.get(key) == 0:
+            errors[key] = "profil_invalid"
+    noekkel = sensor or f"manuell:{navn}"
+    opptatt = {last.noekkel for last in lagrede if last.noekkel != erstatter}
+    if noekkel in opptatt:
+        errors[CONF_LAST_EFFEKT_SENSOR if sensor else CONF_LAST_NAVN] = "last_finnes_allerede"
+    if bryter and any(last.bryter == bryter and last.noekkel != erstatter for last in lagrede):
+        errors[CONF_LAST_BRYTER] = "last_finnes_allerede"
+    if errors:
+        return None, errors
+    return LastOppsett(
+        effekt_sensor=sensor,
+        navn=navn or None,
+        bryter=bryter or None,
+        terskel_w=float(svar.get(CONF_LAST_TERSKEL_W, DEFAULT_LAST_TERSKEL_W)),
+        profil=profil,
+        nominell_w=tall.get(CONF_LAST_NOMINELL_W),
+        arbeidssyklus_pct=tall.get(CONF_LAST_DUTY_PCT),
+        typisk_paa_minutter=tall.get(CONF_LAST_PAA_MIN),
+        maks_kutt_minutter=tall.get(CONF_LAST_MAKS_KUTT_MIN) or 60.0,
+    ), {}
 
 
 def _last_valg(laster: list[LastOppsett]) -> list[selector.SelectOptionDict]:
@@ -243,9 +315,7 @@ def _last_valg(laster: list[LastOppsett]) -> list[selector.SelectOptionDict]:
     Sensoren og ikke indeksen er verdien: en indeks ville pekt på feil last i
     det noen fjernet en annen i et annet nettleservindu.
     """
-    return [
-        selector.SelectOptionDict(value=last.effekt_sensor, label=last.navn or last.effekt_sensor) for last in laster
-    ]
+    return [selector.SelectOptionDict(value=last.noekkel, label=last.navn or last.effekt_sensor) for last in laster]
 
 
 def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, float]]:
@@ -282,7 +352,10 @@ def parse_kapasitetstrinn(raa: str) -> list[tuple[float | None, float]]:
 
 def flettet_data(lagret: Mapping[str, Any], user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Lagret konfigurasjon med svarene fra Configure lagt over."""
-    return {**lagret, **user_input}
+    ny = {**lagret, **user_input}
+    if not ny.get(CONF_BRUK_LASTPROFILER):
+        ny.pop(CONF_BRUK_LASTPROFILER, None)
+    return ny
 
 
 class EffektvaktConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
@@ -439,6 +512,8 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
 
     def _sensorfeil(self, entity_id: str) -> dict[str, str]:
         """Effektsensoren for en last, maalt mot tilstandsmaskinen."""
+        if not entity_id:
+            return {}
         state = self.hass.states.get(entity_id)
         if state is None:
             return {CONF_LAST_EFFEKT_SENSOR: "sensor_not_found"}
@@ -447,7 +522,7 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
         return {}
 
     async def async_step_init(self, _user_input: dict[str, Any] | None = None) -> FlowResult:
-        valg = ["innstillinger", "legg_til_last"]
+        valg = ["innstillinger", "maaltrinn", "legg_til_last"]
         if self._laster:
             valg.append("velg_last")
         valg.append("ferdig")
@@ -462,10 +537,56 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
             data_schema=innstillinger_skjema(self.config_entry.data),
         )
 
+    async def async_step_maaltrinn(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Valgfritt maanedsmaal, uten aa endre standardmodus for eksisterende oppsett."""
+        data = self.config_entry.data
+        trinn = les_trinn(dso_id=data.get(CONF_DSO), custom=data.get(CONF_KAPASITETSTRINN_CUSTOM)).trinn
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            verdi = user_input.get(CONF_VALGT_MAAL_KW, "av")
+            ny = dict(data)
+            if verdi == "av":
+                ny.pop(CONF_VALGT_MAAL_KW, None)
+            else:
+                try:
+                    kw = float(verdi)
+                except (TypeError, ValueError):
+                    kw = float("nan")
+                if not gyldig_maaltrinn(trinn=trinn, valgt_maal_kw=kw):
+                    errors[CONF_VALGT_MAAL_KW] = "maaltrinn_invalid"
+                else:
+                    ny[CONF_VALGT_MAAL_KW] = kw
+            if not errors:
+                self._skriv(ny)
+                return await self.async_step_init()
+        lagret = data.get(CONF_VALGT_MAAL_KW)
+        valgt = str(float(lagret)) if gyldig_maaltrinn(trinn=trinn, valgt_maal_kw=lagret) else "av"
+        valg = [selector.SelectOptionDict(value="av", label="av")]
+        valg.extend(
+            selector.SelectOptionDict(value=str(float(kw)), label=f"{kw:g} kW ({kr:g} NOK)")
+            for kw, kr in trinn[:-1]
+            if math.isfinite(kw) and kw > 0
+        )
+        return self.async_show_form(
+            step_id="maaltrinn",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_VALGT_MAAL_KW, default=valgt): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=valg,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key=CONF_VALGT_MAAL_KW,
+                        ),
+                    ),
+                }
+            ),
+        )
+
     async def async_step_legg_til_last(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = self._sensorfeil(user_input[CONF_LAST_EFFEKT_SENSOR])
+            errors = self._sensorfeil(user_input.get(CONF_LAST_EFFEKT_SENSOR, ""))
             if not errors:
                 last, errors = valider_last(user_input, lagrede=self._laster)
                 if last is not None:
@@ -498,18 +619,18 @@ class EffektvaktOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_rediger_last(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         laster = self._laster
-        valgt = next((last for last in laster if last.effekt_sensor == self._rediger), None)
+        valgt = next((last for last in laster if last.noekkel == self._rediger), None)
         if valgt is None:
             return await self.async_step_init()
 
         errors: dict[str, str] = {}
         if user_input is not None:
             if user_input.get(CONF_SLETT_LAST):
-                self._skriv_laster([last for last in laster if last.effekt_sensor != valgt.effekt_sensor])
+                self._skriv_laster([last for last in laster if last.noekkel != valgt.noekkel])
                 return await self.async_step_init()
-            errors = self._sensorfeil(user_input[CONF_LAST_EFFEKT_SENSOR])
+            errors = self._sensorfeil(user_input.get(CONF_LAST_EFFEKT_SENSOR, ""))
             if not errors:
-                ny, errors = valider_last(user_input, lagrede=laster, erstatter=valgt.effekt_sensor)
+                ny, errors = valider_last(user_input, lagrede=laster, erstatter=valgt.noekkel)
                 if ny is not None:
                     self._skriv_laster([ny if last is valgt else last for last in laster])
                     return await self.async_step_init()

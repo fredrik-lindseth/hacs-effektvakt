@@ -48,26 +48,33 @@
           "innstillinger": "Settings",
           "legg_til_last": "Add a cuttable load",
           "velg_last": "Edit or remove a cuttable load",
-          "ferdig": "Done"
+          "ferdig": "Done",
+          "maaltrinn": "Monthly capacity target"
         }
       },
       "innstillinger": {
         "title": "Effektvakt settings",
-        "description": "Change these once you have seen how Effektvakt behaves in your home. The fields show what is in effect now.",
+        "description": "Change these once you have seen how Effektvakt behaves in your home. The fields show what is in effect now. With load profiles enabled, measured active loads are assessed using expected remaining energy. Profiles without a live power measurement provide planning estimates only. The default assessment is used while this option is off.",
         "data": {
           "safety_buffer_kw": "Safety buffer (kW)",
           "min_risiko_for_kutt": "Cut from this level and up",
-          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)"
+          "risiko_holdetid_minutter": "Risk sensor hold-time on de-escalation (min)",
+          "bruk_lastprofiler": "Use load profiles when assessing reductions"
         }
       },
       "legg_til_last": {
         "title": "New cuttable load",
-        "description": "A load is a power sensor, an optional switch and a threshold. The threshold is how much the load must draw to count as on: around 1000 W for a water heater element, lower for heating cables. Add the switch and Effektvakt can see when the load was actually cut.",
+        "description": "Choose Off for the existing assessment, History for a rolling seven-day profile, or Manual for an assumption. Manual profiles require active power and duty cycle; without a power sensor, also enter a unique name. Link the switch or climate entity used by the blueprint to exclude our own reductions from learning. The estimate maximum off-time must match your blueprint; this field does not change its limits.",
         "data": {
           "effekt_sensor": "Power sensor",
           "navn": "Name (optional, the sensor's own name is used otherwise)",
-          "bryter": "Switch that turns the load off (optional)",
-          "terskel_w": "Threshold for “on” (W)"
+          "bryter": "Control entity (optional)",
+          "terskel_w": "Threshold for “on” (W)",
+          "profil": "Load profile",
+          "nominell_w": "Active power (W)",
+          "arbeidssyklus_pct": "Duty cycle (%)",
+          "typisk_paa_minutter": "Typical active period (minutes)",
+          "maks_kutt_minutter": "Maximum off-time used by the estimate (minutes)"
         }
       },
       "velg_last": {
@@ -79,20 +86,36 @@
       },
       "rediger_last": {
         "title": "Edit {navn}",
-        "description": "Change the load, or tick the box to remove it.",
+        "description": "Choose Off for the existing assessment, History for a rolling seven-day profile, or Manual for an assumption. Manual profiles require active power and duty cycle; without a power sensor, also enter a unique name. Link the switch or climate entity used by the blueprint to exclude our own reductions from learning. The estimate maximum off-time must match your blueprint; this field does not change its limits.",
         "data": {
           "effekt_sensor": "Power sensor",
           "navn": "Name (optional, the sensor's own name is used otherwise)",
-          "bryter": "Switch that turns the load off (optional)",
+          "bryter": "Control entity (optional)",
           "terskel_w": "Threshold for “on” (W)",
-          "slett": "Remove this load"
+          "slett": "Remove this load",
+          "profil": "Load profile",
+          "nominell_w": "Active power (W)",
+          "arbeidssyklus_pct": "Duty cycle (%)",
+          "typisk_paa_minutter": "Typical active period (minutes)",
+          "maks_kutt_minutter": "Maximum off-time used by the estimate (minutes)"
+        }
+      },
+      "maaltrinn": {
+        "title": "Prioritise a lower capacity tier",
+        "description": "Choose a monthly target. Effektvakt can then recommend cuts earlier and more often, even before an hour increases the bill. You still control maximum off-time in your blueprints. Available power is an estimate and deferred heating can create new peaks. Turning this off restores the standard advice. A target already lost in the recorded history is no longer pursued.",
+        "data": {
+          "valgt_maal_kw": "Monthly capacity target"
         }
       }
     },
     "error": {
       "sensor_not_found": "Sensor not found",
       "power_unit_invalid": "Power sensor must have unit W or kW",
-      "last_finnes_allerede": "That power sensor is already used by another load"
+      "last_finnes_allerede": "That power sensor is already used by another load",
+      "maaltrinn_invalid": "Choose a finite tier from the selected tariff.",
+      "profil_invalid": "Enter finite values within the allowed range.",
+      "profil_navn_kreves": "A manual profile without a power sensor needs a unique name.",
+      "profil_felt_kreves": "Manual profiles require active power and duty cycle."
     }
   },
   "entity": {
@@ -129,6 +152,9 @@
       },
       "topp_3_snitt_denne_maned": {
         "name": "Top-3 average this month"
+      },
+      "estimert_kuttenergi_resten_av_timen": {
+        "name": "Estimated reduction energy for the rest of the hour"
       }
     },
     "switch": {
@@ -162,6 +188,18 @@
     "dso": {
       "options": {
         "custom": "Custom"
+      }
+    },
+    "valgt_maal_kw": {
+      "options": {
+        "av": "Off — standard advice"
+      }
+    },
+    "profil": {
+      "options": {
+        "av": "Off",
+        "auto": "History (last seven days)",
+        "manuell": "Manual"
       }
     }
   },

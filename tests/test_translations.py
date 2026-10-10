@@ -16,9 +16,15 @@ import yaml
 from custom_components.effektvakt.binary_sensor import BINARY_SENSOR_KEY
 from custom_components.effektvakt.config_flow import CONF_SLETT_LAST
 from custom_components.effektvakt.const import (
+    CONF_BRUK_LASTPROFILER,
     CONF_LAST_BRYTER,
+    CONF_LAST_DUTY_PCT,
     CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_MAKS_KUTT_MIN,
     CONF_LAST_NAVN,
+    CONF_LAST_NOMINELL_W,
+    CONF_LAST_PAA_MIN,
+    CONF_LAST_PROFIL,
     CONF_LAST_TERSKEL_W,
     CONF_MIN_RISIKO_FOR_KUTT,
     CONF_RISIKO_HOLDETID_MINUTTER,
@@ -43,6 +49,7 @@ SENSOR_NOEKLER = {
     "risiko_niva",
     "tilgjengelig_kutt",
     "kostnad_neste_trinn",
+    "estimert_kuttenergi_resten_av_timen",
 }
 
 
@@ -123,6 +130,7 @@ def test_oppsettet_har_bare_stegene_flyten_viser(navn):
 def test_configure_har_etikett_for_hver_innstilling(navn):
     felt = _last(SPRAAK[navn])["options"]["step"]["innstillinger"]["data"]
     assert set(felt) == {
+        CONF_BRUK_LASTPROFILER,
         CONF_SAFETY_BUFFER_KW,
         CONF_MIN_RISIKO_FOR_KUTT,
         CONF_RISIKO_HOLDETID_MINUTTER,
@@ -134,7 +142,7 @@ def test_configure_har_etikett_for_hver_innstilling(navn):
 def test_menyen_i_configure_har_etikett_for_hvert_valg(navn):
     """Meny-valgene er step-id-er i config_flow.py, og uten etikett vises de raa."""
     valg = _last(SPRAAK[navn])["options"]["step"]["init"]["menu_options"]
-    assert set(valg) == {"innstillinger", "legg_til_last", "velg_last", "ferdig"}
+    assert set(valg) == {"innstillinger", "maaltrinn", "legg_til_last", "velg_last", "ferdig"}
     assert all(valg.values())
 
 
@@ -142,7 +150,17 @@ def test_menyen_i_configure_har_etikett_for_hvert_valg(navn):
 @pytest.mark.parametrize("steg", ["legg_til_last", "rediger_last"])
 def test_lastskjemaet_har_etikett_for_hvert_felt(navn, steg):
     felt = _last(SPRAAK[navn])["options"]["step"][steg]["data"]
-    forventet = {CONF_LAST_EFFEKT_SENSOR, CONF_LAST_NAVN, CONF_LAST_BRYTER, CONF_LAST_TERSKEL_W}
+    forventet = {
+        CONF_LAST_EFFEKT_SENSOR,
+        CONF_LAST_NAVN,
+        CONF_LAST_BRYTER,
+        CONF_LAST_TERSKEL_W,
+        CONF_LAST_PROFIL,
+        CONF_LAST_NOMINELL_W,
+        CONF_LAST_DUTY_PCT,
+        CONF_LAST_PAA_MIN,
+        CONF_LAST_MAKS_KUTT_MIN,
+    }
     if steg == "rediger_last":
         forventet.add(CONF_SLETT_LAST)
     assert set(felt) == forventet

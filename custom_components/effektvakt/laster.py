@@ -20,13 +20,19 @@ hendelsesloggen og sparesensoren regner videre på.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .const import (
     CONF_LAST_BRYTER,
+    CONF_LAST_DUTY_PCT,
     CONF_LAST_EFFEKT_SENSOR,
+    CONF_LAST_MAKS_KUTT_MIN,
     CONF_LAST_NAVN,
+    CONF_LAST_NOMINELL_W,
+    CONF_LAST_PAA_MIN,
+    CONF_LAST_PROFIL,
     CONF_LAST_TERSKEL_W,
     CONF_LASTER,
     DEFAULT_LAST_TERSKEL_W,
@@ -50,6 +56,16 @@ class LastOppsett:
     navn: str | None = None
     bryter: str | None = None
     terskel_w: float = DEFAULT_LAST_TERSKEL_W
+    profil: str = "av"
+    nominell_w: float | None = None
+    arbeidssyklus_pct: float | None = None
+    typisk_paa_minutter: float | None = None
+    maks_kutt_minutter: float = 60.0
+
+    @property
+    def noekkel(self) -> str:
+        """Sensor-id for gamle laster, ellers navnet paa et manuelt anslag."""
+        return self.effekt_sensor or f"manuell:{self.navn}"
 
 
 @dataclass(frozen=True)
@@ -120,6 +136,16 @@ def _tekst(raa: Any) -> str | None:
     return strippet or None
 
 
+def _profil_tall(raa: Any, *, maks: float) -> float | None:
+    if isinstance(raa, bool):
+        return None
+    try:
+        tall = float(raa)
+    except (TypeError, ValueError):
+        return None
+    return tall if math.isfinite(tall) and 0 <= tall <= maks else None
+
+
 def les_laster(raa: object) -> list[LastOppsett]:
     """Lastelisten fra config entryen, som `LastOppsett`.
 
@@ -134,14 +160,27 @@ def les_laster(raa: object) -> list[LastOppsett]:
         if not isinstance(post, dict):
             continue
         sensor = _tekst(post.get(CONF_LAST_EFFEKT_SENSOR))
-        if sensor is None:
+        profil = post.get(CONF_LAST_PROFIL, "av")
+        if profil not in ("av", "auto", "manuell"):
+            profil = "av"
+        navn = _tekst(post.get(CONF_LAST_NAVN))
+        nominell = _profil_tall(post.get(CONF_LAST_NOMINELL_W), maks=100000)
+        if nominell == 0:
+            nominell = None
+        duty = _profil_tall(post.get(CONF_LAST_DUTY_PCT), maks=100)
+        if sensor is None and not (profil == "manuell" and navn and nominell is not None and duty is not None):
             continue
         laster.append(
             LastOppsett(
-                effekt_sensor=sensor,
-                navn=_tekst(post.get(CONF_LAST_NAVN)),
+                effekt_sensor=sensor or "",
+                navn=navn,
                 bryter=_tekst(post.get(CONF_LAST_BRYTER)),
                 terskel_w=_terskel(post.get(CONF_LAST_TERSKEL_W)),
+                profil=profil,
+                nominell_w=nominell,
+                arbeidssyklus_pct=duty,
+                typisk_paa_minutter=_profil_tall(post.get(CONF_LAST_PAA_MIN), maks=1440) or None,
+                maks_kutt_minutter=_profil_tall(post.get(CONF_LAST_MAKS_KUTT_MIN), maks=240) or 60.0,
             )
         )
     return laster
@@ -161,6 +200,18 @@ def last_til_lagring(last: LastOppsett) -> dict[str, Any]:
         post[CONF_LAST_NAVN] = last.navn
     if last.bryter:
         post[CONF_LAST_BRYTER] = last.bryter
+    if not last.effekt_sensor:
+        post.pop(CONF_LAST_EFFEKT_SENSOR)
+    if last.profil != "av":
+        post[CONF_LAST_PROFIL] = last.profil
+        post[CONF_LAST_MAKS_KUTT_MIN] = last.maks_kutt_minutter
+        for key, verdi in (
+            (CONF_LAST_NOMINELL_W, last.nominell_w),
+            (CONF_LAST_DUTY_PCT, last.arbeidssyklus_pct),
+            (CONF_LAST_PAA_MIN, last.typisk_paa_minutter),
+        ):
+            if verdi is not None:
+                post[key] = verdi
     return post
 
 
@@ -249,11 +300,11 @@ def build_kutt_kilder(
     spor = sporing or {}
     kilder = []
     for a in avlesninger:
-        s = spor.get(a.oppsett.effekt_sensor)
+        s = spor.get(a.oppsett.noekkel)
         kuttet_siden = None if s is None else s.kuttet_siden
         kilder.append(
             KuttKilde(
-                entity_id=a.oppsett.effekt_sensor,
+                entity_id=a.oppsett.effekt_sensor or a.oppsett.bryter or a.oppsett.noekkel,
                 navn=visningsnavn(a),
                 effekt_w=None if a.effekt_w is None else round(a.effekt_w, 1),
                 teller_med=teller_med(effekt_w=a.effekt_w, terskel_w=a.oppsett.terskel_w),
@@ -278,11 +329,12 @@ def compute_tilgjengelig_kutt_kw(avlesninger: list[LastAvlesning]) -> float | No
     Summen går over nøyaktig de lastene som får `teller_med` i `kutt_kilder`,
     så de to tallene kan ikke drifte fra hverandre.
     """
-    if not avlesninger:
+    maalte = [a for a in avlesninger if a.oppsett.effekt_sensor]
+    if not maalte:
         return None
     total_w = sum(
         a.effekt_w
-        for a in avlesninger
+        for a in maalte
         if a.effekt_w is not None and teller_med(effekt_w=a.effekt_w, terskel_w=a.oppsett.terskel_w)
     )
     return total_w / 1000.0
@@ -325,7 +377,7 @@ def oppdater_kuttsporing(
     gjenopptakelse som aldri fant sted. Laster uten bryter spores ikke: der er
     det ingenting å observere.
     """
-    levende = {a.oppsett.effekt_sensor for a in avlesninger if a.oppsett.bryter}
+    levende = {a.oppsett.noekkel for a in avlesninger if a.oppsett.bryter}
     for noekkel in [k for k in sporing if k not in levende]:
         del sporing[noekkel]
 
@@ -333,7 +385,7 @@ def oppdater_kuttsporing(
     for a in avlesninger:
         if not a.oppsett.bryter:
             continue
-        s = sporing.setdefault(a.oppsett.effekt_sensor, KuttSporing())
+        s = sporing.setdefault(a.oppsett.noekkel, KuttSporing())
         if a.bryter_paa is None:
             continue
 
@@ -341,7 +393,7 @@ def oppdater_kuttsporing(
             if s.kuttet_siden is not None:
                 observasjoner.append(
                     KuttObservasjon(
-                        entity_id=a.oppsett.effekt_sensor,
+                        entity_id=a.oppsett.effekt_sensor or a.oppsett.bryter or a.oppsett.noekkel,
                         navn=visningsnavn(a),
                         kuttet=False,
                         effekt_w=s.kuttet_effekt_w,
@@ -357,7 +409,7 @@ def oppdater_kuttsporing(
             s.kuttet_effekt_w = s.siste_effekt_paa_w
             observasjoner.append(
                 KuttObservasjon(
-                    entity_id=a.oppsett.effekt_sensor,
+                    entity_id=a.oppsett.effekt_sensor or a.oppsett.bryter or a.oppsett.noekkel,
                     navn=visningsnavn(a),
                     kuttet=True,
                     effekt_w=s.kuttet_effekt_w,

@@ -33,7 +33,7 @@ Etter dette steget er Effektvakt i gang.
 
 Under **Settings > Devices & Services > Effektvakt > Configure** ligger resten. Feltene viser alltid det som gjelder nå, så du kan endre én ting uten å røre de andre.
 
-Configure åpner på en meny: **Innstillinger**, **Legg til en kuttbar last**, **Endre eller fjern en kuttbar last** og **Ferdig**. Alt lagres med en gang du svarer, så du kan lukke dialogen når du er ferdig.
+Configure åpner på en meny med innstillinger, kuttbare laster og Ferdig. Utviklingsversjonen har også Mål for måneden. Alt lagres med en gang du svarer, så du kan lukke dialogen når du er ferdig.
 
 Under Innstillinger:
 
@@ -58,3 +58,13 @@ En kuttbar last er noe du kan slå av en halvtime uten at noen merker det: en be
 Lastene er det `sensor.effektvakt_tilgjengelig_kutt` summerer, og uten dem opprettes ikke den sensoren i det hele tatt. Legger du inn bryteren også, ser Effektvakt når lasten faktisk ble kuttet, og det er grunnlaget for hendelsesloggen.
 
 Legg dem inn under **Configure > Legg til en kuttbar last**. Full forklaring med fornuftige terskler per lasttype står i [laster.md](laster.md).
+
+## Mål for måneden
+
+Utviklingsversjonen har et valgfritt **Mål for måneden** i konfigurasjonsmenyen. Velg en terskel fra nettselskapets kapasitetstrinn eller **Av** for vanlig vurdering. Et valgt mål kan gi flere og tidligere kutt for å holde plass til senere dager. Allerede registrerte topper avgjør om målet fortsatt kan nås. Les [forutsetningene og avveiningene](sparepotensial.md#et-mål-for-måneden) før du bruker det til automatisk lastkutt.
+
+## Lastprofil per last
+
+Under oppretting eller redigering av en last kan du i utviklingsversjonen velge profil: Av, Historikk (siste sju dager) eller Manuell. Automatisk bruker effektsensorens recorder-historikk. Manuell krever navn, nominell effekt og arbeidssyklus og kan brukes uten effektsensor. Typisk påtid er valgfri. Sett maksimal kuttvarighet etter lasten og samme grense som i blueprinten. [Lastprofiler](lastprofiler.md) forklarer beregningen og forskjellen mellom planleggingsanslag og målt tilgjengelig kutt.
+
+Under Innstillinger er **Bruk lastprofiler i kuttvurderingen** av som standard. Aktiver det for å vurdere energibidraget fra målte aktive laster med profil. Manuelle profiler uten wattmåling gir bare planleggingsanslag. [Virkning og avgrensning](lastprofiler.md#profiler-inne-i-home-assistant).

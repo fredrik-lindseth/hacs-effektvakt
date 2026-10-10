@@ -57,6 +57,7 @@ class Lastkutt:
     original: float | None = None
     kutt_temp: float | None = None
     slipp: bool = False
+    start: float | None = None
 
 
 class Lastvern:
@@ -67,6 +68,7 @@ class Lastvern:
         self.store = Store[dict[str, Any]](hass, 1, DATA_LASTVERN)
         self.kutt: dict[str, Lastkutt] = {}
         self.tidligst_kutt: dict[str, float] = {}
+        self._profilkutt: dict[str, list[tuple[float, float]]] = {}
         self._laas = asyncio.Lock()
         self._avmeld: list[Callable[[], None]] = []
         self._avmeld_frist: Callable[[], None] | None = None
@@ -80,6 +82,8 @@ class Lastvern:
                 kutt = Lastkutt(**rad)
                 if not math.isfinite(kutt.frist) or not math.isfinite(kutt.min_paatid):
                     raise ValueError("ugyldig frist")
+                if kutt.start is not None and not math.isfinite(kutt.start):
+                    raise ValueError("ugyldig kuttstart")
                 if not entity_id.startswith(("switch.", "climate.")):
                     raise ValueError("ugyldig last")
                 kutt.slipp = True
@@ -91,6 +95,19 @@ class Lastvern:
             for entity_id, verdi in lagret.get("tidligst_kutt", {}).items()
             if isinstance(verdi, (int, float)) and math.isfinite(verdi)
         }
+        for entity_id, vinduer in lagret.get("profilkutt", {}).items():
+            if not entity_id.startswith(("switch.", "climate.")) or not isinstance(vinduer, list):
+                continue
+            for vindu in vinduer:
+                if not isinstance(vindu, (list, tuple)) or len(vindu) != 2:
+                    continue
+                fra, til = vindu
+                if (
+                    all(isinstance(t, (int, float)) and not isinstance(t, bool) and math.isfinite(t) for t in vindu)
+                    and fra < til
+                ):
+                    self._noter_profilkutt(entity_id, fra, til)
+        self._rydd_profilkutt(dt_util.utcnow().timestamp())
         self._avmeld = [
             async_track_time_interval(self.hass, self.async_sjekk, timedelta(seconds=30)),
             self.hass.bus.async_listen(EVENT_STATE_CHANGED, self._async_endret),
@@ -120,11 +137,55 @@ class Lastvern:
                 self.hass, self.async_sjekk, datetime.fromtimestamp(min(framtid), UTC)
             )
 
+    def _rydd_profilkutt(self, naa: float) -> None:
+        grense = naa - timedelta(days=7).total_seconds()
+        self._profilkutt = {
+            aktuator: [(max(fra, grense), til) for fra, til in vinduer if til > grense]
+            for aktuator, vinduer in self._profilkutt.items()
+            if any(til > grense for _, til in vinduer)
+        }
+
+    def _noter_profilkutt(self, aktuator: str, start: float, slutt: float) -> None:
+        if slutt <= start:
+            return
+        vinduer = sorted([*self._profilkutt.get(aktuator, []), (start, slutt)])
+        sammenslaatt: list[tuple[float, float]] = []
+        for fra, til in vinduer:
+            if sammenslaatt and fra <= sammenslaatt[-1][1]:
+                sammenslaatt[-1] = (sammenslaatt[-1][0], max(til, sammenslaatt[-1][1]))
+            else:
+                sammenslaatt.append((fra, til))
+        self._profilkutt[aktuator] = sammenslaatt
+
+    def profilvinduer(self, aktuator: str, naa: datetime) -> list[tuple[datetime, datetime]]:
+        """Egne kutt til profilinnleseren, inkludert uavklart restore.
+
+        Gamle lagrede ansvar mangler start. Da utelates konservativt hele
+        syvdagersvinduet fram til restore; fristen brukes aldri som kuttstart.
+        """
+        if naa.tzinfo is None:
+            raise ValueError("Profilvinduer krever tidssone")
+        slutt = naa.timestamp()
+        self._rydd_profilkutt(slutt)
+        grense = slutt - timedelta(days=7).total_seconds()
+        vinduer = list(self._profilkutt.get(aktuator, []))
+        if (kutt := self.kutt.get(aktuator)) is not None:
+            start = max(grense, kutt.start if kutt.start is not None else grense)
+            if start < slutt:
+                vinduer.append((start, slutt))
+        return [
+            (datetime.fromtimestamp(fra, UTC), datetime.fromtimestamp(min(til, slutt), UTC))
+            for fra, til in vinduer
+            if fra < min(til, slutt)
+        ]
+
     async def _lagre(self) -> None:
+        self._rydd_profilkutt(dt_util.utcnow().timestamp())
         await self.store.async_save(
             {
                 "kutt": {entity_id: asdict(kutt) for entity_id, kutt in self.kutt.items()},
                 "tidligst_kutt": self.tidligst_kutt,
+                "profilkutt": self._profilkutt,
             }
         )
         self._planlegg_frist()
@@ -173,6 +234,9 @@ class Lastvern:
                 )
             )
         if ferdig:
+            naa = dt_util.utcnow().timestamp()
+            start = kutt.start if kutt.start is not None else naa - timedelta(days=7).total_seconds()
+            self._noter_profilkutt(entity_id, start, naa)
             self.tidligst_kutt[entity_id] = dt_util.utcnow().timestamp() + kutt.min_paatid
             del self.kutt[entity_id]
             await self._lagre()
@@ -231,7 +295,9 @@ class Lastvern:
                 naa.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
                 naa + timedelta(minutes=data["max_off_minutes"]),
             )
-            kutt = Lastkutt(eier, frist.timestamp(), data["min_on_minutes"] * 60, original, kutt_temp)
+            kutt = Lastkutt(
+                eier, frist.timestamp(), data["min_on_minutes"] * 60, original, kutt_temp, start=naa.timestamp()
+            )
             self.kutt[entity_id] = kutt
             # Ansvar foer handling: ogsaa stroembrudd rett etter turn_off maa kunne rettes.
             await self._lagre()

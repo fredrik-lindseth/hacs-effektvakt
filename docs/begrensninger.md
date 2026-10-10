@@ -14,7 +14,7 @@ Mitigering: Tick-frekvensen øker til 30s ved `like_under_terskel` og 15s ved `o
 
 ## Et kutt uten effektmåling er et sjansespill
 
-Slår du av en varmtvannsbereder på slump, er det 85-90 % sjanse for at elementet uansett var av i det øyeblikket. Forventet kutt blir da rundt 0,3 kW mot de 2 kW du trodde du kuttet, og det er et gjennomsnitt over tid, ikke noe du kan regne med i timen du står i. Replay-tester på BKK-måneder viser at et slikt blindkutt gir meningsfull forbedring i bare 2 av 5 måneder.
+Uten effektmåling vet du ikke om varmtvannsberederen varmer når du kutter. Et element på 2 kW kan være av en stor del av tiden, og et gjennomsnitt over døgnet sier ikke hva du kan hente i den aktuelle topptimen. Selv når elementet er på, kan det ha stanset av seg selv før timen er slutt. [Lastprofiler](sparepotensial.md#hva-et-lastkutt-kan-bidra-med) kan beskrive historisk drift, men garanterer ikke framtidig kutteffekt.
 
 Løsning: legg lasten inn som en kuttbar last med effektsensor, se [laster.md](laster.md). Da kutter automasjonen bare når elementet faktisk varmer, og `sensor.effektvakt_tilgjengelig_kutt` sier hvor mye som er å hente akkurat nå. Uten konfigurerte laster finnes ikke den sensoren, og da har Effektvakt ingen mening om hva du har å kutte. Det er med vilje: fram til september 2026 stod den på 0,3 kW for alle, og tallet var en antagelse om en bereder ingen visste om brukeren hadde.
 
@@ -28,7 +28,7 @@ Det er ikke feil regnet. Holder du hver eneste dag under 2 kW, betaler du faktis
 
 To ting demper det. `kostnad_denne_timen_kr` er 0 i nettopp disse timene, for måneden er der uansett, og varsel-blueprintet leser den. Og timetaket er `max(dagens maks, dagstaket)`, så varselet slår bare ut på timer som setter ny dagsrekord, ikke hele dagen.
 
-Mest treffsikkert ville vært å la forrige måneds oppgjorte topp-3 være gulv for måltrinnet de første dagene. Det er ikke gjort, og `previous_month_top_3_snitt_kw` på `Timeregnskap` ligger alt lagret hvis noen vil.
+Utviklingsversjonen lar deg velge et månedsmål, for eksempel 5 kW, framfor å bruke det laveste oppnåelige trinnet fra første dag. Det kan samtidig gi flere kutt for å beskytte målet mot topper senere. Ingen historikk velger dette automatisk for deg. Se [månedsmålet](sparepotensial.md#et-mål-for-måneden).
 
 ---
 
@@ -59,3 +59,9 @@ Med energy-sensor kompenseres dette ved at delta leses direkte fra telleren.
 ## Ingen historikk mellom instanser
 
 Effektvakt lagrer data per `entry_id`. Hvis du sletter og gjenoppretter integrasjonen, mister du månedenes `daily_max_kw`. Topp-3-snittet starter på nytt. Dette er ønsket atferd for å unngå datakontaminering mellom instanser, men betyr at reinstallasjon midt i måneden gir ufullstendig bilde resten av måneden.
+
+## Lastprofil er et anslag for planlegging
+
+Utviklingsversjonen kan lære fra siste ukes effekthistorikk eller bruke manuell arbeidssyklus og nominell effekt. En komplett tilstandshistorikk bekrefter ikke at sensoren var fersk eller riktig, og uavklarte effektkanaler skal ikke telles flere ganger. Profilen brukes som beste anslag og oppdateres med nye målinger.
+
+Profilbasert kuttenergi kan valgfritt brukes i kuttvurderingen for målte aktive laster. Den velger ennå ikke enkeltlaster automatisk, og styrer ikke når utsatt oppvarming tas igjen. Et mål i kWh må derfor vurderes sammen med aktuell effekt, temperaturbehov og plass i senere timer. [Metodikken](lastprofiler.md) og [eksempelrapporten](research/lastprofil-rapport.md) beskriver grunnlaget.

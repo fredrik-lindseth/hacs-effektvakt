@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
+from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
@@ -15,9 +16,11 @@ from .const import DOMAIN, ENTRY_VERSION, WATCHDOG_INTERVAL_SECONDS
 from .coordinator import EffektvaktCoordinator, dt_util_now, is_coordinator_stale
 from .frontend import async_register_frontend, async_unregister_frontend
 from .laster import migrer_til_laster
-from .lastvern import async_setup_lastvern
+from .lastvern import DATA_LASTVERN, async_setup_lastvern
+from .profilhistorikk import Profilhistorikk
 
 if TYPE_CHECKING:
+    from asyncio import Task
     from datetime import datetime
 
     from homeassistant.config_entries import ConfigEntry
@@ -197,6 +200,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
+
+    terskler = {
+        last.effekt_sensor: last.terskel_w
+        for last in coordinator.laster
+        if last.profil == "auto" and last.effekt_sensor
+    }
+    if terskler:
+        historikk = Profilhistorikk(hass)
+        coordinator.profilhistorikk = historikk
+
+        async def _oppdater_profiler(_now: datetime | None = None) -> None:
+            vern = hass.data.get(DATA_LASTVERN)
+            naa = dt_util_now()
+            utelatte = {
+                last.effekt_sensor: vern.profilvinduer(last.bryter, naa)
+                for last in coordinator.laster
+                if last.bryter and vern is not None and hasattr(vern, "profilvinduer")
+            }
+            await historikk.async_oppdater(terskler, naa=naa, utelatte_intervaller=utelatte)
+            await coordinator.async_request_refresh()
+
+        # Recorder venter ikke i den adaptive effektticken. Oppstart laster
+        # sensorer foerst, saa en stor historikkdatabase ikke blokkerer oppsett.
+        oppgave: Task[None] | None = None
+        avsluttet = False
+
+        @callback
+        def _start_profiloppdatering(_now: datetime | None = None) -> None:
+            nonlocal oppgave
+            if avsluttet or (oppgave is not None and not oppgave.done()):
+                return
+            oppgave = entry.async_create_background_task(hass, _oppdater_profiler(), "effektvakt lastprofiler")
+
+        def _stopp_profiler() -> None:
+            nonlocal avsluttet
+            avsluttet = True
+            if oppgave is not None:
+                oppgave.cancel()
+
+        entry.async_on_unload(_stopp_profiler)
+        entry.async_on_unload(async_track_time_interval(hass, _start_profiloppdatering, timedelta(hours=1)))
+        _start_profiloppdatering()
 
     async def _watchdog_check(_now: datetime) -> None:
         if is_coordinator_stale(

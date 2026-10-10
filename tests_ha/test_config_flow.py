@@ -367,12 +367,12 @@ async def test_menyen_tilbyr_ikke_redigering_foer_det_finnes_en_last(hass: HomeA
     await hass.async_block_till_done()
 
     resultat = await hass.config_entries.options.async_init(entry.entry_id)
-    assert set(resultat["menu_options"]) == {"innstillinger", "legg_til_last", "ferdig"}
+    assert set(resultat["menu_options"]) == {"innstillinger", "maaltrinn", "legg_til_last", "ferdig"}
 
 
 async def test_menyen_tilbyr_redigering_naar_en_last_finnes(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:
     resultat = await hass.config_entries.options.async_init(oppsett.entry_id)
-    assert set(resultat["menu_options"]) == {"innstillinger", "legg_til_last", "velg_last", "ferdig"}
+    assert set(resultat["menu_options"]) == {"innstillinger", "maaltrinn", "legg_til_last", "velg_last", "ferdig"}
 
 
 async def test_lasten_kan_endres(hass: HomeAssistant, oppsett: MockConfigEntry) -> None:

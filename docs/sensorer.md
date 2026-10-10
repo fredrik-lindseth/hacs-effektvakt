@@ -189,7 +189,7 @@ Alle konfigurerte laster er med, også de som ikke teller nå. Forskjellen mello
 
 `effekt_w: null` er ikke det samme som `0`. Null watt betyr at lasten står stille, `null` betyr at vi ikke vet. Det samme skillet gjelder `bryter_paa`.
 
-`kuttet` settes bare når bryteren gikk fra på til av mens kutt var anbefalt. Slår du av lasten selv, er det ikke Effektvakt sitt kutt, og da skal det heller ikke telle som en innsparing senere.
+`kuttet` beskriver last som Effektvakt har overtatt gjennom lastvernet. Et manuelt avslag samtidig med et kuttvarsel er ikke alene bevis på et kutt fra Effektvakt.
 
 Summen av `effekt_w` for oppføringene med `teller_med: true` er tilstanden til sensoren, i W mot kW.
 
@@ -285,7 +285,7 @@ Alle sensorer eksponerer disse attributtene. Bruk dem i dashboards, template-sen
 | `minutter_igjen_av_timen`     | min      | Minutter igjen av klokketimen. Summerer alltid til 60 med raden over |
 | `actual_kwh_this_hour`        | kWh      | Energi målt hittil denne timen (fra energy-sensor eller estimert) |
 | `current_kw`                  | kW       | Øyeblikkelig effekt fra power-sensor                              |
-| `maal_terskel_kw`             | kW       | Terskelen til det billigste trinnet måneden fortsatt kan ende på  |
+| `maal_terskel_kw`             | kW       | Terskelen til det aktive månedsmålet, ellers det billigste oppnåelige trinnet  |
 | `maal_trinn_kr`               | kr/mnd   | Månedsprisen for det trinnet                                      |
 | `dagstak_kw`                  | kW       | Høyeste dagsmaks i dag som holder måneden i det trinnet           |
 | `time_tak_kw`                 | kW       | `max(dagens_maks_kw, dagstak_kw)`: det marginen måles mot         |
@@ -317,3 +317,30 @@ sensor:
           {{ state_attr('sensor.effektvakt_projisert_time_snitt', 'kutt_anbefalt_kw') }}
         unit_of_measurement: kW
 ```
+
+## Valgt månedsmål
+
+Utviklingsversjonen legger til tre felles attributter: `valgt_maal_kw` er den konfigurerte terskelen eller `null` når målet er av, `maal_status` er `ikke_valgt`, `aktiv`, `tapt` eller `ugyldig`, og `maal_kutt_anbefalt` sier om et kutt kan begrense en ny dagsmaks over måltaket. De to siste blir `null` når måle- eller tariffgrunnlaget mangler. Målet gir ikke et sparebeløp: `timen_flytter_trinnet` og kostnadsattributtene beskriver fortsatt virkningen på kapasitetstrinnet nå. [Forutsetninger](sparepotensial.md#et-mål-for-måneden).
+
+## Lastprofiler og estimert kuttenergi
+
+I utviklingsversjonen opprettes `sensor.effektvakt_estimert_kuttenergi_resten_av_timen` når minst én last har en profil aktivert. Tilstanden er kWh som anslås å kunne fjernes fra den inneværende timen innenfor lastens tillatte kuttvarighet. Det er et framtidsanslag, og har ikke energiens device class eller state class for akkumulert forbruk. Sensoren må ikke brukes som målt forbruk eller målt spart energi i Energy-dashbordet.
+
+Den eksisterende sensoren for tilgjengelig kutt beholder målt momentan effekt i kW. En manuell last uten effektsensor bidrar ikke til den målingen. Hver last med profil får et `lastprofil`-objekt i `kutt_kilder`:
+
+| Felt | Grunnlag |
+| --- | --- |
+| `kilde` | Automatisk eller manuell profil |
+| `datagrunnlag` | Forklaring på målt, antatt eller manglende grunnlag |
+| `arbeidssyklus_pct` | Påandel i prosent |
+| `aktiv_effekt_w` | Målt eller antatt effekt når aktiv |
+| `dekning_pct` | Andel kjent tid i målevinduet, ikke bevis på fersk sensor |
+| `hele_sykluser` | Antall hele observerte påperioder |
+| `oppdatert` | Tidspunkt for profiloppdateringen |
+| `periode_start`, `periode_slutt` | Målevinduet for automatisk profil |
+| `estimert_kuttenergi_kwh` | Lastens estimerte bidrag til resten av timen |
+| `forventet_drift_minutter` | Forventet drift innenfor vurdert tidsvindu |
+| `stoette_antall` | Historiske sykluser som støtter restvarighetsanslaget |
+| `maks_kutt_minutter` | Lastens konfigurerte grense for estimatet |
+
+Profilgrunnlaget vises også på estimatsensoren. [Metodikken](lastprofiler.md) beskriver tidsvekting, hele sykluser og manuelle antakelser. Når det valgfrie profilvalget i innstillingene er på, brukes energianslag fra målte aktive laster i kuttvurderingen. Manuelle profiler uten effektmåling gir bare planleggingsanslag. Profilene erstatter ikke blueprintenes lastvalg eller lastvernets tidsgrenser.

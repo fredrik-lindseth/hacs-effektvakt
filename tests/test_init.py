@@ -25,6 +25,7 @@ class _FakeCoordinator:
         # Et oppsett uten problemer aa melde. Repair-meldingene har egne tester
         # i test_oppsett.py.
         self.trinn_oppsett = les_trinn(dso_id="bkk", custom=None)
+        self.laster = []
         self.safety_buffer_kw = 1.0
         self._daily_max_kw = {"2026-06-15": 5.0}
         self._last_successful_update = None

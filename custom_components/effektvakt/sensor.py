@@ -49,14 +49,18 @@ async def async_setup_entry(
         EffektvaktRisikoSensor(coordinator),
         EffektvaktKostnadNesteTrinnSensor(coordinator),
     ]
-    if coordinator.laster:
+    if any(last.effekt_sensor for last in coordinator.laster):
         sensorer.append(EffektvaktTilgjengeligKuttSensor(coordinator))
     else:
         _glem_tilgjengelig_kutt(hass, entry)
+    if any(last.profil != "av" for last in coordinator.laster):
+        sensorer.append(EffektvaktEstimertKuttenergiSensor(coordinator))
+    else:
+        _glem_tilgjengelig_kutt(hass, entry, key="estimert_kuttenergi_resten_av_timen")
     async_add_entities(sensorer)
 
 
-def _glem_tilgjengelig_kutt(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _glem_tilgjengelig_kutt(hass: HomeAssistant, entry: ConfigEntry, *, key: str = TILGJENGELIG_KUTT_KEY) -> None:
     """Ta sensoren ut av entitetsregisteret naar siste last er fjernet.
 
     Uten dette blir den staaende som `unavailable` i det uendelige: registeret
@@ -65,7 +69,7 @@ def _glem_tilgjengelig_kutt(hass: HomeAssistant, entry: ConfigEntry) -> None:
     samme unique_id-en, saa historikken henger med.
     """
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{TILGJENGELIG_KUTT_KEY}")
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{key}")
     if entity_id:
         registry.async_remove(entity_id)
 
@@ -123,6 +127,9 @@ class _EffektvaktBaseSensor(CoordinatorEntity, SensorEntity):
             # måltrinnet, taket for dagen, og taket for timen vi står i.
             "maal_terskel_kw": d.get("maal_terskel_kw"),
             "maal_trinn_kr": d.get("maal_trinn_kr"),
+            "valgt_maal_kw": d.get("valgt_maal_kw"),
+            "maal_status": d.get("maal_status"),
+            "maal_kutt_anbefalt": d.get("maal_kutt_anbefalt"),
             "dagstak_kw": d.get("dagstak_kw"),
             "time_tak_kw": d.get("time_tak_kw"),
             "dagens_maks_kw": d.get("dagens_maks_kw"),
@@ -293,4 +300,27 @@ class EffektvaktKostnadNesteTrinnSensor(_EffektvaktBaseSensor):
             "topp_3_projisert_kw": d.get("topp_3_projisert_kw"),
             "minste_mulige_topp_3_kw": d.get("minste_mulige_topp_3_kw"),
             "kapasitetstrinn": _kapasitetstrinn_json(self.coordinator.kapasitetstrinn),
+        }
+
+
+class EffektvaktEstimertKuttenergiSensor(_EffektvaktBaseSensor):
+    """Forventet utsatt energi, ikke faktisk konsum eller spart energi."""
+
+    _attr_native_unit_of_measurement = "kWh"
+    _sensor_key = "estimert_kuttenergi_resten_av_timen"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("estimert_kuttenergi_resten_av_timen_kwh") if self.coordinator.data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = self.coordinator.data or {}
+        return {
+            **(super().extra_state_attributes or {}),
+            "lastprofiler": d.get("lastprofiler", {}),
+            "profiler_antall": d.get("profiler_antall"),
+            "profiler_ukjente": d.get("profiler_ukjente"),
+            "laster_uten_profil": d.get("laster_uten_profil"),
+            "bruk_lastprofiler": d.get("bruk_lastprofiler"),
         }

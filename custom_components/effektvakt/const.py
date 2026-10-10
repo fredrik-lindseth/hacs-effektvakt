@@ -18,6 +18,7 @@ CONF_POWER_SENSOR: Final[str] = "power_sensor"
 CONF_ENERGY_SENSOR: Final[str] = "energy_sensor"
 CONF_KAPASITETSTRINN_CUSTOM: Final[str] = "kapasitetstrinn_custom"
 CONF_SAFETY_BUFFER_KW: Final[str] = "safety_buffer_kw"
+CONF_VALGT_MAAL_KW: Final[str] = "valgt_maal_kw"
 CONF_MIN_RISIKO_FOR_KUTT: Final[str] = "min_risiko_for_kutt"
 CONF_RISIKO_HOLDETID_MINUTTER: Final[str] = "risiko_holdetid_minutter"
 CONF_CONFIRM_PEAK_SENSOR: Final[str] = "confirm_peak_sensor"
@@ -140,3 +141,11 @@ VALID_ENERGY_UNITS: Final[frozenset[str]] = frozenset({"Wh", "kWh"})
 
 MAX_POWER_CLAMP_W: Final[int] = 100_000  # 100 kW absolutt øvre grense
 MAX_ENERGY_DELTA_KWH: Final[float] = 50.0  # ingen 50+ kWh delta per minutt
+
+# Valgfrie lastprofiler. Gamle oppsett mangler feltene og beholder raadene.
+CONF_LAST_PROFIL = "profil"
+CONF_LAST_NOMINELL_W = "nominell_w"
+CONF_LAST_DUTY_PCT = "arbeidssyklus_pct"
+CONF_LAST_PAA_MIN = "typisk_paa_minutter"
+CONF_LAST_MAKS_KUTT_MIN = "maks_kutt_minutter"
+CONF_BRUK_LASTPROFILER = "bruk_lastprofiler"

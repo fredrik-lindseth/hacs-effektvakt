@@ -4,6 +4,19 @@ Alt som merkes av den som bruker Effektvakt, står her. Formatet er [Keep a Chan
 
 Punktene som er merket `<!--kort-->` er de som havner i den korte release-noten, altså teksten HACS viser i oppdateringspanelet inne i Home Assistant. Resten står bare her. Overskriften får utgivelsesdatoen sin den dagen versjonen faktisk går ut; fram til da sier den «Ikke sluppet», og release-flyten nekter å slippe en versjon uten dato.
 
+## [0.5.0] - Ikke sluppet
+
+### Lagt til
+
+- Valgfritt mål for månedens kapasitetstrinn. Du kan for eksempel sikte mot 5 kW fra første dag i måneden. Det kan gi tidligere og flere lastkutt for å holde målet innen rekkevidde; målet slutter å styre kuttene hvis allerede registrerte topper har gjort det umulig. Standardinnstillingen er uendret. [Slik virker månedsmålet](docs/sparepotensial.md#et-mål-for-måneden). <!--kort-->
+- Valgfrie lastprofiler fra siste ukes historikk eller manuell nominell effekt og arbeidssyklus. En ny sensor viser estimert kuttenergi resten av timen; målt tilgjengelig kutt beholder kW. Profilgrunnlaget vises per last. Du kan velge å bruke det i kuttvurderingen for målte aktive laster; manuelle profiler uten måling gir bare planleggingsanslag. [Lastprofiler](docs/lastprofiler.md). <!--kort-->
+- Verktøy for å hente effekthistorikk fra Home Assistant, analysere lastenes målte påandel, effekt og sykluslengder og simulere lastkutt med utsatt forbruk som må inn igjen. De kjøres lokalt fra repoet og endrer ikke styringen i Home Assistant. [Eksport og analyse](docs/lastprofiler.md#eksporter-historikken-fra-home-assistant) og [sparepotensial og forutsetninger](docs/sparepotensial.md).
+- Historikkprofilene hentes fra recorder i bakgrunnen ved oppstart og hver time. Egne utkoblinger holdes utenfor læringen, også etter omstart. Profilene viser målevindu, datadekning og antall støttende sykluser; manglende historikk gir ukjent anslag.
+
+### Dokumentasjon
+
+- README er kortet ned, med spareeksemplet og installasjonen først. Lastprofiler, regnestykkene og simuleringen har egne veiledninger på norsk og engelsk, med en etterprøvbar eksempelrapport for den som vil undersøke sitt eget anlegg.
+
 ## [0.4.0] - 2026-10-09
 
 Betaversjon. Denne versjonen retter beregningene og laststyringen og kan installeres og oppdateres gjennom HACS.
