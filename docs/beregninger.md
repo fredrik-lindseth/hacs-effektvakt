@@ -1,353 +1,188 @@
 # Beregninger
 
-Implementasjon, alt sammen ren Python uten Home Assistant-import: [`modell.py`](../custom_components/effektvakt/modell.py) (terskler, projeksjon, risiko og kostnad), [`timeregnskap.py`](../custom_components/effektvakt/timeregnskap.py) (integrasjon, måleravstemming og dagsmaks), [`hysterese.py`](../custom_components/effektvakt/hysterese.py), [`laster.py`](../custom_components/effektvakt/laster.py) (tilgjengelig kutt) og [`const.py`](../custom_components/effektvakt/const.py) (konstantene). [`coordinator.py`](../custom_components/effektvakt/coordinator.py) regner ikke selv: den leser sensorene gjennom [`avlesning.py`](../custom_components/effektvakt/avlesning.py), kaller filene over i rekkefølge og legger svarene i data-dicten sensorene leser.
+Regnestykkene ligger i [modell.py](../custom_components/effektvakt/modell.py), [timeregnskap.py](../custom_components/effektvakt/timeregnskap.py), [hysterese.py](../custom_components/effektvakt/hysterese.py) og [laster.py](../custom_components/effektvakt/laster.py), uten HA-import. Coordinatoren leser målinger og kaller dem. [Sensoroversikten](sensorer.md) beskriver utdata.
 
 ## Projisert time-snitt
 
-Hvert tick beregnes forventet time-snitt i kW ved time-slutt:
-
-```
-projected_avg = actual_kwh_this_hour + current_kw * remaining_h
-```
-
-Hvor:
-
-- `actual_kwh_this_hour`: energi målt hittil denne timen (kWh)
-- `current_kw`: øyeblikkelig effekt fra power-sensor (kW)
-- `remaining_h`: andel av timen som gjenstår (`1.0 - elapsed_h`)
-- `elapsed_h`: `(now.minute + now.second / 60) / 60`
-
-Eksempel kl. 18:45, 2,4 kWh brukt, 3,2 kW nå:
-
-```
-elapsed_h      = (45 + 0/60) / 60 = 0.75
-remaining_h    = 1.0 - 0.75 = 0.25
-projected_avg  = 2.4 + 3.2 * 0.25 = 3.2 kW
+```text
+projected_avg = actual_kwh_this_hour + current_kw × remaining_h
+remaining_h  = 1 − elapsed_h
 ```
 
-Tidlig i timen er tallet nesten bare framskrivning, og en last som slås på der løfter det med nesten hele sin effekt. Projeksjonen er likevel riktig som den står, for den svarer på «hvor ender timen om det fortsetter slik». At den ikke kan tas på ordet som grunnlag for å kutte, håndteres i [kuttkriteriet](#kuttkriteriet-flytter-denne-timen-trinnet).
+For en klokketime er kWh numerisk lik gjennomsnittlig kW. Klokken 18:45 med 2,4 kWh brukt og 3,2 kW nå blir projeksjonen `2,4 + 3,2 × 0,25 = 3,2 kW`. Tidlig i timen dominerer framskrivningen.
 
 ### `actual_kwh_this_hour`
 
-Timen bygges av to kilder som avstemmes mot hverandre, ikke av energy-sensoren alene.
+Effekt integreres med trapesregelen og faktisk tid mellom avlesningene:
 
-**Effektintegrasjon hvert tick.** Energien mellom to tick er trapesregelen over de to effektavlesningene, med faktisk tid mellom tidsstemplene:
-
-```
-kwh = (forrige_kw + na_kw) / 2 * timer_mellom_ticks
+```text
+kwh = (forrige_kw + na_kw) / 2 × timer_mellom_ticks
 ```
 
-Tiden hentes fra tidsstemplene og ikke fra et antatt tickintervall, for ticket hopper over når HA har det travelt. Trapesregelen framfor å holde den forrige avlesningen: en last som slås av og på treffer like ofte før som etter en avlesning, og da er midtverdien uten systematisk slagside. Går det mer enn fem minutter mellom to tick, har HA vært nede eller stått fast, og da integreres intervallet ikke i det hele tatt (se `MAX_INTEGRATION_GAP_H` i `timeregnskap.py`).
+Intervaller over fem minutter integreres ikke. Siste effekt lagres, slik at kortere omstarter kan inngå som anslag. Energimåleren korrigerer uten dobbelttelling:
 
-Siste effektavlesning lagres, så en omstart som tar under fem minutter integreres over med den effekten som sto da HA gikk ned. Det er et anslag, men et bundet et, og energy-sensoren retter det ved neste avlesning.
-
-**Energy-sensoren korrigerer.** Måleren er den nøyaktige kilden og skal vinne, men den legges ikke oppå anslaget. `Timeregnskap` holder rede på hvor mye av timen som er integrert anslag og ikke bekreftet av måleren (`estimert_siden_maaler_kwh`), og når måleren flytter seg byttes nettopp den delen ut:
-
-```
-actual_kwh_this_hour = actual_kwh_this_hour - estimert_siden_maaler + maalerens_andel
+```text
+actual_kwh_this_hour = actual_kwh_this_hour − estimert_siden_maaler + maalerens_andel
 ```
 
-Dermed telles ingenting to ganger, og en måler som oppdaterer hvert tiende sekund gir nøyaktig sin egen differanse. Står måleren stille, er det ingenting å avstemme, og anslaget får stå. Vi kan ikke se forskjell på en måler med null forbruk og en som bare ikke har rapportert ennå.
-
-Går måleren ned, er den nullstilt eller byttet. Hopper den mer enn `MAX_ENERGY_DELTA_KWH`, er avlesningen ikke til å stole på uansett. I begge tilfeller beholdes det som alt er målt denne timen, og tellingen fortsetter fra den nye standen.
-
-Uten energy-sensor er integrasjonen alt som finnes, og timen blir like god som effekt-sensoren og tick-frekvensen tillater. Typisk 1-5 % avvik over en time.
+Bare ubekreftet energi erstattes. Stillestående måler gir ingen korreksjon. Negativ eller for stor målerdifferanse beholder allerede registrert energi og setter nytt anker. Uten energimåler brukes bare effektintegrasjon.
 
 ### kWh som kommer etter timeskiftet
 
-En norsk HAN-avleser rapporterer gjerne 13 sekunder på timen, altså etter at timen den måler er over. Den kWh-en hører til timen før. Tre ting gjør at den havner riktig:
+Målerens `last_changed` bestemmer avlesningstidspunktet. Effektintegrasjonen deles ved timeskiftet. Forrige time beholdes som `VentendeTime` og kan korrigeres både opp og ned til måleren har bekreftet tiden forbi skiftet.
 
-1. **Tidspunktet er målerens, ikke ticket sitt.** `last_changed` på energy-sensoren sier
-   når måleren faktisk meldte seg. Ticket som leser den kommer gjerne et halvt minutt
-   senere, og brukes det tidspunktet i stedet, havner hele timen på feil side av skiftet.
-2. **Timeskiftet deler integrasjonen.** Ligger et timeskifte mellom to tick, interpoleres
-   effekten ved skiftet og energien deles i to. Den delen som lå før, følger med over til
-   timen som ble ferdig.
-3. **Timen holdes åpen for retting.** `Timeregnskap._finalize_hour` låser timen inn med det vi vet ved
-   timeskiftet, men beholder den som en `VentendeTime` med `dagsmaks_foer`, altså
-   dagsverdien slik den sto før. Kommer avlesningen som dekker skiftet, byttes den
-   estimerte delen ut og timen låses inn på nytt, også nedover. Så snart måleren har
-   bekreftet tiden forbi skiftet, er timen gjort opp og kan ikke ta imot mer.
-
-Fordelingen av en måleravlesning mellom de to timene følger anslaget, ikke tiden: måleren sier hvor mye som gikk med, integrasjonen sier når. Vekten er ikke anslaget rått, men snitteffekten vi faktisk målte ganget med den tiden av måler-vinduet som ligger i timen. Forskjellen betyr noe når HA kom opp igjen fem minutter før timen var omme: fem minutter med anslag er for lite til å veies mot tretten sekunder av den neste timen, og uten skaleringen ville den nye timen fått en tiendedel av forrige times kWh i fanget. Er anslaget null, altså ingen effekt-sensor, deles det på tid i stedet. Rekker vinduet mellom to avlesninger lenger tilbake enn de to timene vi kan rette på, skaleres kWh-en ned til den andelen av tiden som faktisk lar seg plassere. Resten hører til timer som er låst, og å legge den på timen vi står i ville bygget en falsk topp.
+Målerenergi fordeles mellom timene etter målt snitteffekt og overlappende varighet; uten effektgrunnlag brukes tid. Avlesninger som rekker lenger bakover enn de to timene vi kan korrigere, begrenses til den plasserbare andelen. Eldre forbruk legges ikke på dagens time.
 
 ### `kwh_maalt_fra_minutt`
 
-Hvilket minutt av den inneværende timen vi har sammenhengende måling fra. Null i normal drift. Over null betyr at `actual_kwh_this_hour` mangler starten av timen, og da er projeksjonen for lav. Det skjer i to tilfeller:
-
-- Integrasjonen ble satt opp midt i en time. Vi kan ikke integrere bakover, og finner ikke
-  på et tall for det vi ikke så.
-- HA var nede lenger enn `MAX_INTEGRATION_GAP_H`, eller effekt-sensoren var utilgjengelig.
-
-Dekningen utvides av seg selv så snart energy-sensoren rapporterer en avlesning som rekker tilbake til før hullet, for den kWh-en inneholder det vi gikk glipp av. Med en timesmåler skjer det ved neste timeskifte. Uten energy-sensor står hullet ut timen. Tallet ligger i coordinator-data og i diagnostikken, og er ikke en egen sensor.
-
----
+Minuttet sammenhengende dekning begynner. Over null betyr manglende start av timen, for eksempel ved førstegangsoppsett eller lengre målehull. Energimåleren kan fylle hullet senere; uten den består hullet ut timen. Tallet finnes i coordinator-data og diagnostikk.
 
 ## NVE-modellen for kapasitetstrinn
 
-Norske nettselskap bruker snittet av de tre høyeste time-forbrukene fra tre ulike dager. `Timeregnskap` i `timeregnskap.py` fører dagsmaksene, `top_n_average` i `modell.py` regner snittet:
+For støttet `TRE_DØGNMAX_MND` lagres én dagsmaks per dato: dagens høyeste fullførte timegjennomsnitt. Summen av de inntil tre høyeste deles alltid på tre; manglende dager teller som null. Dette gir en nedre skranke for månedens endelige topp-3-snitt. Sene målerkorreksjoner sammenlignes med dagsmaksen før den aktuelle timen, så timen ikke konkurrerer med seg selv.
 
-1. For hver fullført klokketime, ta `actual_kwh_this_hour` som timer-forbruk.
-2. Sammenlign mot beste registrerte time samme dag. Oppdater hvis høyere.
-3. `daily_max_kw` inneholder én verdi per dag: høyeste registrerte time den dagen.
-4. `topp_3_snitt` = sum av de inntil 3 høyeste verdiene i `daily_max_kw`, alltid delt på 3.
-
-Delingen på 3 også med færre enn tre dager er det som gjør tallet monotont: en rolig dag nummer tre skal ikke dra snittet ned og gi inntrykk av at noe ble reddet. Dagene som ikke finnes ennå teller som null, og da er tallet samtidig en nedre skranke for hva måneden kan ende på.
-
-Dagsverdien settes med max mot det dagen hadde før timen ble lagt inn, ikke mot det den har nå. Forskjellen betyr noe når en måleravlesning retter den timen som nettopp ble låst inn: rettingen skal også kunne gå nedover, uten at den må konkurrere med seg selv. En omstart som kjører innlåsingen på nytt for den samme timen kan fortsatt ikke telle dobbelt.
-
-Dette er dag-snitt av maks-timer, ikke rå time-verdier. Modellen gjelder nettselskap med `TRE_DØGNMAX_MND`; månedsmaks og ukjent fastledd-metode gir ingen operative råd.
-
----
+`MND_MAX` og ukjent tariffmetode gir ingen operative råd.
 
 ## Terskelmodellen
 
-Hele modellen ligger i [`modell.py`](../custom_components/effektvakt/modell.py), som er ren Python uten Home Assistant-import. Risiko, margin, kostnad og «kan legge på» regner fra det samme taket, så de kan ikke si hver sin ting om den samme timen.
-
-Fram til september 2026 fantes tre ulike terskler i tre funksjoner, og de var uenige. `compute_effective_threshold` ga `max(neste terskel, snitt av topp-2 dager)`, altså motsatt vei av regelen: den hevet terskelen når de andre dagene var høye. To dager på 6,0 og 5,8 ga «terskel 5,90» når den ekte grensen var 3,20.
+Risiko, margin, kostnad og tilgjengelig påslag bruker samme modell.
 
 ### Måltrinnet: T
 
-Det billigste kapasitetstrinnet måneden fortsatt kan ende på. Det er trinnet `minste_mulige_topp_3_kw` havner i, og terskelen til det trinnet er `T`.
-
-```
-minste_mulige_topp_3_kw = sum av inntil tre høyeste daily_max_kw / 3
-T                       = øvre terskel for trinnet det tallet havner i
+```text
+minste_mulige_topp_3_kw = sum(inntil tre høyeste registrerte dagsmaks) / 3
+T = øvre grense for trinnet denne skranken havner i
 ```
 
-Skranken teller bare dagsmaks som alt er låst inn, og deler alltid på tre. Den kan derfor bare stige gjennom måneden, og den sier hvor lavt måneden kan ende uansett hva som skjer videre.
+Grunnlaget inneholder avsluttede timer, ikke dagens pågående projeksjon. Et aktivt valgt månedsmål kan erstatte standardmålet; se [månedsmål](sparepotensial.md#et-mål-for-måneden).
 
-Måltrinnet følger ikke projeksjonen. Det er med vilje: fulgte det den, ville referansen flyttet seg oppover i samme øyeblikk som en time spratt over terskelen, og varselet forsvunnet akkurat når brukeren burde kuttet. Det var også det som gjorde at marginen målte mot noe annet enn brukeren trodde (`sensor.effektvakt_margin_til_neste_trinn` viste 3,50 med projisert 0,38, fordi den lave projeksjonen valgte 2 kW-trinnet som «neste»).
+### Dagstaket: x*
 
-### Dagstaket: x\*
+Med `a` og `b` som de to høyeste dagsmaksene fra andre dager:
 
-Hvor høy dagen i dag kan bli uten å dra topp-3-snittet over T. Snittet av de tre høyeste er `(a + b + x) / 3`, der `a` og `b` er dagsmaks for de to høyeste **andre** dagene:
-
-```
-(a + b + x) / 3 <= T     =>     x <= 3T - (a + b)
-
-dagstak_kw = min(T, 3T - (a + b))
+```text
+(a + b + x) / 3 ≤ T
+x ≤ 3T − (a + b)
+dagstak_kw = min(T, 3T − (a + b))
 ```
 
-Jo høyere de andre dagene er, jo mindre tåler dagen i dag. Det er hele poenget, og det er motsatt av hva koden gjorde før.
-
-Kappet ved T er en policy, ikke aritmetikk. Ukappet kunne én dag tatt hele budsjettet de tre plassene deler, og da måtte resten av måneden holdt seg nær null. Kappet gir hver av de tre dagene lik andel.
-
-Mot BKKs 5 kW-trinn (250 kr), der neste trinn er 10 kW (415 kr):
-
-| Andre dager  | `3T - (a + b)` | `dagstak_kw` | Gammel modell |
-| ------------ | -------------- | ------------ | ------------- |
-| 6,0 og 5,8   | 3,2            | **3,20**     | 5,90          |
-| 5,5 og 5,5   | 4,0            | **4,00**     | 5,50          |
-| 2,0 og 2,0   | 11,0           | **5,00**     | 5,00          |
-
-De to første meldte god margin mens brukeren var langt over. Den tredje traff riktig svar av feil grunn.
+Høyere topper på andre dager gir mindre rom i dag. Kappingen ved `T` er en konservativ policy som hindrer én dag i å bruke hele tre-dagersbudsjettet. Med `T = 5`, `a = 6,0` og `b = 5,8` blir dagstaket 3,2 kW.
 
 ### Timetaket: det marginen måles mot
 
-Dagen teller bare med sin høyeste time, så en time under dagens eget dagsmaks flytter ingenting:
-
-```
+```text
 time_tak_kw = max(dagens_maks_kw, dagstak_kw)
-margin_kw   = time_tak_kw - projisert_time_snitt
+margin_kw   = time_tak_kw − projected_avg
 ```
 
-Da blir domeneregelen sann i koden og ikke bare i README: er dagens topp alt blant de tre høyeste, koster en ny time på samme nivå ingenting.
-
-Eksempel: dagene 1,0 / 1,0 / 12,0, der 12,0 er i dag. Skranken er 14 / 3 = 4,67, altså 5 kW-trinnet, og dagstaket er kappet til 5,0. Men dagen har alt satt 12,0, så timetaket er 12,0. En time på 11 kW har 1 kW margin; en time på 13 kW flytter dagsmaksen og dermed måneden.
+En ny time på eller under dagens registrerte topp øker ikke dagsmaksen og flytter ikke månedens trinn.
 
 ### Resten av timen
 
-Marginen sier hvor mye time-snittet tåler å stige. Det er ikke det samme som hvor mye last du kan slå på, og forskjellen er hele poenget med en effektvakt.
-
-En last på `P` kW som slås på nå og står timen ut løfter det projiserte snittet med `P * (1 - elapsed_h)`:
-
-```
-P * (1 - elapsed_h) <= margin_kw
-
-kan_legge_paa_resten_av_timen_kw = margin_kw / (1 - elapsed_h)
-minutter_igjen_av_timen          = 60 - elapsed_minutes_in_hour
+```text
+kan_legge_paa_resten_av_timen_kw = max(0, margin_kw) / remaining_h
+kutt_anbefalt_kw = max(0, −margin_kw) / remaining_h
 ```
 
-Samme tidsdeling gjelder nødvendig reduksjon: `kutt_anbefalt_kw = max(0, -margin_kw) / (1 - elapsed_h)`. Kl. 18:50 med projisert 6 kW og tak 5 kW kreves 6 kW reduksjon resten av timen. Dette er lastreduksjon nå; marginen er endring i hele timens gjennomsnitt. Når timen er omme kan ingen lastreduksjon endre den.
-
-Kl. 18:50 med 1 kW margin er det 6 kW som kan legges på, ikke 1. «Margin 1,00 kW» forteller det aldri, og marginen blir mer tillatende jo nærmere timeslutt man kommer.
-
-Tallet kappes ved 100 kW. Formelen deler på resten av timen og går mot uendelig de siste sekundene, og en verdi som spretter til 3600 knekker både grafen og tilliten. Samme absoluttgrense som effektavlesningen klampes mot, for ingen bolig trekker mer.
-
-Er `margin_kw` `null`, er påslaget `null`: finnes det ikke noe dyrere trinn å unngå, finnes det heller ikke et tak å regne plass under.
+Ti minutter igjen og 1 kW margin gir 6 kW mulig påslag. Tilsvarende overskridelse krever 6 kW reduksjon resten av timen. Påslaget begrenses til 100 kW; etter timeslutt kan forbruket ikke kuttes bort.
 
 ### Ingen terskel å måle mot
 
-På øverste trinn er `maal_terskel_kw`, `dagstak_kw`, `time_tak_kw`, `margin_kw` og `kan_legge_paa_kw` `null`: det finnes ikke noe dyrere trinn å unngå. Risikoen er da `god_margin`, og `kutt_anbefalt_kw` er 0.
-
-Manglende eller utdatert effekt og tomt eller sperret tariffgrunnlag er et annet tilfelle. Coordinatoren publiserer da ukjent risiko og ukjente styringsråd med `beregning_gyldig: false`. Historikken beholdes; det manglende grunnlaget skal aldri tolkes som god margin.
-
-Det står `null` og ikke uendelig med vilje: `inf` er ugyldig JSON og knekker både recorder og websocket.
-
----
+På øverste trinn er terskel og margin `null`, risiko `god_margin` og anbefalt kutt 0. Manglende/utdatert måling eller sperret tariff gir derimot ukjent risiko og `beregning_gyldig: false`. Historikken beholdes. `null` brukes fordi uendelig er ugyldig JSON.
 
 ## Kostnad for neste trinn
 
-`compute_kostnad` i `modell.py` regner ut hva kapasitetsleddet koster og hva som står på spill akkurat nå. Resultatet mater `sensor.effektvakt_kostnad_neste_trinn`.
+Dagens verdi erstattes med det høyeste av registrert dagsmaks og projeksjonen. Snittet av de tre høyeste gir `topp_3_projisert_kw` og forventet kapasitetstrinn.
 
-Først: hvilket trinn ligger måneden an til?
-
-```
-projiserte_dager       = daily_max_kw, men dagens verdi byttes ut med
-                         max(daily_max_kw[i dag], projisert_time_snitt)
-topp_3_projisert_kw    = snitt av de 3 høyeste i projiserte_dager
+```text
+kostnad_neste_trinn_kr = pris(neste trinn) − pris(forventet trinn)
+besparelse_trinn_under_kr = pris(forventet trinn) − pris(trinnet under)
 ```
 
-Trinnet er det laveste med terskel >= `topp_3_projisert_kw`. Over høyeste terskel havner du på øverste trinn. Derfra:
-
-```
-trinn_na_kr                = månedspris for det trinnet
-trinn_na_ovre_grense_kw    = terskelen for det trinnet (null på øverste trinn)
-trinn_neste_kr             = månedspris for trinnet over (null på øverste trinn)
-kostnad_neste_trinn_kr     = trinn_neste_kr - trinn_na_kr   (0 på øverste trinn)
-besparelse_trinn_under_kr  = trinn_na_kr - pris for trinnet under   (0 på laveste)
-```
-
-Prisene er flate månedspriser. Ingen pro rata, så tallet er like stort den 1. som den 28. Det er hele månedsregningen som står på spill uansett når i måneden toppen settes.
+Prisene gjelder hele måneden uten pro rata. Ingen trinn over gir 0 i neste-trinn-kostnad; ingen trinn under gir 0 i mulig reduksjon.
 
 ### `minste_mulige_topp_3_kw`
 
-Nedre skranke for hva måneden kan ende på, og samtidig tilstanden til `sensor.effektvakt_topp_3_snitt_denne_maned` og grunnlaget for måltrinnet:
-
-```
-minste_mulige_topp_3_kw = sum av inntil 3 høyeste daily_max_kw / 3
+```text
+trinn_under_oppnaelig = minste_mulige_topp_3_kw ≤ terskel(trinnet under)
 ```
 
-Bare dagsmaks som alt er låst inn telles. Den inneværende timen holdes utenfor nettopp fordi den fortsatt kan kuttes. Å telle den med ville gjort tallet pessimistisk og kunne sagt at trinnet under er uoppnåelig når det faktisk er innen rekkevidde.
-
-```
-trinn_under_oppnaelig = minste_mulige_topp_3_kw <= terskel for trinnet under
-```
-
-Én dag på 7 kW gir 2,33 og trinnet under er oppnåelig. Tre dager på 6, 7 og 8 gir 7,0, og da er løpet kjørt.
+Den pågående timen holdes utenfor fordi den fortsatt kan påvirkes.
 
 ### Er trinnet under realistisk?
 
-`trinn_under_oppnaelig` gjelder låste topper denne måneden. `trinn_under_realistisk` bruker huset sin historikk:
-
-```
-trinn_under_realistisk = forrige måneds topp-3-snitt <= terskel for trinnet under
-                         eller snitt av de tre LAVESTE dagsmaksene <= samme terskel
-```
-
-Uten historikk er svaret `false`. Med inntil tre dager er laveste og høyeste dager samme utvalg. Feltet er en historisk vurdering, ikke en garanti for framtidig forbruk.
+`trinn_under_realistisk` er sann når forrige måneds topp-3-snitt eller snittet av de tre laveste registrerte dagsmaksene er innenfor trinnet under. Uten historikk er svaret falskt. Dette er en historisk vurdering, ikke en garanti.
 
 ### `kostnad_denne_timen_kr`
 
-Kronene den inneværende timen er i ferd med å låse inn, og tilstanden til `sensor.effektvakt_kostnad_neste_trinn`:
-
-```
-kostnad_denne_timen_kr = pris for trinnet topp_3_projisert_kw gir
-                         - pris for trinnet minste_mulige_topp_3_kw gir
+```text
+kostnad_denne_timen_kr = max(0, pris(topp_3_projisert_kw) − pris(minste_mulige_topp_3_kw))
 ```
 
-Begge tallene deler på 3, så det projiserte ligger aldri under skranken og differansen er aldri negativ. Klemmen mot null står igjen som en sikring mot egendefinerte trinn-tabeller der prisen ikke stiger med terskelen.
+Dette er kostnadssensorens tilstand: beløpet timen er i ferd med å legge til månedens kapasitetsledd.
 
 ### Kostnaden og marginen sier ikke det samme, men de motsier hverandre ikke
 
-Marginen slår ut på eller før kostnaden, aldri etter. Er `margin_kw` null eller positiv, er `kostnad_denne_timen_kr` alltid 0. Den invarianten er testet med hypothesis i `tests/test_kostnad.py`.
-
-Den andre veien er tillatt: marginen kan være negativ mens timen ennå ikke koster noe. Det skjer når dagstaket er kappet ved T. To dager på 4,0 og en projeksjon på 5,0 holder måneden i 5 kW-trinnet (13 / 3 = 4,33), men dagen er over sin andel av de tre plassene, og fortsetter resten av måneden i samme spor ryker trinnet. Timen koster ikke noe ennå, den bruker opp slarken. Det er den konservative retningen, og det er den et varsel skal ha.
+Positiv eller manglende margin gir ingen ekstra timekostnad med gyldig tariff. Negativ margin kan forekomme uten ekstra kostnad, fordi dagstaket begrenser dagens andel før fakturert trinn øker.
 
 ### Uendelig øverste terskel
 
-Øverste kapasitetstrinn har `float("inf")` som terskel i `dso.py`. `inf` er ugyldig JSON og knekker både recorder og websocket, så både `trinn_na_ovre_grense_kw` og øverste par i `kapasitetstrinn`-attributtet sendes som `null`.
-
-Egendefinerte trinn skriver det samme trinnet med `null` som terskel: `[[2, 155], [5, 250], [null, 415]]`. Uendelig lagres ikke som tall i config entryen, for entry-data skal være gyldig JSON; `oppsett.les_trinn` oversetter tilbake til `inf` ved innlesing. Sløyfer du det åpne trinnet, er alt over det høyeste tallet ditt prisfritt land: terskelen blir uendelig og risikoen `god_margin` uansett hvor høyt forbruket går. Det skjer ikke lenger i stillhet, for `__init__.py` melder en repair-sak om tabellen mangler et åpent topptrinn.
+Øverste trinngrense lagres internt som `inf` og sendes som `null`. Egendefinerte trinn bruker `[[2, 155], [5, 250], [null, 415]]`. Manglende åpent topptrinn utløser repair.
 
 ### Ukjent nettselskap
 
-Tom trinntabell gir `None` i kostnadsfeltene og `unknown` på sensoren. En config entry med ukjent nøkkel utløser repair som ber brukeren velge nettselskap på nytt. Eksisterende DSO-nøkler må beholdes ved synk; de ligger i brukernes oppsett.
+Tom tabell gir ukjente kostnadsfelt og repair. Eksisterende DSO-nøkler må beholdes; de ligger i brukernes oppsett.
 
 ## Kuttkriteriet: flytter denne timen trinnet?
 
-Tidlig i timen kan en kort last gi høy projeksjon uten å øke fakturert nettleie. `vurder_kuttkriterium` vurderer tariffen etter tilgjengelig kutt og skjermer mot kortvarige topper.
+Standardkriteriet krever at tilgjengelig kutt fortsatt kan redusere tariffkostnaden. Et valgt månedsmål kan begrunne tidligere kutt for å begrense en ny dagsmaks.
 
-Standardkriteriet krever unngåelig tariffvirkning. `kostnad_denne_timen_kr` er forskjellen mellom projisert trinn og trinnet låste dager alene gir. Et valgt månedsmål kan i tillegg begrunne et kutt som begrenser døgnmaks før kostnaden øker.
+Kortvarige topper dempes før tariffen vurderes:
 
-Prisen regnes ikke av projeksjonen rå, men av `varig_projeksjon_kw`:
-
-```
-kortvarig_paaslag_kw = KORTVARIG_LAST_KW × (1 − elapsed_h)
-varig_projeksjon_kw  = max(actual_kwh_this_hour, projected_avg − kortvarig_paaslag_kw)
+```text
+kortvarig_paaslag_kw = KORTVARIG_LAST_KW × remaining_h
+varig_projeksjon_kw = max(actual_kwh_this_hour, projected_avg − kortvarig_paaslag_kw)
 ```
 
-En last på P kW som slås på ved `e0` løfter projeksjonen med `P × (1 − e0)` og holder den der så lenge den går, mens den ekte virkningen på time-snittet bare er `P × varigheten`. Fradraget har derfor samme form: det er akkurat det en last på `KORTVARIG_LAST_KW` ville lagt på om den ble slått på nå. Ved minutt null er det 1,5 kW, ved minutt tretti 0,75, og når timen er omme er det null og projeksjonen er målt faktum. Gulvet er kilowattimene timen alt har brukt; de kan ikke kuttes bort igjen, så fradraget skal aldri ta oss under dem.
+Med konstanten 1,5 kW er fradraget 1,5 kW ved timestart, 0,75 halvveis og 0 ved timeslutt. Allerede brukt energi er alltid gulvet.
 
 ### Avveiningen
 
-Ventingen koster noe. Et varsel som kommer for sent er like ubrukelig som et som kommer for tidlig, for verdien av et kutt faller med resten av timen: kutter du 2 kW ved minutt ti, forsvinner 1,67 kW av time-snittet, ved minutt femti bare 0,33.
+Senere kutt gir mindre bidrag: 2 kW fra minutt 10 reduserer timegjennomsnittet med 1,67 kW; fra minutt 50 bare 0,33 kW. `mulig_besparelse_kr` beskriver kostnadsøkningen fra avsluttede dager, mens `unngaaelig_besparelse_kr` beskriver det tilgjengelig kutt fortsatt kan unngå. Samme trinn etter kutt gir ingen standardanbefaling.
 
-Kriteriet sammenligner dessuten tariffen uten kutt med tariffen etter tilgjengelig lastreduksjon resten av timen. `mulig_besparelse_kr` er forskjellen fra allerede avsluttede dager; `unngaaelig_besparelse_kr` er det et kutt nå fortsatt kan spare. Energi som alt er brukt er gulvet i begge beregninger. Har timen allerede låst inn samme trinn selv etter kutt, blir det ingen automatisk kuttanbefaling.
-
-Store kuttbare laster beholder fradraget som vern mot korte topper og beredere som varmer igjen etter timeskiftet. For en last under 1,5 kW kan ventingen ellers gjøre kuttet verdiløst. Fra minutt ti får slike laster også et signal når målt gjennomsnitt så langt gir et dyrere trinn, og tilgjengelig kutt fortsatt gir en lavere tariff. Med 5,2 kW gjennom timen og 0,3 kW kutt ved minutt ti blir resultatet 4,95 kWh; samme kutt ved minutt 53 kommer for sent. Dette er en varighetsantakelse, ikke en garanti for at lasten ville vart timen ut.
-
----
+For laster under 1,5 kW finnes også et signal fra minutt 10: målt snitt hittil må gi dyrere tariff, og tilgjengelig kutt må fortsatt senke tariffen. Med 5,2 kW forbruk og 0,3 kW kutt fra minutt 10 blir resultatet 4,95 kWh. Forutsetningen er at lasten ellers ville fortsatt.
 
 ## Risikoklassifisering
 
-`classify_raw_risk` bruker margin, `safety_buffer_kw` (standard 1,0 kW) og kuttkriteriet:
-
-| Betingelse | Rå risiko |
+| Margin før kuttkriterium | Rå risiko |
 | --- | --- |
 | `margin > 2 × buffer` | `god_margin` |
-| `buffer < margin <= 2 × buffer` | `naermer_seg_terskel` |
-| `0 < margin <= buffer` | `like_under_terskel` |
-| `margin <= 0` | `over_terskel` |
+| `buffer < margin ≤ 2 × buffer` | `naermer_seg_terskel` |
+| `0 < margin ≤ buffer` | `like_under_terskel` |
+| `margin ≤ 0` | `over_terskel` |
 
-Margin er `time_tak_kw - projected_avg`. Høy rå risiko krever oppfylt kuttkriterium; ellers begrenses nivået til `naermer_seg_terskel`. Standardvurderingen krever tariffvirkning, mens et valgt [månedsmål](sparepotensial.md#et-mål-for-måneden) også kan begrunne kutt for å begrense en ny døgnmaks. Sikkerhetsbufferen gir forvarsel og utløser ikke alene høy risiko.
-
-Med gyldig grunnlag og uten øvre terskel er risikoen `god_margin`. Manglende måling eller tariff gir ukjent risiko. `like_under_terskel` oppstår normalt gjennom hysterese på vei ned fra `over_terskel`; testen ligger i `tests/test_tidlig_i_timen.py`.
+Bufferen er standard 1 kW. Uten oppfylt kuttkriterium begrenses høy rå risiko til `naermer_seg_terskel`. `like_under_terskel` oppstår normalt på vei ned gjennom hysterese.
 
 ## Hysterese
 
-Rå risiko går direkte inn i `apply_hysteresis` i [`hysterese.py`](../custom_components/effektvakt/hysterese.py). Regler:
-
-- **Oppgang** (høyere risiko): umiddelbar. Ingen ventetid.
-- **Nedgang** (lavere risiko): ett trinn av gangen. Hvert trinn ned krever at det lavere nivået holder seg i `risiko_holdetid_minutter` (standard 5 min).
-- Multi-step: fra `over_terskel` til `god_margin` skjer via `over_terskel -> like_under_terskel -> naermer_seg_terskel -> god_margin`, med ny tidtaker per trinn.
-
-Eksempel: Risiko er `over_terskel`. Rå risiko faller til `god_margin`. Etter 5 min uten ny `over_terskel` settes risiko til `like_under_terskel`. Etter ytterligere 5 min til `naermer_seg_terskel`. Etter 5 min til til `god_margin`.
-
-Dette forhindrer at VVB eller panelovn slås raskt av og på ved forbruk som svinger rundt en grense.
-
----
+Oppgang er umiddelbar. Nedgang skjer ett trinn av gangen, med ny holdetid per trinn (standard fem minutter). Fra `over_terskel` til `god_margin` tar det dermed minst 15 minutter hvis rå risiko holder seg lav.
 
 ## Adaptiv tick-frekvens
 
-Coordinator-intervallet justeres basert på risiko-nivå, etter `TICK_INTERVAL_BY_RISIKO` i `const.py`:
-
-| Risiko                | Intervall   |
-| --------------------- | ----------- |
-| `god_margin`          | 60 sekunder |
-| `naermer_seg_terskel` | 60 sekunder |
-| `like_under_terskel`  | 30 sekunder |
-| `over_terskel`        | 15 sekunder |
-
-Er terskelen passert, leses sensorer og projeksjon oppdateres hvert 15 sekund for rask respons.
-
----
+| Risiko | Intervall |
+| --- | --- |
+| `god_margin`, `naermer_seg_terskel` | 60 sekunder |
+| `like_under_terskel` | 30 sekunder |
+| `over_terskel` | 15 sekunder |
 
 ## Tilgjengelig kutt
 
-`compute_tilgjengelig_kutt_kw` i `laster.py` summerer effekten til de konfigurerte lastene som trekker over sin egen terskel, og deler på 1000:
-
-```
-tilgjengelig_kutt_kw = sum(effekt_w for last in laster if effekt_w > last.terskel_w) / 1000
+```text
+tilgjengelig_kutt_kw = sum(effekt_w der effekt_w > lastens_terskel_w) / 1000
 ```
 
-Terskelen er per last, ikke felles. Et berederelement er enten fullt på (~2 kW) eller av, så der hører den hjemme rundt 1000 W og alt under regnes som standby. Varmekabler på 550 W ville falt utenfor en slik terskel, og har derfor sin egen på 100 W, som er defaulten.
-
-Uten konfigurerte laster er svaret `None` og ikke et tall, og da opprettes ikke sensoren i det hele tatt. Se [laster.md](laster.md).
-
----
+Bare gyldige målinger bidrar. Uten målte laster opprettes ikke sensoren. [Lastprofiler](lastprofiler.md) gir et separat energianslag.
 
 ## DST-håndtering
 
-Time-bucket bestemmes av `(now.hour, now.utcoffset())`. Ved overgang til/fra sommertid endres utcoffset, noe som fanger klokkeskiftet uten å forveksle det med et vanlig time-skifte. Klokken 02:00 (DST frem) og 03:00 (DST tilbake) håndteres korrekt uten å lage dobbel- eller manglende time-registrering.
+Klokketime identifiseres med time og UTC-offset; varighet regnes i faktisk tid. De to lokale 02-timene ved høstskiftet holdes adskilt. Dagsmaks og månedsskifte følger lokal kalender.

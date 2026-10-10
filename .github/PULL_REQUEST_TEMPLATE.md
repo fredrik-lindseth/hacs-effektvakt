@@ -1,31 +1,12 @@
-## Beskrivelse
+## Endringen
 
-<!-- Hva endrer denne PR-en, og hvorfor -->
+<!-- Hva endres for brukeren, og hvorfor? Eventuelt Closes #123. -->
 
-## Type endring
+## Verifisering
 
-- [ ] Bugfix
-- [ ] Ny funksjonalitet
-- [ ] Refaktorering
-- [ ] Dokumentasjon
-- [ ] Brytende endring
+- [ ] `just test` er grønn.
+- [ ] Ekte HA er testet med `just test-ha minimum` og `just test-ha current` hvis HA-kalt kode er endret.
+- [ ] Dokumentasjon og nødvendig migrering er oppdatert.
+- [ ] Egne endringer er gjennomlest; bruk `pre-commit run --files <filene dine>`.
 
-## Relaterte issues
-
-<!-- Lukk issues med "Closes #123" -->
-
-## Sjekkliste
-
-- [ ] Koden følger stilen i repoet, og norsk i kode, kommentarer og dokumentasjon
-- [ ] Tester er skrevet eller oppdatert
-- [ ] `pytest tests/` passerer
-- [ ] `ruff check` passerer
-- [ ] `pre-commit run --files <filene dine>` passerer
-- [ ] Dokumentasjonen i `docs/` er oppdatert der endringen merkes
-- [ ] Jeg har lest gjennom min egen diff
-
-## Rører endringen noe av dette?
-
-- [ ] `dso.py` (den er autogenerert, se `AGENTS.md`)
-- [ ] Entitets-id-er eller `unique_id` (brukeren mister historikk)
-- [ ] Hysterese eller failsafe i blueprintene (last kan bli stående av)
+<!-- DSO-data regenereres fra kilden. Bevar entitets-ID-er, lagring, hysterese og lastvern. -->

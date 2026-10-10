@@ -1,55 +1,31 @@
 # Blueprints
 
-Effektvakt kommer med fire blueprints i `docs/blueprints/`. De er laget for å brukes direkte, men kan tilpasses.
+Fire blueprints følger med. Opprett en automasjon fra valgt blueprint og tilpass entiteter og tidsgrenser.
 
 ## Installer
-
-Kopier filene fra `docs/blueprints/` til `config/blueprints/automation/effektvakt/` i Home Assistant-oppsettet ditt, og last inn automasjoner på nytt (**Developer tools > YAML > Automations**). Da ligger de under `effektvakt/`, og det er stien eksemplene i dette dokumentet bruker.
-
-Lenkene under åpner import-dialogen i din egen HA i stedet:
 
 - [Enkel lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fmain%2Fdocs%2Fblueprints%2Fenkel_lastkutt.yaml): én switch av og på
 - [Prioritert lastkutt](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fmain%2Fdocs%2Fblueprints%2Fprioritert_lastkutt.yaml): to switches i rekkefølge etter hvor nær terskelen timen ligger
 - [Climate med min-temp](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fmain%2Fdocs%2Fblueprints%2Fclimate_min_temp.yaml): panelovn til min-temp med restore
 - [Kun varsel](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Ffredrik-lindseth%2Fhacs-effektvakt%2Fmain%2Fdocs%2Fblueprints%2Fkun_varsel.yaml): push-notifikasjon uten styring
 
-Importerer du sånn, legger Home Assistant filen under GitHub-kontoen url-en peker på, altså `fredrik-lindseth/enkel_lastkutt.yaml`. Setter du automasjonen opp i grensesnittet, trenger du ikke tenke på det. Skriver du YAML selv, må `path` peke på mappen filen faktisk havnet i, og alltid med `.yaml` bak.
-
----
+Alternativt: kopier `docs/blueprints/` til `/config/blueprints/automation/effektvakt/` og last automasjoner på nytt. YAML-eksemplene under bruker denne mappen. Etter nettimport ligger filen vanligvis under `fredrik-lindseth/`; bruk den faktiske stien i `path`.
 
 ## Hovedbryteren
 
-Integrasjonen lager én switch per oppsett, `switch.effektvakt_automatikk`. Slår du den av, kutter ingen av lastkutt-blueprintene under, uansett hvor mange automasjoner du har laget. Den er på som standard og husker stillingen over omstart.
+Sett `automatikk_switch` til oppsettets `switch.effektvakt_automatikk` for å hindre nye kutt når bryteren er av. Feltet er valgfritt; uten koblingen lytter automasjonen ikke til bryteren. Bryteren er på som standard og husker lagret av-stilling.
 
-Alle fire blueprintene tar den inn som `automatikk_switch`. Feltet er valgfritt: lar du det stå tomt, oppfører automasjonen seg nøyaktig som før bryteren fantes, så eksisterende automasjoner overlever en oppdatering uten at du rører dem. Vil du at de skal lytte, må du peke feltet på bryteren.
-
-Bryteren stopper nye kutt. Ved neste vurdering, senest innen ett minutt, ber blueprinten lastvernet slippe et aktivt kutt. Den uavhengige fristtimeren fortsetter uansett; bare lastene Effektvakt selv overtok blir gjenopprettet.
-
-`kun_varsel` er unntaket. Den gater ikke på bryteren i det hele tatt. Har du skrudd av automatikken, er det du som må kutte, og da er varselet verdt mer, ikke mindre. Den sier i stedet fra i teksten at ingenting kuttes av seg selv.
-
-Sensorene bryr seg ikke om bryteren. Projisert time-snitt, risiko og kostnad regnes videre, og `binary_sensor.effektvakt_kutt_ned_anbefalt` står fortsatt på når risikoen tilsier det. Den sier «dette burde kuttes», ikke «dette blir kuttet». Vil et dashboard vise begge deler, ligger bryterens stilling som attributtet `automatikk_aktiv` på den samme binary-sensoren.
-
----
+Sensorene regner videre. Avslått automatikk ber om gjeninnkobling ved neste blueprint-vurdering, senest innen ett minutt. Varsel-blueprinten stopper ikke varsler, men nevner at automatikk er av.
 
 ## Kuttet slippes ved timeskiftet
 
-Nettleien måles time for time. Et kutt som starter 18:50 og varer til 19:20 gir ti minutter nytte og tjue minutter kutting som bare flytter oppvarmingen inn i 19-timen og drar den opp. Derfor slipper alle tre lastkutt-blueprintene lasten ved neste hele time, eller når Effektvakt sier at risikoen er over, det som kommer først.
+Kutt slipper ved neste hele time, `max_off_minutes` eller opphørt kuttbehov, det som kommer først. Standard maks utkobling er 60 minutter og minste påtid fem minutter. Nytt kutt kan skje etter påtiden, også i samme time dersom maksimal utkobling er kortere enn tiden som gjenstår.
 
-Det er også den enkleste demperen mot yo-yo: uten den varmer berederen 2 kW ekstra fra 19:05, drar 19-timen over terskelen, og blir kuttet på nytt. Hysteresen i integrasjonen hjelper ikke der, for det skjer på tvers av timer.
-
-Er risikoen fortsatt der i den nye timen, kuttes lasten igjen, men først etter `min_on_minutes` på. Den påtiden er det som skiller et slipp fra en pause på null sekunder.
-
-`max_off_minutes` er blitt et absolutt tak i stedet for hovedregelen. Vernet velger den tidligste av timeskiftet og dette taket og setter en egen fristtimer. Standard er 60 minutter, som er akkurat lengre enn det lengste et kutt kan vare når timeskiftet virker.
-
----
+Utsatt oppvarming kan lage en ny topp etter gjeninnkobling. Tidsgrensene verner utkoblingen, men planlegger ikke gjenoppvarmingen.
 
 ## enkel_lastkutt.yaml
 
-**Hva**: Slår av én switch når `binary_sensor.effektvakt_kutt_ned_anbefalt` går til `on`. Slår på igjen ved neste hele time, eller med én gang sensoren går til `off`.
-
-**Passer til**: VVB, billader, panelovn med switch.
-
-**Input**:
+Slår av én switch når kutt anbefales. Velg lasten og grensene etter hva den tåler; lading skal styres via laderens støttede grensesnitt.
 
 | Felt                   | Standard                                     | Beskrivelse                                 |
 | ---------------------- | -------------------------------------------- | ------------------------------------------- |
@@ -58,16 +34,6 @@ Er risikoen fortsatt der i den nye timen, kuttes lasten igjen, men først etter 
 | `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over. Tom = kutt alltid   |
 | `max_off_minutes`      | 60                                           | Kortere grense kan slippe før timeskiftet  |
 | `min_on_minutes`       | 5                                            | Minste påtid før lasten kan kuttes på nytt  |
-
-**Oppførsel**:
-
-- Sensor `on`: switch slås av
-- Neste hele time: switch slås på
-- Sensor `off`: switch slås på umiddelbart
-- Fortsatt `on` etter påtiden: nytt kutt i den nye timen
-- Taket nås: switch slås på uavhengig av sensor
-
-**Eksempel-konfigurasjon**:
 
 ```yaml
 alias: Effektvakt - VVB kutt
@@ -81,15 +47,9 @@ use_blueprint:
     min_on_minutes: 5
 ```
 
----
-
 ## prioritert_lastkutt.yaml
 
-**Hva**: Styrer to switches i prioritert rekkefølge basert på `sensor.effektvakt_risiko_niva`. Første switch slås av når timen ligger like under terskelen, begge når den er over.
-
-**Passer til**: Situasjoner med to kuttbare laster der du vil rangere hvilken som kuttes først.
-
-**Input**:
+Styrer to switches: første ved `like_under_terskel`, begge ved `over_terskel`. Lavere risiko slipper eide kutt.
 
 | Felt                     | Standard                        | Beskrivelse                                |
 | ------------------------ | ------------------------------- | ------------------------------------------ |
@@ -99,15 +59,6 @@ use_blueprint:
 | `automatikk_switch`      | (tom)                           | Hovedbryteren, se over                     |
 | `max_off_minutes`        | 60                              | Kortere grense kan slippe før timeskiftet |
 | `min_on_minutes`         | 5                               | Minste påtid før nytt kutt                 |
-
-**Oppførsel**:
-
-- `like_under_terskel`: switch 1 av, switch 2 på
-- `over_terskel`: begge av
-- Neste hele time: alt som ble kuttet slås på
-- `naermer_seg_terskel` / `god_margin`: begge på
-
-**Eksempel-konfigurasjon**:
 
 ```yaml
 alias: Effektvakt - VVB og panelovn prioritert
@@ -122,15 +73,9 @@ use_blueprint:
     min_on_minutes: 5
 ```
 
----
-
 ## climate_min_temp.yaml
 
-**Hva**: Setter en climate-entitet (panelovn) til min-temp når kutt anbefales, og restorer til lagret temperatur ved neste hele time eller når risiko er borte. Lastvernet persisterer originaltemperaturen over HA-restart; den gamle `restore_helper`-inputen er valgfri og brukes ikke lenger.
-
-**Passer til**: Panelovner og andre climate-entiteter der du ikke vil slå av helt, men redusere setpunkt.
-
-**Input**:
+Senker setpunktet til `min_temp` og gjenoppretter lagret temperatur. `restore_helper` er et ubrukt eldre felt. Dette vernet måler ikke temperatur eller varmebehov.
 
 | Felt                   | Standard                                     | Beskrivelse                                |
 | ---------------------- | -------------------------------------------- | ------------------------------------------ |
@@ -141,17 +86,6 @@ use_blueprint:
 | `automatikk_switch`    | (tom)                                        | Hovedbryteren, se over                     |
 | `max_off_minutes`      | 60                                           | Kortere grense kan slippe før timeskiftet |
 | `min_on_minutes`       | 5                                            | Minste tid på normal temp før ny senking   |
-
-**Oppførsel**:
-
-- Sensor `on`: lagre nåværende temp i lastvernet, sett climate til `min_temp`
-- Neste hele time: restore til lagret temp
-- Sensor `off`: restore til lagret temp
-- HA-restart: lastvernet leser ansvaret fra disk og gjenoppretter når aktuatoren svarer
-
-Temperaturen lagres én gang, før første senking. Varer risikoen i flere timer, er det den brukeren satte som kommer tilbake hver gang, ikke min-temp.
-
-**Eksempel-konfigurasjon**:
 
 ```yaml
 alias: Effektvakt - Panelovn stue
@@ -166,15 +100,9 @@ use_blueprint:
     min_on_minutes: 5
 ```
 
----
-
 ## kun_varsel.yaml
 
-**Hva**: Sender push-notifikasjon når risiko går til `like_under_terskel` eller `over_terskel`. Ingen styring av laster.
-
-**Passer til**: Brukere som vil ta beslutningen selv basert på en notifikasjon.
-
-**Input**:
+Sender varsel ved `like_under_terskel` eller `over_terskel`, uten laststyring. Beløpet er timens tariffvirkning, eller prisen på neste trinn hvis timen ennå ikke flytter trinnet. Forslaget velger den største målte lasten som bidrar nå. Varsler kommer også med hovedbryteren av.
 
 | Felt                       | Standard                              | Beskrivelse                                                 |
 | -------------------------- | ------------------------------------- | ----------------------------------------------------------- |
@@ -184,23 +112,6 @@ use_blueprint:
 | `notify_service`           | `notify`                              | Tjeneste uten `notify.`-prefiks, f.eks. `mobile_app_iphone` |
 | `automatikk_switch`        | (tom)                                 | Stopper ikke varselet, men nevnes i teksten når den er av   |
 | `dashboard_url`            | (tom)                                 | URL til Lovelace-dashboard, lenkes i notifikasjon           |
-
-**Oppførsel**:
-
-- `like_under_terskel` og `over_terskel`: varsel, med kroner og en handling
-- Varselet kommer uansett hvordan hovedbryteren står
-- Notifikasjoner køes (mode: queued) for å unngå tap ved rask endring
-
-Kronene er attributtet `kostnad_denne_timen_kr`: hva timen er i ferd med å låse inn på nettleien denne måneden. Har timen ikke flyttet trinnet ennå, sier varselet i stedet hva trinnet over koster. Handlingen er den største av `kutt_kilder` som teller med akkurat nå. Har du ikke konfigurert noen kutt-kilder, blir forslaget generelt.
-
-**Eksempel notifikasjonsinnhold**:
-
-```
-Effektvakt: over terskelen
-Denne timen låser inn 165 kr ekstra på nettleien denne måneden. Slå av Varmtvannsbereder, den drar 1,8 kW nå.
-```
-
-**Eksempel-konfigurasjon**:
 
 ```yaml
 alias: Effektvakt - Varsel til telefon
@@ -215,14 +126,10 @@ use_blueprint:
     dashboard_url: /lovelace/effektvakt
 ```
 
----
-
 ## Gjeninnkoblingsvern
 
-Lastkutt-blueprintene krever `effektvakt.styr_last` fra integrasjonen. Oppdater integrasjonen og importer blueprintene på nytt samtidig. Eldre, allerede importerte kopier har fortsatt den gamle ventingen og får ikke vernet automatisk.
+Oppdater integrasjonen og importer lastkutt-blueprintene på nytt samtidig. Gamle importerte kopier får ikke nytt vern automatisk.
 
-Blueprinten ber om kutt eller slipp og vurderer vedvarende risiko hvert minutt. Integrasjonens lastvern lagrer originaltilstand, eier og frist før kuttet. Det slipper ved neste hele time eller `max_off_minutes`, det som kommer først. Gjentatte forespørsler forlenger aldri fristen. Reload av automasjoner avbryter ikke vernet. Ved HA-start gjenopprettes tidligere eide kutt så snart aktuatoren svarer. En utilgjengelig aktuator prøves igjen når tilstanden endrer seg og hvert 30. sekund. HA må kjøre og aktuatoren må være tilgjengelig for at en kommando skal kunne utføres.
+`effektvakt.styr_last` lagrer originaltilstand, eier og frist før kutt. Gjentatte forespørsler forlenger ikke fristen. Vernet overlever automasjonsreload, entry-unload og HA-omstart. Utilgjengelige aktuatorer prøves igjen ved tilstandsendring og hvert 30. sekund; HA og aktuatoren må være tilgjengelige for å utføre kommandoen.
 
-Minste påtid regnes fra bekreftet gjeninnkobling og lagres på disk. Blink i risikosensoren eller en ny automasjonskjøring kan derfor ikke omgå den. Kutt kan først begynne igjen ved neste vurdering etter at påtiden er utløpt.
-
-En switch som allerede var av, eller et setpunkt som allerede var lavere enn kutt-temperaturen, overtas ikke og blir heller ikke gjenopprettet. Et manuelt endret setpunkt under kuttet beholdes. To automasjoner kan ikke eie et aktivt kutt på samme aktuator samtidig; den andre får en tjenestefeil. Bruk én styringsautomasjon per last. Vernet fortsetter å fullføre aktive gjeninnkoblinger selv om et Effektvakt-oppsett lastes ut. Nye kutt krever en aktiv automasjon.
+Minste påtid starter ved bekreftet gjeninnkobling og lagres på disk. En allerede avslått switch eller et allerede lavere setpunkt overtas ikke. Manuelle temperaturendringer under kuttet beholdes. Bare én automasjon kan eie et aktivt kutt per aktuator; bruk én styringsautomasjon per last.

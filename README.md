@@ -14,13 +14,13 @@ Effektvakt regner ut hvor høyt time-snittet ditt ender, og sier fra i tide hvis
 
 ## Hva kan du spare?
 
-Hos BKK koster trinnet 5–10 kW 165 kr mer i måneden enn 2–5 kW. Klarer du å unngå det dyrere trinnet i to til fire måneder, betyr det **330–660 kr mindre nettleie i året**, uten nødvendigvis å bruke mindre strøm. Med fem slike måneder er potensialet 825 kr. Elbillading, bereder og oppvarming gir mulighet til å flytte forbruket; hvor mye du får igjen, avhenger av toppene og hva huset tåler å utsette.
+Hos BKK gir ett lavere kapasitetstrinn fra 5–10 til 2–5 kW **165 kr mindre nettleie per måned**. To til fire slike måneder gir 330–660 kr/år; fem gir 825 kr. Elbil, bereder og oppvarming gir fleksibilitet til å flytte toppene.
 
-Dette er betingede regneeksempler, ikke målt sparing. I et eksempelhus med 16 000 kWh/år utgjør 330–660 kr omtrent 2–4 % av samlet kraftkostnad og nettleie. Se [årsregnestykket](docs/sparepotensial.md#hva-kan-det-bli-på-et-år), [vask i lavpristiden](docs/scenario-nattvask.md) og [Norgespris mot spotpris](docs/scenario-norgespris.md).
+Dette er betinget potensial. I et eksempelhus med 16 000 kWh/år tilsvarer 330–660 kr omtrent 2–4 % av samlet kraftkostnad og nettleie. Se [årsregnestykket og forutsetningene](docs/sparepotensial.md#hva-kan-det-bli-på-et-år).
 
 ## Et regneeksempel fra BKK
 
-1 kW lavere topp-3-snitt ville redusert kapasitetsleddet med 165 kr i desember 2025 og 165 kr i februar 2026 i et BKK-anlegg: til sammen 330 kr. 600 W ville ikke vært nok til å nå det billigere trinnet. Dette er et beregnet potensial fra historiske timesdata; lasten må gå lenge nok, og utsatt oppvarming må få plass senere. Se [regnestykket og simuleringen](docs/sparepotensial.md) og [en eksempelrapport for lastprofiler](docs/research/lastprofil-rapport.md).
+1 kW lavere topp-3-snitt ville gitt 330 kr mindre kapasitetsledd over desember 2025 og februar 2026; 600 W ville ikke vært nok. Varighet og gjenoppvarming avgjør om det er mulig. [Historiske tall og simulering](docs/sparepotensial.md).
 
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt-kortet: en gjenskapt analog effektvakt med kW-skala, kapasitetstrinn med månedspris, og tre visere" width="420">
@@ -28,11 +28,11 @@ Dette er betingede regneeksempler, ikke målt sparing. I et eksempelhus med 16 0
 
 ## Hvordan det virker
 
-Effektvakt projiserer timegjennomsnittet og sammenligner det med månedens kapasitetstrinn. Sensorene viser margin, risiko, topp-3-snitt og målt tilgjengelig kutt akkurat nå. Du kan bruke varsler eller blueprints til å styre bereder, oppvarming og andre laster. Lastvernet kobler styrte laster inn igjen innen fristen og husker ansvaret gjennom reload og omstart.
+Sensorene viser projisert timegjennomsnitt, margin, risiko, topp-3-snitt og tilgjengelig kutt. Bruk varsler eller blueprints til å styre laster; lastvernet husker gjeninnkoblingsansvaret gjennom omstart.
 
-Beregningen støtter tariffer med de tre høyeste timegjennomsnittene fra ulike dager. Husholdningstariffer følger med; egendefinerte trinn må bruke samme metode. Manglende eller gamle effektmålinger gir ukjent råd. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) beregner nettleie, avgifter og støtteordninger. Et unngått kapasitetstrinn sparer kroner uten nødvendigvis å redusere kWh. Prisplanlegging fra Nord Pool er ikke implementert.
+Støtter kapasitetstariffer med tre høyeste timer fra ulike dager. Manglende eller gamle målinger gir ukjent råd. Automatisk spotprisplanlegging er ikke implementert. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) beregner nettleie, avgifter og støtteordninger.
 
-Oppsett, entiteter og kort støtter norsk og engelsk. Detaljdokumentasjonen er på norsk.
+Oppsett, sensorer og kort støtter norsk og engelsk. Detaljveiledningene er norske.
 
 ## Installasjon
 
@@ -52,17 +52,17 @@ Krever Home Assistant 2025.1.0 eller nyere.
 
 Last ned `effektvakt.zip` fra [siste release](https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest) og pakk den ut i `/config/custom_components/effektvakt`. Start Home Assistant på nytt.
 
-Deretter **Settings > Devices & Services > Add Integration > Effektvakt**. Du velger nettselskap, peker på power-sensoren din, og resten har standardverdier som duger. Stegene er beskrevet i [docs/oppsett.md](docs/oppsett.md).
+Legg til under **Settings → Devices & Services → Add Integration → Effektvakt**, og velg nettselskap og effektsensor. [Oppsett](docs/oppsett.md).
 
 ## Dashbord og laststyring
 
-Legg `custom:effektvakt-card` til i dashbordet; se [kortoppsettet](docs/dashboard-kort.md). Rød viser er projisert timegjennomsnitt, den tynne svarte er effekten akkurat nå, og trekanten utenfor buen er månedens topp-3-snitt.
+Legg `custom:effektvakt-card` til i dashbordet. [Kortoppsett og visere](docs/dashboard-kort.md).
 
 <p align="center">
   <img src="docs/bilder/dashboard.png" alt="Dashbord med effektskive, kort for resten av timen og ukesgraf" width="900">
 </p>
 
-Registrer de kuttbare lastene under Konfigurer og importer [blueprintene](docs/blueprints.md) for varsling eller automatisk lastkutt. Velg maksimal utkobling og minste påtid etter hva lasten tåler. [Veiledningen om lastprofiler](docs/lastprofiler.md) forklarer hvordan du anslår bidraget resten av timen.
+Registrer [laster](docs/laster.md) under Konfigurer og importer [blueprints](docs/blueprints.md) for varsling eller kutt. Velg tidsgrenser etter lasten; [profiler](docs/lastprofiler.md) anslår bidraget resten av timen.
 
 ## Kvalitet og utvikling
 

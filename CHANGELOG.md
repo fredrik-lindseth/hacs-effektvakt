@@ -15,6 +15,7 @@ Punktene som er merket `<!--kort-->` er de som havner i den korte release-noten,
 
 ### Dokumentasjon
 
+- Veiledningene er forkortet, med bevarte formler, sensorattributter, blueprint-eksempler og styringsgrenser. Utviklerguiden, PR-malen og kortets ressursbeskrivelse følger dagens test- og registreringsflyt.
 - Årsregneeksempel med andel av kapasitet og samlet kostnad, og scenarioer for vask i lavpristiden, spotpris og høyere Norgespris. FAQ forklarer betydningen av elbil, oppvarming og solceller.
 - README er kortet ned, med spareeksemplet og installasjonen først. Lastprofiler, regnestykkene og simuleringen har egne norske veiledninger, med en etterprøvbar eksempelrapport for den som vil undersøke sitt eget anlegg.
 

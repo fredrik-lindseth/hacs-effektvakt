@@ -1,6 +1,6 @@
 # Eksempelrapport for en lastprofil
 
-Denne rapporten bruker kunstige data fra [metodikkens eksempelfil](../lastprofiler.md#kjør-analysen-selv). Den viser hvordan du kan dokumentere en analyse av eget anlegg uten å publisere råhistorikk. Tallene beskriver ingen bestemt husholdning.
+Kunstig eksempel fra [metodikkens eksempelfil](../lastprofiler.md#kjør-analysen-selv), med tabell og forutsetninger du kan bruke i egen rapport.
 
 ## Målevindu og grunnlag
 
@@ -27,10 +27,8 @@ Som et separat manuelt scenario gir 2 000 W samlet gulvvarme pluss 300 W i en an
 
 ## Slik dokumenterer du ditt eget anlegg
 
-Oppgi målevindu, tidssone, terskel, kjent dekning og om verdier ble holdt videre. Skill målte tall fra manuell nominell effekt og antatt arbeidssyklus. Noter antall hele sykluser som støtter restvarighetsanslaget. Sammenlign med faktiske topptimer framfor å bruke døgnsnitt alene.
+Oppgi målevindu, tidssone, terskel, dekning, viderehold av verdier og antall hele støttende sykluser. Skill måling fra nominell effekt og antatt arbeidssyklus. Sammenlign med topptimene, ikke bare døgnsnitt.
 
-Har flere sensorer samme fysiske last, kontroller enheter, brytertilstand og ferskhet før du summerer. En kontrollert på/av-observasjon kan avdekke kanaler som holder en gammel effekt eller rapporterer null. Høy tilstandsdekning alene bekrefter ikke riktige målinger. Rapporter uavklarte kanaler som uavklart grunnlag.
+Kontroller enhet, ferskhet og aktuator før summering; ikke tell samme last flere ganger. Uavklarte sensorkanaler gir uavklart grunnlag.
 
-En rapport om sparing bør vise utkobling og gjeninnkobling, og hvor utsatt energi ble av. [BKK-regneeksemplet og simuleringen](../sparepotensial.md#regneeksempel-og-simulert-styring) sammenligner ideelle reduksjoner med en modell som fører energien tilbake. Det er ikke nok å multiplisere dagens aktiveffekt med resten av timen og kalle resultatet spart nettleie.
-
-Personlig råhistorikk og faktiske husholdningsprofiler kan oppbevares lokalt. Velg bevisst hva du vil dele i en offentlig rapport.
+Dokumenter kutt, gjeninnkobling og hvor utsatt energi havnet før du kaller det spart nettleie. [Simuleringen](../sparepotensial.md#regneeksempel-og-simulert-styring) viser forskjellen. Hold personlig råhistorikk lokalt.

@@ -14,13 +14,13 @@ Effektvakt projects your average consumption for the current hour and warns when
 
 ## What could you save?
 
-At BKK, the 5–10 kW capacity tier costs NOK 165 more per month than the 2–5 kW tier. Avoiding the higher tier in two to four months means **NOK 330–660 less in annual grid charges**, without necessarily using less electricity. Five such months would mean NOK 825. EV charging, water heating and space heating provide flexibility; the result depends on your peaks and how much demand you can defer.
+At BKK, moving from the 5–10 kW tier to 2–5 kW saves **NOK 165 per month**. Two to four such months mean NOK 330–660/year; five mean NOK 825. EV charging, water heating and space heating can provide flexibility to shift peaks.
 
-These are conditional calculations, not measured savings. For an example home using 16,000 kWh/year, NOK 330–660 is about 2–4% of combined electricity and grid costs. See the [annual calculation](docs/sparepotensial.md#hva-kan-det-bli-på-et-år), [laundry during cheaper grid periods](docs/scenario-nattvask.md) and [Norgespris versus spot prices](docs/scenario-norgespris.md).
+This is conditional potential. For an example home using 16,000 kWh/year, NOK 330–660 represents about 2–4% of combined electricity and grid costs. See the [annual calculation and assumptions](docs/sparepotensial.md#hva-kan-det-bli-på-et-år).
 
 ## A savings example from BKK
 
-Reducing the monthly top-three average by 1 kW would have lowered a BKK household's capacity charge by NOK 165 in December 2025 and NOK 165 in February 2026: NOK 330 in total. A 600 W reduction would not have reached the cheaper tier. This is conditional potential calculated from historical readings; the load must run for long enough, and deferred heating must fit into later hours. See the [calculation and simulation](docs/sparepotensial.md) and [an example load-profile report](docs/research/lastprofil-rapport.md).
+A 1 kW lower top-three average would have reduced capacity charges by NOK 330 across December 2025 and February 2026; 600 W would not have been enough. Duration and reheating determine feasibility. [Historical figures and simulation](docs/sparepotensial.md).
 
 <p align="center">
   <img src="docs/bilder/skive-gossen.png" alt="Effektvakt dashboard card: an analogue demand monitor with a kW scale, monthly capacity prices and three indicators" width="420">
@@ -28,11 +28,11 @@ Reducing the monthly top-three average by 1 kW would have lowered a BKK househol
 
 ## How it works
 
-Effektvakt projects the current hourly average and compares it with your monthly capacity tier. Sensors show the margin, risk, monthly top-three average and measured load reduction available now. You can use notifications or blueprints to control water heaters, heating and other loads. The load guard restores controlled loads by their deadline and retains responsibility across reloads and restarts.
+Sensors show the projected hourly average, margin, risk, monthly top-three average and available reductions. Use notifications or blueprints to control loads; the load guard retains responsibility for restoration across restarts.
 
-The calculation supports tariffs based on the three highest hourly averages from different days. Household tariffs are built in; custom tiers must use the same method. Missing or stale power readings give unknown advice. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) calculates grid charges, taxes and support schemes. Avoiding a capacity tier saves money without necessarily reducing kWh. Nord Pool price scheduling is not implemented.
+Supports tariffs using the three highest hourly averages from different days. Missing or stale readings give unknown advice. Automatic spot-price scheduling is not implemented. [Strømkalkulator](https://github.com/fredrik-lindseth/hacs-strømkalkulator) calculates grid charges, taxes and support schemes.
 
-Setup, entities and the card support Norwegian and English. Detailed guides are in Norwegian.
+Setup, sensors and the card support Norwegian and English. Detailed guides are in Norwegian.
 
 ## Installation
 
@@ -52,17 +52,17 @@ Open Effektvakt in HACS with the button. If the repository has not been added ye
 
 Download `effektvakt.zip` from the [latest release](https://github.com/fredrik-lindseth/hacs-effektvakt/releases/latest) and extract it into `/config/custom_components/effektvakt`. Restart Home Assistant.
 
-Then go to **Settings > Devices & Services > Add Integration > Effektvakt**. Choose your grid company and power sensor; the remaining settings have defaults. See the [setup guide](docs/oppsett.md).
+Add it under **Settings → Devices & Services → Add Integration → Effektvakt**, then choose your grid company and power sensor. [Setup](docs/oppsett.md).
 
 ## Dashboard and load control
 
-Add `custom:effektvakt-card` to your dashboard; see the [card setup](docs/dashboard-kort.md). The red indicator is the projected hourly average, the thin black indicator is current power, and the outer triangle is the monthly top-three average.
+Add `custom:effektvakt-card` to your dashboard. [Card setup and indicators](docs/dashboard-kort.md).
 
 <p align="center">
   <img src="docs/bilder/dashboard.png" alt="Dashboard with the demand dial, remaining-hour cards and weekly chart" width="900">
 </p>
 
-Register your controllable loads under Configure and import the [blueprints](docs/blueprints.md) for notifications or automatic reductions. Set maximum off-time and minimum on-time to suit each load. The [load-profile guide](docs/lastprofiler.md) explains how to estimate what a load can contribute during the rest of the hour.
+Register [loads](docs/laster.md) under Configure and import [blueprints](docs/blueprints.md) for notifications or reductions. Choose time limits to suit each load; [profiles](docs/lastprofiler.md) estimate the remaining-hour contribution.
 
 ## Quality and development
 
