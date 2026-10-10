@@ -197,7 +197,11 @@ done
 
 ## Prøve Lovelace-kortet
 
-`python3 docs/kort-harness/server.py` kjører kortet i nettleseren uten Home Assistant, med skiver generert fra `faceplate.py` og kortfilen lastet rett fra `custom_components/effektvakt/www/`. Bruk den framfor å legge testkort i en produksjonsinstallasjon. Se `docs/dashboard-kort.md`.
+`python3 docs/kort-harness/server.py` kjører den ekte kortfilen uten Home Assistant på `http://127.0.0.1:8799/docs/kort-harness/`. SVG-skivene genereres fra `faceplate.py` ved hver forespørsel. Bruk `--dso sygnir` for et annet nettselskap, `--port` for en annen port og `--ingen-nettleser` for å unngå å åpne nettleseren.
+
+Benken viser begge stiler, 30 kW-skala og manglende/utilgjengelige målinger. `?sen=3000` simulerer forsinket websocket-registrering etter HA-start. Testverdier ligger i `FELLES`, `tilstander` og `oppsett` i `docs/kort-harness/index.html`; hold sammenhengen mellom verdiene fra terskelmodellen. Konsollen viser aria-tekst, farger, trinn og viservinkler. Lys/mørk modus følger operativsystemet.
+
+Kortets skive og trinn har tekstalternativer for skjermlesere, og `prefers-reduced-motion` slår av viseranimasjonen. Bruk prøvebenken framfor å legge testkort i produksjon; se [kortoppsettet](dashboard-kort.md).
 
 ---
 
