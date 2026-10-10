@@ -1,6 +1,9 @@
 {
   "domain": "effektvakt",
   "name": "Effektvakt",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@fredrik-lindseth"
   ],
@@ -16,8 +19,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/fredrik-lindseth/hacs-effektvakt/issues",
   "requirements": [],
-  "version": "0.4.0",
-  "after_dependencies": [
-    "recorder"
-  ]
+  "version": "0.4.0"
 }

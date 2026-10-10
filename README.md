@@ -34,6 +34,10 @@ Krever Home Assistant 2025.1.0 eller nyere.
 
 ### HACS
 
+Åpne Effektvakt i HACS med knappen. Hvis repoet ikke er lagt til ennå, følg stegene under.
+
+[![Åpne Effektvakt i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fredrik-lindseth&repository=hacs-effektvakt&category=integration)
+
 1. Åpne menyen i HACS og velg **Custom repositories**.
 2. Legg til `https://github.com/fredrik-lindseth/hacs-effektvakt` med typen **Integration**.
 3. Last ned **Effektvakt** og start Home Assistant på nytt.
